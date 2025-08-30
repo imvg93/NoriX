@@ -54,10 +54,17 @@ class ApiService {
   }
 
   // Authentication APIs
-  async login(phone: string, password: string, role: string) {
-    return this.request('/auth/login', {
+  async loginRequestOTP(email: string, userType: string) {
+    return this.request('/auth/login-request-otp', {
       method: 'POST',
-      body: JSON.stringify({ phone, password, role }),
+      body: JSON.stringify({ email, userType }),
+    });
+  }
+
+  async loginVerifyOTP(email: string, userType: string, otp: string) {
+    return this.request('/auth/login-verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, userType, otp }),
     });
   }
 
@@ -68,14 +75,14 @@ class ApiService {
     });
   }
 
-  async sendOTP(email: string, purpose: 'verification' | 'password-reset') {
+  async sendOTP(email: string, purpose: 'verification' | 'password-reset' | 'login') {
     return this.request('/auth/send-otp', {
       method: 'POST',
       body: JSON.stringify({ email, purpose }),
     });
   }
 
-  async verifyOTP(email: string, otp: string, purpose: 'verification' | 'password-reset') {
+  async verifyOTP(email: string, otp: string, purpose: 'verification' | 'password-reset' | 'login') {
     return this.request('/auth/verify-otp', {
       method: 'POST',
       body: JSON.stringify({ email, otp, purpose }),

@@ -59,7 +59,7 @@ export const generateOTP = (): string => {
 };
 
 // Send OTP email with comprehensive error handling
-export const sendOTPEmail = async (email: string, otp: string, purpose: 'verification' | 'password-reset'): Promise<boolean> => {
+export const sendOTPEmail = async (email: string, otp: string, purpose: 'verification' | 'password-reset' | 'login'): Promise<boolean> => {
   console.log(`📧 Attempting to send ${purpose} OTP to: ${email}`);
 
   // Validate configuration
@@ -70,6 +70,8 @@ export const sendOTPEmail = async (email: string, otp: string, purpose: 'verific
 
   const subject = purpose === 'verification'
     ? 'Email Verification OTP - StudentJobs'
+    : purpose === 'login'
+    ? 'Login Verification OTP - StudentJobs'
     : 'Password Reset OTP - StudentJobs';
 
   const html = `
@@ -204,7 +206,7 @@ export const sendOTPEmail = async (email: string, otp: string, purpose: 'verific
 };
 
 // Verify OTP with enhanced logging
-export const verifyOTP = async (email: string, otp: string, purpose: 'verification' | 'password-reset'): Promise<boolean> => {
+export const verifyOTP = async (email: string, otp: string, purpose: 'verification' | 'password-reset' | 'login'): Promise<boolean> => {
   try {
     console.log(`🔍 Verifying OTP for ${email} with purpose: ${purpose}`);
     

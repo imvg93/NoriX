@@ -133,37 +133,90 @@ router.post('/register', rateLimit(15 * 60 * 1000, 10), asyncHandler(async (req:
   }, 'User registered successfully', 201);
 }));
 
-// @route   POST /api/auth/login
-// @desc    Authenticate user & get token
+// @route   POST /api/auth/login-request-otp
+// @desc    Request OTP for login
 // @access  Public
-router.post('/login', rateLimit(15 * 60 * 1000, 10), asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { phone, password, role } = req.body;
+router.post('/login-request-otp', rateLimit(15 * 60 * 1000, 5), asyncHandler(async (req: express.Request, res: express.Response) => {
+  const { email, userType } = req.body;
 
   // Validate input
-  if (!phone || !password || !role) {
-    throw new ValidationError('Phone, password, and role are required');
+  if (!email || !userType) {
+    throw new ValidationError('Email and user type are required');
   }
 
-  // Find user by phone
-  const user = await User.findOne({ phone });
+  // Validate user type
+  if (!['student', 'employer'].includes(userType)) {
+    throw new ValidationError('Invalid user type');
+  }
+
+  // Find user by email
+  const user = await User.findOne({ email });
   if (!user) {
-    throw new ValidationError('Invalid credentials');
+    throw new ValidationError('No account found with this email address');
   }
 
   // Check if user type matches
-  if (user.userType !== role) {
-    throw new ValidationError('Invalid role for this account');
-  }
-
-  // Check password
-  const isPasswordValid = await user.comparePassword(password);
-  if (!isPasswordValid) {
-    throw new ValidationError('Invalid credentials');
+  if (user.userType !== userType) {
+    throw new ValidationError('Invalid user type for this account');
   }
 
   // Check if user is active
   if (!user.isActive) {
     throw new ValidationError('Account is deactivated');
+  }
+
+  // Send OTP for login
+  const otp = generateOTP();
+  const emailSent = await sendOTPEmail(email, otp, 'login');
+  if (!emailSent) {
+    const configStatus = getEmailConfigStatus();
+    console.error('❌ Failed to send login OTP:', configStatus);
+    throw new ValidationError('Failed to send OTP email. Please check your email configuration.');
+  }
+
+  sendSuccessResponse(res, {
+    message: 'OTP sent to your email address',
+    email: email,
+    userType: userType
+  }, 'OTP sent successfully');
+}));
+
+// @route   POST /api/auth/login-verify-otp
+// @desc    Verify OTP and login user
+// @access  Public
+router.post('/login-verify-otp', rateLimit(15 * 60 * 1000, 10), asyncHandler(async (req: express.Request, res: express.Response) => {
+  const { email, userType, otp } = req.body;
+
+  // Validate input
+  if (!email || !userType || !otp) {
+    throw new ValidationError('Email, user type, and OTP are required');
+  }
+
+  // Validate user type
+  if (!['student', 'employer'].includes(userType)) {
+    throw new ValidationError('Invalid user type');
+  }
+
+  // Find user by email
+  const user = await User.findOne({ email });
+  if (!user) {
+    throw new ValidationError('No account found with this email address');
+  }
+
+  // Check if user type matches
+  if (user.userType !== userType) {
+    throw new ValidationError('Invalid user type for this account');
+  }
+
+  // Check if user is active
+  if (!user.isActive) {
+    throw new ValidationError('Account is deactivated');
+  }
+
+  // Verify OTP
+  const otpValid = await verifyOTP(email, otp, 'login');
+  if (!otpValid) {
+    throw new ValidationError('Invalid or expired OTP. Please request a new one.');
   }
 
   // Generate token
