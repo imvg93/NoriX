@@ -16,7 +16,7 @@ export default function Signup() {
     // Student-specific fields
     college: '',
     skills: '',
-    availability: '',
+    availability: 'flexible', // Default value
     // Employer-specific fields
     companyName: '',
     businessType: '',
@@ -28,7 +28,7 @@ export default function Signup() {
   const [otpData, setOtpData] = useState({ email: '', phone: '' });
   const [step, setStep] = useState<'form' | 'otp' | 'success'>('form');
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -61,8 +61,20 @@ export default function Signup() {
       return;
     }
 
-    if (userType === 'employer' && (!formData.companyName || !formData.businessType)) {
-      setError('Please fill in company details');
+    if (userType === 'student' && !formData.availability) {
+      setError('Please select your availability');
+      setLoading(false);
+      return;
+    }
+
+    if (userType === 'employer' && !formData.companyName) {
+      setError('Please enter your company name');
+      setLoading(false);
+      return;
+    }
+
+    if (userType === 'employer' && !formData.businessType) {
+      setError('Please select your business type');
       setLoading(false);
       return;
     }
@@ -349,15 +361,20 @@ export default function Signup() {
                         Availability
                       </label>
                       <div className="mt-1">
-                        <textarea
+                        <select
                           id="availability"
                           name="availability"
-                          rows={2}
+                          required
                           value={formData.availability}
                           onChange={handleInputChange}
                           className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                          placeholder="When are you available? (e.g., Weekends, Evenings, Flexible)"
-                        />
+                        >
+                          <option value="">Select your availability</option>
+                          <option value="weekdays">Weekdays</option>
+                          <option value="weekends">Weekends</option>
+                          <option value="both">Both (Weekdays & Weekends)</option>
+                          <option value="flexible">Flexible</option>
+                        </select>
                       </div>
                     </div>
                   </>
@@ -389,16 +406,26 @@ export default function Signup() {
                         Business Type
                       </label>
                       <div className="mt-1">
-                        <input
+                        <select
                           id="businessType"
                           name="businessType"
-                          type="text"
                           required
                           value={formData.businessType}
                           onChange={handleInputChange}
                           className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                          placeholder="e.g., Restaurant, Retail, Technology"
-                        />
+                        >
+                          <option value="">Select business type</option>
+                          <option value="Cafe & Restaurant">Cafe & Restaurant</option>
+                          <option value="Retail Store">Retail Store</option>
+                          <option value="Tuition Center">Tuition Center</option>
+                          <option value="Events & Entertainment">Events & Entertainment</option>
+                          <option value="Delivery Service">Delivery Service</option>
+                          <option value="Office & Corporate">Office & Corporate</option>
+                          <option value="Tech Company">Tech Company</option>
+                          <option value="Creative Agency">Creative Agency</option>
+                          <option value="Healthcare">Healthcare</option>
+                          <option value="Other">Other</option>
+                        </select>
                       </div>
                     </div>
 
