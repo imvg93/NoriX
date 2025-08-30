@@ -1,6 +1,9 @@
 const { spawn } = require('child_process');
 const path = require('path');
 
+// Load environment variables from .env file
+require('dotenv').config();
+
 // Check if required environment variables are set
 const requiredEnvVars = [
   'MONGODB_URI',
@@ -18,6 +21,7 @@ if (missingVars.length > 0) {
   });
   console.error('\n💡 Please set these variables in your Render dashboard:');
   console.error('   Environment → Environment Variables');
+  console.error('\n📁 Or check your local .env file at:', path.join(__dirname, '.env'));
   process.exit(1);
 }
 
