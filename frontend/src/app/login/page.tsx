@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { apiService } from '../../services/api';
+import { useRouter } from 'next/navigation';
 
 export default function Login() {
   const [step, setStep] = useState<'email' | 'otp'>('email');
@@ -16,6 +17,8 @@ export default function Login() {
   const [success, setSuccess] = useState('');
   const [resendTimer, setResendTimer] = useState(0);
   const [canResend, setCanResend] = useState(false);
+
+  const router = useRouter();
 
   // Timer for resend OTP functionality
   useEffect(() => {
@@ -80,23 +83,24 @@ export default function Login() {
     }
 
     try {
-      const response: any = await apiService.loginVerifyOTP(formData.email, formData.userType, formData.otp);
+      // Login with OTP verification
+      const response: any = await apiService.loginVerifyOTP(formData.email, 'student', formData.otp);
       
-      // Store the token
       if (response.token) {
+        // Store the token
         localStorage.setItem('token', response.token);
         localStorage.setItem('user', JSON.stringify(response.user));
         
-        setSuccess('Login successful! Redirecting...');
+        setSuccess('Login successful!');
         
         // Redirect to appropriate dashboard based on user type
         setTimeout(() => {
-          if (formData.userType === 'student') {
-            window.location.href = '/student-home';
-          } else if (formData.userType === 'employer') {
-            window.location.href = '/employer-home';
-          } else if (formData.userType === 'admin') {
-            window.location.href = '/admin-home';
+          if (response.user.userType === 'student') {
+            router.push('/student-home');
+          } else if (response.user.userType === 'employer') {
+            router.push('/employer-home');
+          } else if (response.user.userType === 'admin') {
+            router.push('/admin-home');
           }
         }, 2000);
       }

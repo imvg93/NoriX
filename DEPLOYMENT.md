@@ -1,231 +1,164 @@
-# 🚀 Deployment Guide for Render
+# 🚀 Render Deployment Guide
 
 This guide will help you deploy your StudentJobs application to Render.
 
 ## 📋 Prerequisites
 
 1. **GitHub Repository**: Your code should be pushed to GitHub
-2. **MongoDB Atlas**: Set up a MongoDB Atlas cluster
-3. **Gmail Account**: For OTP email functionality
+2. **MongoDB Atlas Account**: For production database
+3. **Gmail Account**: For email OTP functionality
 4. **Render Account**: Sign up at [render.com](https://render.com)
 
 ## 🔧 Step 1: MongoDB Atlas Setup
 
-### 1.1 Create MongoDB Atlas Cluster
 1. Go to [MongoDB Atlas](https://www.mongodb.com/atlas)
 2. Create a free cluster
-3. Set up database access (username/password)
-4. Set up network access (allow all IPs: 0.0.0.0/0)
-5. Get your connection string
-
-### 1.2 Connection String Format
-```
-mongodb+srv://username:password@cluster.mongodb.net/studentjobs
-```
+3. Get your connection string
+4. Replace `<username>`, `<password>`, and `<cluster>` with your values
 
 ## 📧 Step 2: Gmail SMTP Setup
 
-### 2.1 Enable 2-Factor Authentication
-1. Go to Google Account Settings
-2. Navigate to "Security"
-3. Enable "2-Step Verification"
+1. Enable 2-Factor Authentication on your Gmail account
+2. Generate an App Password:
+   - Go to Google Account Settings → Security
+   - Find "App passwords"
+   - Select "Mail" and "Other"
+   - Copy the 16-character password
 
-### 2.2 Generate App Password
-1. In Security settings, find "App passwords"
-2. Click "App passwords"
-3. Select "Mail" as the app
-4. Select "Other" as the device
-5. Enter a name like "StudentJobs OTP"
-6. Click "Generate"
-7. **Copy the 16-character password**
+## 🌐 Step 3: Render Deployment
 
-## 🚀 Step 3: Deploy to Render
+### Option A: Using render.yaml (Recommended)
 
-### 3.1 Deploy Backend First
+1. **Connect Repository**:
+   - Go to [Render Dashboard](https://dashboard.render.com)
+   - Click "New" → "Blueprint"
+   - Connect your GitHub repository: `https://github.com/imvg93/MeWork.git`
 
-1. **Go to Render Dashboard**
-   - Visit [render.com](https://render.com)
-   - Click "New +" → "Web Service"
+2. **Configure Environment Variables**:
+   - After connecting, you'll see both services
+   - For **Backend Service**, add these environment variables:
 
-2. **Connect Repository**
-   - Connect your GitHub repository
-   - Select the repository: `imvg93/MeWork`
+```
+NODE_ENV=production
+PORT=10000
+MONGODB_URI=mongodb+srv://your-username:your-password@your-cluster.mongodb.net/studentjobs
+JWT_SECRET=your-super-secret-jwt-key-here-change-this-in-production
+JWT_EXPIRES_IN=7d
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_SECURE=false
+EMAIL_USER=your-gmail@gmail.com
+EMAIL_PASS=your-16-character-app-password
+EMAIL_ALLOW_SELF_SIGNED=false
+```
 
-3. **Configure Backend Service**
-   ```
-   Name: studentjobs-backend
-   Environment: Node
-   Build Command: cd backend && npm install && npm run build
-   Start Command: cd backend && npm start
-   ```
+3. **For Frontend Service**, add:
+```
+NEXT_PUBLIC_API_URL=https://your-backend-service-name.onrender.com/api
+```
 
-4. **Set Environment Variables**
-   ```
-   NODE_ENV=production
-   PORT=5000
-   MONGODB_URI=mongodb+srv://your-username:your-password@your-cluster.mongodb.net/studentjobs
-   JWT_SECRET=your-super-secret-jwt-key-here-change-this-in-production
-   JWT_EXPIRES_IN=7d
-   EMAIL_HOST=smtp.gmail.com
-   EMAIL_PORT=587
-   EMAIL_SECURE=false
-   EMAIL_USER=your-gmail@gmail.com
-   EMAIL_PASS=your-16-character-app-password
-   EMAIL_ALLOW_SELF_SIGNED=false
-   ```
+### Option B: Manual Deployment
 
-5. **Deploy**
-   - Click "Create Web Service"
-   - Wait for deployment to complete
-   - Note the URL: `https://studentjobs-backend.onrender.com`
+#### Backend Service
+1. Go to Render Dashboard
+2. Click "New" → "Web Service"
+3. Connect your GitHub repository
+4. Configure:
+   - **Name**: `studentjobs-backend`
+   - **Environment**: `Node`
+   - **Build Command**: `cd backend && npm install && npm run build`
+   - **Start Command**: `cd backend && npm start`
+   - **Plan**: Free
 
-### 3.2 Deploy Frontend
+#### Frontend Service
+1. Click "New" → "Static Site"
+2. Configure:
+   - **Name**: `studentjobs-frontend`
+   - **Build Command**: `cd frontend && npm install && npm run build`
+   - **Publish Directory**: `frontend/out`
 
-1. **Create Another Web Service**
-   - Click "New +" → "Web Service"
-   - Connect the same repository
+## 🔑 Environment Variables Reference
 
-2. **Configure Frontend Service**
-   ```
-   Name: studentjobs-frontend
-   Environment: Node
-   Build Command: cd frontend && npm install && npm run build
-   Start Command: cd frontend && npm start
-   ```
-
-3. **Set Environment Variables**
-   ```
-   NODE_ENV=production
-   PORT=3000
-   NEXT_PUBLIC_API_URL=https://studentjobs-backend.onrender.com/api
-   ```
-
-4. **Deploy**
-   - Click "Create Web Service"
-   - Wait for deployment to complete
-   - Note the URL: `https://studentjobs-frontend.onrender.com`
-
-## 🔍 Step 4: Verify Deployment
-
-### 4.1 Test Backend Health
+### Backend Required Variables:
 ```bash
-curl https://studentjobs-backend.onrender.com/health
+NODE_ENV=production
+PORT=10000
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/studentjobs
+JWT_SECRET=your-super-secret-jwt-key-here
+JWT_EXPIRES_IN=7d
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_SECURE=false
+EMAIL_USER=your-gmail@gmail.com
+EMAIL_PASS=your-16-character-app-password
+EMAIL_ALLOW_SELF_SIGNED=false
 ```
 
-Expected response:
-```json
-{
-  "status": "OK",
-  "message": "StudentJobs API is running",
-  "timestamp": "2025-08-30T14:00:00.000Z",
-  "environment": "production"
-}
-```
-
-### 4.2 Test API Documentation
+### Frontend Required Variables:
 ```bash
-curl https://studentjobs-backend.onrender.com/api
+NEXT_PUBLIC_API_URL=https://your-backend-service-name.onrender.com/api
 ```
 
-### 4.3 Test Frontend
-- Visit: `https://studentjobs-frontend.onrender.com`
-- Try registering a new user
-- Test login functionality
+## 🚀 Deployment Steps
 
-## 🛠️ Step 5: Troubleshooting
+1. **Push Latest Code**:
+   ```bash
+   git add .
+   git commit -m "Prepare for Render deployment"
+   git push origin master
+   ```
 
-### 5.1 Common Issues
+2. **Deploy on Render**:
+   - Render will automatically detect the `render.yaml` file
+   - It will create both services automatically
+   - Set the environment variables as shown above
 
-**Build Failures**
-- Check if all dependencies are in package.json
-- Verify Node.js version compatibility
-- Check build logs in Render dashboard
+3. **Wait for Build**:
+   - Backend build: ~5-10 minutes
+   - Frontend build: ~3-5 minutes
 
-**Database Connection Issues**
-- Verify MongoDB Atlas connection string
-- Check network access settings
-- Ensure database user has correct permissions
+## 🔍 Troubleshooting
 
-**Email Issues**
-- Verify Gmail App Password is correct
-- Check if 2-Factor Authentication is enabled
-- Test email configuration locally first
+### Common Issues:
 
-**CORS Issues**
-- Verify CORS origins in backend configuration
-- Check if frontend URL is included in allowed origins
+1. **Build Fails**:
+   - Check build logs in Render dashboard
+   - Ensure all dependencies are in package.json
+   - Verify TypeScript compilation
 
-### 5.2 Environment Variables Checklist
+2. **Database Connection Issues**:
+   - Verify MongoDB Atlas connection string
+   - Check IP whitelist in MongoDB Atlas
+   - Ensure database user has correct permissions
 
-**Backend Required Variables:**
-- ✅ `MONGODB_URI`
-- ✅ `JWT_SECRET`
-- ✅ `EMAIL_USER`
-- ✅ `EMAIL_PASS`
+3. **Email Not Working**:
+   - Verify Gmail App Password
+   - Check if 2FA is enabled
+   - Test email configuration locally first
 
-**Frontend Required Variables:**
-- ✅ `NEXT_PUBLIC_API_URL`
+4. **Frontend Can't Connect to Backend**:
+   - Verify `NEXT_PUBLIC_API_URL` is correct
+   - Check CORS settings in backend
+   - Ensure backend service is running
 
-### 5.3 Monitoring
+## 📊 Monitoring
 
-1. **Check Logs**
-   - Go to your service in Render dashboard
-   - Click on "Logs" tab
-   - Monitor for errors
+- **Backend URL**: `https://your-backend-service-name.onrender.com`
+- **Frontend URL**: `https://your-frontend-service-name.onrender.com`
+- **Health Check**: `https://your-backend-service-name.onrender.com/health`
 
-2. **Health Checks**
-   - Backend: `https://studentjobs-backend.onrender.com/health`
-   - Frontend: `https://studentjobs-frontend.onrender.com`
+## 🔄 Updates
 
-## 🔄 Step 6: Auto-Deployment
-
-### 6.1 Enable Auto-Deploy
-- In Render dashboard, go to your service
-- Enable "Auto-Deploy" option
-- Every push to main branch will trigger deployment
-
-### 6.2 Manual Deployment
-- Go to service dashboard
-- Click "Manual Deploy"
-- Select branch and commit
-
-## 📊 Step 7: Performance Optimization
-
-### 7.1 Database Optimization
-- Create indexes for frequently queried fields
-- Monitor database performance
-- Consider connection pooling
-
-### 7.2 Frontend Optimization
-- Enable Next.js image optimization
-- Use CDN for static assets
-- Implement caching strategies
-
-## 🔒 Step 8: Security
-
-### 8.1 Environment Variables
-- Never commit sensitive data to Git
-- Use Render's environment variable system
-- Rotate JWT secrets regularly
-
-### 8.2 CORS Configuration
-- Only allow necessary origins
-- Use HTTPS in production
-- Implement rate limiting
+To update your deployed application:
+1. Push changes to GitHub
+2. Render will automatically redeploy
+3. Monitor build logs for any issues
 
 ## 📞 Support
 
 If you encounter issues:
-
-1. Check Render documentation: [docs.render.com](https://docs.render.com)
-2. Check application logs in Render dashboard
-3. Verify all environment variables are set correctly
-4. Test locally before deploying
-
-## 🎉 Success!
-
-Once deployed, your application will be available at:
-- **Frontend**: `https://studentjobs-frontend.onrender.com`
-- **Backend API**: `https://studentjobs-backend.onrender.com`
-
-Your StudentJobs platform is now live and ready to connect students with part-time job opportunities! 🚀
+1. Check Render build logs
+2. Verify environment variables
+3. Test locally first
+4. Check MongoDB Atlas connection
+5. Verify Gmail SMTP settings

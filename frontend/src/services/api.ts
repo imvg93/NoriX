@@ -1,50 +1,73 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 class ApiService {
-  private baseURL: string;
-
-  constructor() {
-    this.baseURL = API_BASE_URL;
+  private getToken(): string | null {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('token');
+    }
+    return null;
   }
 
-  private async request(endpoint: string, options: RequestInit = {}) {
-    const url = `${this.baseURL}${endpoint}`;
-    
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<T> {
+    const token = this.getToken();
+    const url = `${API_BASE_URL}${endpoint}`;
+
     const config: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
         ...options.headers,
       },
       ...options,
     };
 
-    // Add auth token if available
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('token');
-      if (token) {
-        config.headers = {
-          ...config.headers,
-          Authorization: `Bearer ${token}`,
-        };
-      }
-    }
-
     try {
       const response = await fetch(url, config);
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        let errorData: any = null;
+        try {
+          errorData = await response.json();
+        } catch (_) {
+          // ignore JSON parse failure
+        }
+        const message =
+          errorData?.message ||
+          errorData?.error?.message ||
+          (Array.isArray(errorData?.errors) && errorData.errors[0]?.message) ||
+          (typeof errorData === 'string' ? errorData : `HTTP error! status: ${response.status}`);
+
+        const err: any = new Error(message);
+        err.status = response.status;
+        err.details = errorData;
+        throw err;
       }
-      
+
       return await response.json();
-    } catch (error: any) {
+    } catch (error) {
       console.error('API request failed:', error);
       throw error;
     }
   }
 
-  // Authentication methods
+  // Authentication APIs
+  async loginRequestOTP(email: string, userType: string) {
+    return this.request('/auth/login-request-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, userType }),
+    });
+  }
+
+  async loginVerifyOTP(email: string, userType: string, otp: string) {
+    return this.request('/auth/login-verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, userType, otp }),
+    });
+  }
+
   async register(userData: any) {
     return this.request('/auth/register', {
       method: 'POST',
@@ -52,91 +75,62 @@ class ApiService {
     });
   }
 
-  async login(credentials: { email: string; password: string }) {
-    return this.request('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(credentials),
-    });
-  }
-
-  async sendOTP(email: string, purpose: 'verification' | 'login' | 'reset') {
+  async sendOTP(email: string, purpose: 'verification' | 'password-reset' | 'login') {
     return this.request('/auth/send-otp', {
       method: 'POST',
       body: JSON.stringify({ email, purpose }),
     });
   }
 
-  async verifyOTP(email: string, otp: string, purpose: 'verification' | 'login' | 'reset') {
+  async verifyOTP(email: string, otp: string, purpose: 'verification' | 'password-reset' | 'login') {
     return this.request('/auth/verify-otp', {
       method: 'POST',
       body: JSON.stringify({ email, otp, purpose }),
     });
   }
 
-  async loginWithOTP(email: string, otp: string) {
-    return this.request('/auth/login-verify-otp', {
+  async refreshToken() {
+    return this.request('/auth/refresh', {
       method: 'POST',
-      body: JSON.stringify({ email, otp }),
     });
   }
 
-  async forgotPassword(email: string) {
-    return this.request('/auth/forgot-password', {
-      method: 'POST',
-      body: JSON.stringify({ email }),
-    });
-  }
-
-  async resetPassword(email: string, otp: string, newPassword: string) {
-    return this.request('/auth/reset-password', {
-      method: 'POST',
-      body: JSON.stringify({ email, otp, newPassword }),
-    });
-  }
-
-  // User methods
-  async getUserProfile() {
+  async getProfile() {
     return this.request('/users/profile');
   }
 
-  async updateUserProfile(profileData: any) {
+  async updateProfile(userData: any) {
     return this.request('/users/profile', {
       method: 'PUT',
-      body: JSON.stringify(profileData),
+      body: JSON.stringify(userData),
     });
   }
 
-  async uploadAvatar(formData: FormData) {
-    const url = `${this.baseURL}/users/avatar`;
-    
-    const config: RequestInit = {
+  async uploadAvatar(file: File) {
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    const token = this.getToken();
+    const response = await fetch(`${API_BASE_URL}/users/avatar`, {
       method: 'POST',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
       body: formData,
-    };
+    });
 
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('token');
-      if (token) {
-        config.headers = {
-          Authorization: `Bearer ${token}`,
-        };
-      }
-    }
-
-    const response = await fetch(url, config);
-    
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      throw new Error('Avatar upload failed');
     }
-    
-    return await response.json();
+
+    return response.json();
   }
 
-  // Job methods
+  // Job APIs
   async getJobs(filters?: any) {
-    const queryParams = filters ? `?${new URLSearchParams(filters).toString()}` : '';
-    return this.request(`/jobs${queryParams}`);
+    const queryParams = filters ? new URLSearchParams(filters).toString() : '';
+    const endpoint = queryParams ? `/jobs?${queryParams}` : '/jobs';
+    return this.request(endpoint);
   }
 
   async getJob(id: string) {
@@ -163,11 +157,27 @@ class ApiService {
     });
   }
 
-  // Application methods
+  async getEmployerJobs() {
+    return this.request('/jobs/employer');
+  }
+
+  async updateJobStatus(id: string, status: string) {
+    return this.request(`/jobs/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+  }
+
+
+
+  // Application APIs
   async applyToJob(jobId: string, applicationData: any) {
     return this.request('/applications', {
       method: 'POST',
-      body: JSON.stringify({ jobId, ...applicationData }),
+      body: JSON.stringify({
+        job: jobId,
+        ...applicationData,
+      }),
     });
   }
 
@@ -179,59 +189,127 @@ class ApiService {
     return this.request(`/applications/job/${jobId}`);
   }
 
-  async updateApplicationStatus(applicationId: string, status: string) {
-    return this.request(`/applications/${applicationId}/status`, {
-      method: 'PUT',
-      body: JSON.stringify({ status }),
+  async updateApplicationStatus(id: string, status: string, notes?: string) {
+    return this.request(`/applications/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, notes }),
     });
   }
 
-  // Admin methods
-  async getAdminDashboard() {
-    return this.request('/admin/dashboard');
+  async withdrawApplication(id: string) {
+    return this.request(`/applications/${id}/withdraw`, {
+      method: 'PATCH',
+    });
   }
 
+  async rateApplication(id: string, rating: number, feedback?: string) {
+    return this.request(`/applications/${id}/rate`, {
+      method: 'POST',
+      body: JSON.stringify({ rating, feedback }),
+    });
+  }
+
+
+
+  // User Management APIs (Admin)
   async getAllUsers(filters?: any) {
-    const queryParams = filters ? `?${new URLSearchParams(filters).toString()}` : '';
-    return this.request(`/admin/users${queryParams}`);
+    const queryParams = filters ? new URLSearchParams(filters).toString() : '';
+    const endpoint = queryParams ? `/users?${queryParams}` : '/users';
+    return this.request(endpoint);
   }
 
-  async getUserStats() {
-    return this.request('/admin/users/stats');
+  async getUser(id: string) {
+    return this.request(`/users/${id}`);
   }
 
-  async updateUserStatus(userId: string, status: string) {
-    return this.request(`/admin/users/${userId}/status`, {
+  async updateUser(id: string, userData: any) {
+    return this.request(`/users/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(userData),
     });
   }
 
-  async deleteUser(userId: string) {
-    return this.request(`/admin/users/${userId}`, {
+  async deleteUser(id: string) {
+    return this.request(`/users/${id}`, {
       method: 'DELETE',
     });
   }
 
+  async suspendUser(id: string) {
+    return this.request(`/users/${id}/suspend`, {
+      method: 'PATCH',
+    });
+  }
+
+  async activateUser(id: string) {
+    return this.request(`/users/${id}/activate`, {
+      method: 'PATCH',
+    });
+  }
+
+  // Verification APIs (Admin)
+  async getPendingVerifications() {
+    return this.request('/verifications/pending');
+  }
+
+  async approveVerification(id: string) {
+    return this.request(`/verifications/${id}/approve`, {
+      method: 'PATCH',
+    });
+  }
+
+  async rejectVerification(id: string, reason: string) {
+    return this.request(`/verifications/${id}/reject`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  // Analytics APIs (Admin)
+  async getPlatformStats() {
+    return this.request('/analytics/platform');
+  }
+
+  async getUserStats() {
+    return this.request('/analytics/users');
+  }
+
+  async getJobAnalytics() {
+    return this.request('/analytics/jobs');
+  }
+
+  async getApplicationAnalytics() {
+    return this.request('/analytics/applications');
+  }
+
   // Utility methods
+  async healthCheck() {
+    return this.request('/health');
+  }
+
+  // Error handling
   handleError(error: any): string {
     if (error.message) {
       return error.message;
     }
-    if (error.response?.data?.message) {
-      return error.response.data.message;
-    }
-    return 'An unexpected error occurred';
-  }
-
-  // Logout
-  logout() {
-    if (typeof window !== 'undefined') {
+    if (error.status === 401) {
+      // Token expired or invalid
       localStorage.removeItem('token');
-      localStorage.removeItem('user');
       window.location.href = '/login';
+      return 'Session expired. Please login again.';
     }
+    if (error.status === 403) {
+      return 'Access denied. You do not have permission to perform this action.';
+    }
+    if (error.status === 404) {
+      return 'Resource not found.';
+    }
+    if (error.status >= 500) {
+      return 'Server error. Please try again later.';
+    }
+    return 'An unexpected error occurred. Please try again.';
   }
 }
 
 export const apiService = new ApiService();
+export default apiService;

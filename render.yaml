@@ -3,14 +3,14 @@ services:
   - type: web
     name: studentjobs-backend
     env: node
-    plan: starter
+    plan: free
     buildCommand: cd backend && npm install && npm run build
     startCommand: cd backend && npm start
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 5000
+        value: 10000
       - key: MONGODB_URI
         sync: false
       - key: JWT_SECRET
@@ -29,20 +29,14 @@ services:
         sync: false
       - key: EMAIL_ALLOW_SELF_SIGNED
         value: false
-    healthCheckPath: /health
 
   # Frontend Web Service
   - type: web
     name: studentjobs-frontend
-    env: node
-    plan: starter
+    env: static
+    plan: free
     buildCommand: cd frontend && npm install && npm run build
-    startCommand: cd frontend && npm start
+    staticPublishPath: frontend/out
     envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 3000
       - key: NEXT_PUBLIC_API_URL
-        value: https://studentjobs-backend.onrender.com/api
-    healthCheckPath: /
+        value: https://studentjobs-backend.onrender.com/api 

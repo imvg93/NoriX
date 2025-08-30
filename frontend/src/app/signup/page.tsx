@@ -4,6 +4,13 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { apiService } from '../../services/api';
 
+// Helper function to safely access localStorage
+const setLocalStorage = (key: string, value: string): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(key, value);
+  }
+};
+
 export default function Signup() {
   const [userType, setUserType] = useState<'student' | 'employer'>('student');
   const [formData, setFormData] = useState({
@@ -152,8 +159,8 @@ export default function Signup() {
       
       if (response.token) {
         // Store the token
-        localStorage.setItem('token', response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
+        setLocalStorage('token', response.token);
+        setLocalStorage('user', JSON.stringify(response.user));
         
         setStep('success');
         setSuccess('Account created successfully!');

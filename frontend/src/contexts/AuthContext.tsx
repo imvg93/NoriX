@@ -2,12 +2,12 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-interface User {
+export interface User {
   _id: string;
   name: string;
   email: string;
   userType: 'student' | 'employer' | 'admin';
-  isVerified?: boolean;
+  isVerified: boolean;
   college?: string;
   skills?: string[];
   availability?: string;
@@ -18,12 +18,11 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (userData: any) => Promise<void>;
   logout: () => void;
-  updateProfile: (userData: Partial<User>) => Promise<void>;
+  isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -40,13 +39,33 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+// Helper function to safely access localStorage
+const getLocalStorage = (key: string): string | null => {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem(key);
+  }
+  return null;
+};
+
+const setLocalStorage = (key: string, value: string): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(key, value);
+  }
+};
+
+const removeLocalStorage = (key: string): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(key);
+  }
+};
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // Check if user is logged in on app load
-    const token = localStorage.getItem('token');
+    const token = getLocalStorage('token');
     if (token) {
       // Validate token and get user data
       validateToken(token);
@@ -75,7 +94,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     } catch (error) {
       console.error('Token validation failed:', error);
-      localStorage.removeItem('token');
+      removeLocalStorage('token');
     } finally {
       setIsLoading(false);
     }
@@ -98,7 +117,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       };
       
       // Store token (mock)
-      localStorage.setItem('token', 'mock-jwt-token');
+      setLocalStorage('token', 'mock-jwt-token');
       setUser(mockUser);
     } catch (error) {
       console.error('Login failed:', error);
@@ -132,7 +151,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       };
       
       // Store token (mock)
-      localStorage.setItem('token', 'mock-jwt-token');
+      setLocalStorage('token', 'mock-jwt-token');
       setUser(mockUser);
     } catch (error) {
       console.error('Registration failed:', error);
@@ -143,34 +162,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
+    removeLocalStorage('token');
     setUser(null);
-  };
-
-  const updateProfile = async (userData: Partial<User>) => {
-    try {
-      setIsLoading(true);
-      // Here you would make an API call to update the profile
-      // For now, we'll just update the local state
-      if (user) {
-        setUser({ ...user, ...userData });
-      }
-    } catch (error) {
-      console.error('Profile update failed:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   const value: AuthContextType = {
     user,
-    isAuthenticated: !!user,
     isLoading,
     login,
     register,
     logout,
-    updateProfile
+    isAuthenticated: !!user
   };
 
   return (
