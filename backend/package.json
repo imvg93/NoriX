@@ -10,7 +10,8 @@
     "seed": "ts-node src/scripts/seed.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:email": "node test-otp.js",
-    "test:models": "node test-models.js"
+    "test:models": "node test-models.js",
+    "test:env": "node test-env.js"
   },
   "keywords": [
     "student",
