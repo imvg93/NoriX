@@ -30,7 +30,7 @@ services:
       - key: EMAIL_ALLOW_SELF_SIGNED
         value: false
 
-  # Frontend Web Service
+  # Frontend Static Site
   - type: web
     name: studentjobs-frontend
     env: static
