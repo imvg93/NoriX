@@ -1,27 +1,39 @@
 {
   "name": "studenting",
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "description": "StudentJobs Platform - Connecting students with part-time job opportunities",
   "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "next": "15.5.2"
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "dev:backend": "npm run dev --workspace=backend",
+    "build": "npm run build --workspaces",
+    "build:frontend": "npm run build --workspace=frontend",
+    "build:backend": "npm run build --workspace=backend",
+    "start": "concurrently \"npm run start:frontend\" \"npm run start:backend\"",
+    "start:frontend": "npm run start --workspace=frontend",
+    "start:backend": "npm run start --workspace=backend",
+    "install:all": "npm install && npm install --workspace=frontend && npm install --workspace=backend",
+    "setup": "node setup.js",
+    "test:email": "npm run test:email --workspace=backend",
+    "test:models": "npm run test:models --workspace=backend"
   },
   "devDependencies": {
-    "typescript": "^5",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4",
-    "eslint": "^9",
-    "eslint-config-next": "15.5.2",
-    "@eslint/eslintrc": "^3"
-  }
+    "concurrently": "^8.2.2"
+  },
+  "keywords": [
+    "student",
+    "jobs",
+    "part-time",
+    "hyderabad",
+    "nextjs",
+    "express",
+    "mongodb"
+  ],
+  "author": "StudentJobs Team",
+  "license": "ISC"
 }

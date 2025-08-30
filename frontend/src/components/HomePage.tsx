@@ -1,0 +1,53 @@
+"use client";
+
+import React from 'react';
+import { motion } from 'framer-motion';
+import StudentHome from './StudentHome';
+import AdminHome from './AdminHome';
+import EmployerHome from './EmployerHome';
+
+interface User {
+  name: string;
+  userType: 'student' | 'admin' | 'employer';
+}
+
+const HomePage: React.FC = () => {
+  // Mock user data for now - replace with real auth context later
+  const user: User = {
+    name: 'John Doe',
+    userType: 'student'
+  };
+
+  const renderRoleBasedHome = () => {
+    switch (user.userType) {
+      case 'student':
+        return <StudentHome user={user} />;
+      case 'admin':
+        return <AdminHome user={user} />;
+      case 'employer':
+        return <EmployerHome user={user} />;
+      default:
+        return (
+          <div className="text-center py-12">
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Unknown User Role</h2>
+            <p className="text-gray-600">Please contact support to resolve this issue.</p>
+          </div>
+        );
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5 }}
+      className="min-h-screen bg-gray-50"
+    >
+      <div className="container mx-auto px-4 py-6 max-w-7xl">
+        {renderRoleBasedHome()}
+      </div>
+    </motion.div>
+  );
+};
+
+export default HomePage;

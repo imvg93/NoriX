@@ -1,0 +1,289 @@
+import mongoose, { Document, Schema } from 'mongoose';
+
+export interface IJob extends Document {
+  title: string;
+  company: string;
+  employer: mongoose.Types.ObjectId;
+  businessType: string;
+  location: string;
+  jobType: string;
+  pay: number;
+  payType: 'hourly' | 'daily' | 'weekly' | 'monthly' | 'per_task';
+  timing: string;
+  positions: number;
+  description: string;
+  requirements?: string;
+  benefits?: string;
+  contactEmail: string;
+  contactPhone?: string;
+  
+  // Status and verification
+  status: 'active' | 'paused' | 'closed' | 'expired';
+  isVerified: boolean;
+  isPremium: boolean;
+  
+  // Analytics
+  views: number;
+  applications: number;
+  shortlisted: number;
+  hired: number;
+  
+  // Timestamps
+  postedDate: Date;
+  expiryDate: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  
+  // Methods
+  isExpired(): boolean;
+  incrementViews(): Promise<void>;
+  incrementApplications(): Promise<void>;
+}
+
+const jobSchema = new Schema<IJob>({
+  title: {
+    type: String,
+    required: [true, 'Job title is required'],
+    trim: true,
+    maxlength: [200, 'Job title cannot exceed 200 characters']
+  },
+  company: {
+    type: String,
+    required: [true, 'Company name is required'],
+    trim: true,
+    maxlength: [200, 'Company name cannot exceed 200 characters']
+  },
+  employer: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: [true, 'Employer is required']
+  },
+  businessType: {
+    type: String,
+    required: [true, 'Business type is required'],
+    enum: [
+      'Cafe & Restaurant',
+      'Retail Store',
+      'Tuition Center',
+      'Events & Entertainment',
+      'Delivery Service',
+      'Office & Corporate',
+      'Tech Company',
+      'Creative Agency',
+      'Healthcare',
+      'Other'
+    ]
+  },
+  location: {
+    type: String,
+    required: [true, 'Location is required'],
+    trim: true,
+    maxlength: [300, 'Location cannot exceed 300 characters']
+  },
+  jobType: {
+    type: String,
+    required: [true, 'Job type is required'],
+    enum: [
+      'Cafe & Restaurant',
+      'Tuition & Teaching',
+      'Events & Entertainment',
+      'Retail',
+      'Delivery',
+      'Office Work',
+      'Tech Support',
+      'Creative',
+      'Customer Service',
+      'Administrative',
+      'Other'
+    ]
+  },
+  pay: {
+    type: Number,
+    required: [true, 'Pay rate is required'],
+    min: [0, 'Pay rate cannot be negative']
+  },
+  payType: {
+    type: String,
+    required: [true, 'Pay type is required'],
+    enum: ['hourly', 'daily', 'weekly', 'monthly', 'per_task'],
+    default: 'hourly'
+  },
+  timing: {
+    type: String,
+    required: [true, 'Timing is required'],
+    enum: [
+      'Weekdays',
+      'Weekends',
+      'Both',
+      'Flexible',
+      'Morning (6 AM - 12 PM)',
+      'Afternoon (12 PM - 6 PM)',
+      'Evening (6 PM - 12 AM)',
+      'Night (12 AM - 6 AM)'
+    ]
+  },
+  positions: {
+    type: Number,
+    required: [true, 'Number of positions is required'],
+    min: [1, 'At least 1 position is required'],
+    max: [100, 'Cannot exceed 100 positions']
+  },
+  description: {
+    type: String,
+    required: [true, 'Job description is required'],
+    trim: true,
+    maxlength: [2000, 'Job description cannot exceed 2000 characters']
+  },
+  requirements: {
+    type: String,
+    trim: true,
+    maxlength: [1000, 'Requirements cannot exceed 1000 characters']
+  },
+  benefits: {
+    type: String,
+    trim: true,
+    maxlength: [1000, 'Benefits cannot exceed 1000 characters']
+  },
+  contactEmail: {
+    type: String,
+    required: [true, 'Contact email is required'],
+    lowercase: true,
+    trim: true,
+    match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
+  },
+  contactPhone: {
+    type: String,
+    trim: true,
+    match: [/^(\+91|0)?[789]\d{9}$/, 'Please enter a valid Indian phone number']
+  },
+  
+  // Status and verification
+  status: {
+    type: String,
+    enum: ['active', 'paused', 'closed', 'expired'],
+    default: 'active'
+  },
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
+  isPremium: {
+    type: Boolean,
+    default: false
+  },
+  
+  // Analytics
+  views: {
+    type: Number,
+    default: 0,
+    min: [0, 'Views cannot be negative']
+  },
+  applications: {
+    type: Number,
+    default: 0,
+    min: [0, 'Applications cannot be negative']
+  },
+  shortlisted: {
+    type: Number,
+    default: 0,
+    min: [0, 'Shortlisted count cannot be negative']
+  },
+  hired: {
+    type: Number,
+    default: 0,
+    min: [0, 'Hired count cannot be negative']
+  },
+  
+  // Timestamps
+  postedDate: {
+    type: Date,
+    default: Date.now
+  },
+  expiryDate: {
+    type: Date,
+    required: [true, 'Expiry date is required'],
+    validate: {
+      validator: function(this: IJob, value: Date) {
+        return value > new Date();
+      },
+      message: 'Expiry date must be in the future'
+    }
+  }
+}, {
+  timestamps: true
+});
+
+// Indexes for better query performance
+jobSchema.index({ status: 1, isVerified: 1 });
+jobSchema.index({ location: 1 });
+jobSchema.index({ jobType: 1 });
+jobSchema.index({ timing: 1 });
+jobSchema.index({ pay: 1 });
+jobSchema.index({ employer: 1 });
+jobSchema.index({ postedDate: -1 });
+jobSchema.index({ expiryDate: 1 });
+jobSchema.index({ isPremium: 1 });
+
+// Virtual for formatted pay display
+jobSchema.virtual('payDisplay').get(function() {
+  const payTypeLabels = {
+    hourly: '/hour',
+    daily: '/day',
+    weekly: '/week',
+    monthly: '/month',
+    per_task: '/task'
+  };
+  
+  return `₹${this.pay}${payTypeLabels[this.payType]}`;
+});
+
+// Virtual for time since posted
+jobSchema.virtual('timeSincePosted').get(function() {
+  const now = new Date();
+  const posted = this.postedDate;
+  const diffInMs = now.getTime() - posted.getTime();
+  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+  
+  if (diffInDays === 0) return 'Today';
+  if (diffInDays === 1) return 'Yesterday';
+  if (diffInDays < 7) return `${diffInDays} days ago`;
+  if (diffInDays < 30) return `${Math.floor(diffInDays / 7)} weeks ago`;
+  if (diffInDays < 365) return `${Math.floor(diffInDays / 30)} months ago`;
+  return `${Math.floor(diffInDays / 365)} years ago`;
+});
+
+// Virtual for application rate
+jobSchema.virtual('applicationRate').get(function() {
+  if (this.views === 0) return 0;
+  return ((this.applications / this.views) * 100).toFixed(1);
+});
+
+// Method to check if job is expired
+jobSchema.methods.isExpired = function(): boolean {
+  return new Date() > this.expiryDate;
+};
+
+// Method to increment views
+jobSchema.methods.incrementViews = function(): Promise<void> {
+  this.views += 1;
+  return this.save();
+};
+
+// Method to increment applications
+jobSchema.methods.incrementApplications = function(): Promise<void> {
+  this.applications += 1;
+  return this.save();
+};
+
+// Pre-save middleware to set expiry date if not provided
+jobSchema.pre('save', function(next) {
+  if (!this.expiryDate) {
+    // Default expiry: 30 days from posted date
+    this.expiryDate = new Date(this.postedDate.getTime() + (30 * 24 * 60 * 60 * 1000));
+  }
+  next();
+});
+
+const Job = mongoose.model<IJob>('Job', jobSchema);
+export { Job };
+export default Job;
