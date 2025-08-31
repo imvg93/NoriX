@@ -15,12 +15,15 @@ class ApiService {
     const token = this.getToken();
     const url = `${API_BASE_URL}${endpoint}`;
 
+    console.log('🌐 Making API request to:', url);
+
     const config: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
         ...options.headers,
       },
+      credentials: 'include', // Include cookies for CORS
       ...options,
     };
 
