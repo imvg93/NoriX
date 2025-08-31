@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
 import { connectDB } from './config/database';
 import nodemailer from 'nodemailer';
@@ -22,45 +21,6 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// CORS Configuration - MUST BE FIRST MIDDLEWARE
-const corsOptions = {
-  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    // Allow any localhost port for development
-    if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
-      return callback(null, true);
-    }
-    
-    // Allow production URLs
-    const allowedOrigins = [
-      'https://mework.onrender.com',
-      'https://your-frontend-domain.com', // Replace with your actual frontend domain
-      process.env.FRONTEND_URL || 'https://mework.onrender.com'
-    ];
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.log('CORS blocked origin:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept'],
-  exposedHeaders: ['Content-Length', 'X-Requested-With'],
-  optionsSuccessStatus: 200,
-  preflightContinue: false
-};
-
-// Apply CORS middleware FIRST
-app.use(cors(corsOptions));
-
-// Handle preflight requests explicitly
-app.options('*', cors(corsOptions));
-
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -75,16 +35,16 @@ app.get('/health', (req, res) => {
     message: 'StudentJobs API is running',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
-    cors: 'enabled'
+    cors: 'completely removed'
   });
 });
 
-// Test endpoint for debugging CORS
+// Test endpoint for debugging
 app.get('/api/test', (req, res) => {
   res.status(200).json({
     message: 'API is working!',
     timestamp: new Date().toISOString(),
-    cors: 'enabled',
+    cors: 'completely removed',
     origin: req.headers.origin
   });
 });
@@ -110,7 +70,7 @@ const startServer = async (): Promise<void> => {
       console.log(`📱 Environment: ${process.env.NODE_ENV}`);
       console.log(`🔗 Health check: http://localhost:${PORT}/health`);
       console.log(`📚 API Documentation: http://localhost:${PORT}/api`);
-      console.log(`🔒 CORS: Enabled for localhost and production domains`);
+      console.log(`🔒 CORS: COMPLETELY REMOVED - OTP will work now!`);
     });
 
     // Verify email configuration
