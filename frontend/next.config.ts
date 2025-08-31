@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: 'export',
+  // Removed output: 'export' to fix styling issues
   trailingSlash: true,
   images: {
     unoptimized: true
