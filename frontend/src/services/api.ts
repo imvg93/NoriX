@@ -1,5 +1,9 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
+// Debug: Log the API base URL
+console.log('🔧 API_BASE_URL:', API_BASE_URL);
+console.log('🔧 NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
+
 class ApiService {
   private getToken(): string | null {
     if (typeof window !== 'undefined') {
@@ -107,6 +111,11 @@ class ApiService {
 
   async getProfile() {
     return this.request('/users/profile');
+  }
+
+  // Test API connectivity
+  async testConnection() {
+    return this.request('/test');
   }
 
   async updateProfile(userData: any) {
