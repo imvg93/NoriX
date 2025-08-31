@@ -28,6 +28,13 @@ class ApiService {
     };
 
     try {
+      console.log('🌐 Fetch config:', {
+        url,
+        method: config.method || 'GET',
+        headers: config.headers,
+        credentials: config.credentials
+      });
+      
       const response = await fetch(url, config);
       
       if (!response.ok) {
