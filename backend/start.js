@@ -7,7 +7,11 @@ require('dotenv').config();
 // Check if required environment variables are set
 const requiredEnvVars = [
   'MONGODB_URI',
-  'JWT_SECRET',
+  'JWT_SECRET'
+];
+
+// Optional but recommended environment variables
+const optionalEnvVars = [
   'EMAIL_USER',
   'EMAIL_PASS'
 ];
@@ -23,6 +27,16 @@ if (missingVars.length > 0) {
   console.error('   Environment → Environment Variables');
   console.error('\n📁 Or check your local .env file at:', path.join(__dirname, '.env'));
   process.exit(1);
+}
+
+// Check optional environment variables
+const missingOptionalVars = optionalEnvVars.filter(varName => !process.env[varName]);
+if (missingOptionalVars.length > 0) {
+  console.warn('⚠️ Missing optional environment variables:');
+  missingOptionalVars.forEach(varName => {
+    console.warn(`   - ${varName}`);
+  });
+  console.warn('📧 Email functionality will be disabled without these variables');
 }
 
 console.log('✅ All required environment variables are set');
