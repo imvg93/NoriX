@@ -12,13 +12,25 @@ export interface IJob extends Document {
   timing: string;
   positions: number;
   description: string;
-  requirements?: string;
+  requirements?: string | string[];
   benefits?: string;
   contactEmail: string;
   contactPhone?: string;
   
+  // New fields for enhanced job postings
+  type?: string; // Full-time, Part-time, Daily Labor, etc.
+  category?: string; // non-it, it, general
+  salary?: string; // For display (e.g., "₹15,000/month")
+  skills?: string[];
+  workHours?: string;
+  shiftType?: string;
+  experience?: string;
+  education?: string;
+  schedule?: string;
+  startDate?: Date;
+  
   // Status and verification
-  status: 'active' | 'paused' | 'closed' | 'expired';
+  status: 'active' | 'paused' | 'closed' | 'expired' | 'pending';
   isVerified: boolean;
   isPremium: boolean;
   
@@ -157,10 +169,66 @@ const jobSchema = new Schema<IJob>({
     match: [/^(\+91|0)?[789]\d{9}$/, 'Please enter a valid Indian phone number']
   },
   
+  // New fields for enhanced job postings
+  type: {
+    type: String,
+    enum: ['Full-time', 'Part-time', 'Daily Labor', 'Contract', 'Internship', 'Temporary', 'Freelance'],
+    default: 'Full-time'
+  },
+  category: {
+    type: String,
+    enum: ['non-it', 'it', 'general'],
+    default: 'general'
+  },
+  salary: {
+    type: String,
+    trim: true,
+    maxlength: [50, 'Salary cannot exceed 50 characters']
+  },
+  skills: [{
+    type: String,
+    trim: true,
+    maxlength: [100, 'Skill cannot exceed 100 characters']
+  }],
+  workHours: {
+    type: String,
+    trim: true,
+    maxlength: [50, 'Work hours cannot exceed 50 characters']
+  },
+  shiftType: {
+    type: String,
+    trim: true,
+    maxlength: [50, 'Shift type cannot exceed 50 characters']
+  },
+  experience: {
+    type: String,
+    trim: true,
+    maxlength: [200, 'Experience cannot exceed 200 characters']
+  },
+  education: {
+    type: String,
+    trim: true,
+    maxlength: [200, 'Education cannot exceed 200 characters']
+  },
+  schedule: {
+    type: String,
+    trim: true,
+    maxlength: [200, 'Schedule cannot exceed 200 characters']
+  },
+  startDate: {
+    type: Date,
+    validate: {
+      validator: function(this: IJob, value: Date) {
+        return value >= new Date();
+      },
+      message: 'Start date must be in the future'
+    }
+  },
+  
   // Status and verification
   status: {
     type: String,
-    enum: ['active', 'paused', 'closed', 'expired'],
+    enum: ['active', 'paused', 'closed', 'expired', 'pending'],
     default: 'active'
   },
   isVerified: {

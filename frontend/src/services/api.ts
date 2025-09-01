@@ -14,21 +14,23 @@ class ApiService {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit & { skipAuth?: boolean } = {}
   ): Promise<T> {
     const token = this.getToken();
     const url = `${API_BASE_URL}${endpoint}`;
 
     console.log('🌐 Making API request to:', url);
 
+    const { skipAuth, headers: extraHeaders, ...restOptions } = options as any;
+
     const config: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
-        ...options.headers,
+        ...(!skipAuth && token ? { Authorization: `Bearer ${token}` } : {}),
+        ...extraHeaders,
       },
       credentials: 'include', // Include cookies for CORS
-      ...options,
+      ...restOptions,
     };
 
     try {

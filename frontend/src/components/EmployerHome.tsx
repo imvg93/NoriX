@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { 
   Building, 
   Briefcase, 
@@ -13,37 +15,67 @@ import {
   Bell,
   TrendingUp,
   Clock,
-  CheckCircle
+  CheckCircle,
+  MapPin,
+  DollarSign,
+  Calendar,
+  Search,
+  Filter,
+  ChevronDown,
+  ChevronUp,
+  ArrowRight,
+  FileText,
+  Bookmark,
+  Settings,
+  BarChart3,
+  X,
+  LogOut
 } from 'lucide-react';
 import StatsCard from './StatsCard';
 import NotificationCard from './NotificationCard';
+import { apiService } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 interface JobPosting {
-  id: number;
+  _id: string;
   title: string;
+  company: string;
+  location: string;
+  salary: string;
+  type: string;
   status: string;
   applications: number;
   postedDate: string;
+  description: string;
+  requirements: string[];
 }
 
 interface Application {
-  id: number;
-  student: string;
-  job: string;
+  _id: string;
+  student: {
+    name: string;
+    email: string;
+  };
+  job: {
+    title: string;
+    company: string;
+  };
   status: string;
   appliedDate: string;
+  coverLetter?: string;
 }
 
 interface TopCandidate {
-  id: number;
+  _id: string;
   name: string;
   skills: string[];
   rating: number;
   experience: string;
+  appliedJobs: number;
 }
 
 interface Notification {
-  id: number;
+  _id: string;
   title: string;
   message: string;
   type: 'info' | 'success' | 'warning' | 'error';
@@ -56,6 +88,8 @@ interface EmployerHomeProps {
 }
 
 const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
+  const router = useRouter();
+  const { logout } = useAuth();
   const [data, setData] = useState({
     stats: {
       activeJobs: 0,
@@ -69,46 +103,233 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
     notifications: [] as Notification[]
   });
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filteredJobs, setFilteredJobs] = useState<JobPosting[]>([]);
 
+  // Fetch data from API
   useEffect(() => {
-    // Mock data for now - replace with real API calls later
-    setData({
-      stats: {
-        activeJobs: 8,
-        totalApplications: 47,
-        pendingApprovals: 12,
-        hiredStudents: 23
-      },
-      jobPostings: [
-        { id: 1, title: 'Frontend Developer', status: 'active', applications: 15, postedDate: '2024-01-10' },
-        { id: 2, title: 'Data Analyst Intern', status: 'pending', applications: 8, postedDate: '2024-01-12' },
-        { id: 3, title: 'Marketing Assistant', status: 'active', applications: 12, postedDate: '2024-01-08' }
-      ],
-      applications: [
-        { id: 1, student: 'Sarah Johnson', job: 'Frontend Developer', status: 'pending', appliedDate: '2024-01-14' },
-        { id: 2, student: 'Mike Chen', job: 'Data Analyst Intern', status: 'reviewing', appliedDate: '2024-01-13' },
-        { id: 3, student: 'Emily Davis', job: 'Marketing Assistant', status: 'accepted', appliedDate: '2024-01-11' }
-      ],
-      topCandidates: [
-        { id: 1, name: 'Alex Thompson', skills: ['React', 'Node.js', 'MongoDB'], rating: 4.8, experience: '2 years' },
-        { id: 2, name: 'Priya Sharma', skills: ['Python', 'Data Analysis', 'SQL'], rating: 4.9, experience: '1.5 years' },
-        { id: 3, name: 'David Kim', skills: ['Marketing', 'Social Media', 'Analytics'], rating: 4.7, experience: '3 years' }
-      ],
-      notifications: [
-        { id: 1, title: 'New Application Received', message: 'Sarah Johnson applied for Frontend Developer position', type: 'info', timestamp: '2 hours ago', isRead: false },
-        { id: 2, title: 'Application Status Updated', message: 'Mike Chen\'s application moved to review phase', type: 'success', timestamp: '4 hours ago', isRead: true },
-        { id: 3, title: 'Job Posting Approved', message: 'Data Analyst Intern position is now live', type: 'success', timestamp: '1 day ago', isRead: true }
-      ]
-    });
-    setLoading(false);
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch employer's jobs
+        const jobsData = await apiService.getEmployerJobs();
+        setData(prev => ({
+          ...prev,
+          jobPostings: jobsData.jobs || jobsData || []
+        }));
+        
+        // Fetch applications for employer's jobs
+        const applicationsData = await apiService.getJobApplications('all');
+        setData(prev => ({
+          ...prev,
+          applications: applicationsData.applications || applicationsData || []
+        }));
+        
+        // Calculate stats
+        const activeJobs = (jobsData.jobs || jobsData || []).filter((job: JobPosting) => job.status === 'active').length;
+        const totalApplications = applicationsData.applications?.length || applicationsData?.length || 0;
+        const pendingApprovals = (applicationsData.applications || applicationsData || []).filter((app: Application) => app.status === 'pending').length;
+        
+        setData(prev => ({
+          ...prev,
+          stats: {
+            activeJobs,
+            totalApplications,
+            pendingApprovals,
+            hiredStudents: Math.floor(totalApplications * 0.3) // Mock calculation
+          }
+        }));
+        
+        // Mock data for top candidates and notifications
+        setData(prev => ({
+          ...prev,
+          topCandidates: [
+            {
+              _id: '1',
+              name: 'Rahul Kumar',
+              skills: ['Manual Labor', 'Construction', 'Team Work'],
+              rating: 4.8,
+              experience: '3 years',
+              appliedJobs: 5
+            },
+            {
+              _id: '2',
+              name: 'Priya Sharma',
+              skills: ['Housekeeping', 'Customer Service', 'Cleaning'],
+              rating: 4.9,
+              experience: '2 years',
+              appliedJobs: 3
+            },
+            {
+              _id: '3',
+              name: 'Amit Singh',
+              skills: ['Delivery', 'Driving', 'Logistics'],
+              rating: 4.7,
+              experience: '4 years',
+              appliedJobs: 7
+            }
+          ],
+          notifications: [
+            {
+              _id: '1',
+              title: 'New Application Received',
+              message: 'Rahul Kumar applied for Warehouse Worker position',
+              type: 'info',
+              timestamp: '2 hours ago',
+              isRead: false
+            },
+            {
+              _id: '2',
+              title: 'Job Posting Live',
+              message: 'Daily Labor position is now active and receiving applications',
+              type: 'success',
+              timestamp: '1 day ago',
+              isRead: true
+            },
+            {
+              _id: '3',
+              title: 'Application Status Updated',
+              message: 'Priya Sharma\'s application moved to interview phase',
+              type: 'success',
+              timestamp: '3 hours ago',
+              isRead: true
+            }
+          ]
+        }));
+        
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        // Fallback to mock data
+        setData({
+          stats: {
+            activeJobs: 3,
+            totalApplications: 12,
+            pendingApprovals: 5,
+            hiredStudents: 4
+          },
+          jobPostings: [
+            {
+              _id: '1',
+              title: 'Warehouse Worker',
+              company: 'Logistics Solutions',
+              location: 'Hyderabad',
+              salary: '₹15,000/month',
+              type: 'Full-time',
+              status: 'active',
+              applications: 8,
+              postedDate: '2024-01-10',
+              description: 'Looking for reliable warehouse workers for loading and unloading goods',
+              requirements: ['Manual Labor', 'Team Work', 'Physical Stamina']
+            },
+            {
+              _id: '2',
+              title: 'Housekeeping Staff',
+              company: 'CleanPro Services',
+              location: 'Hyderabad',
+              salary: '₹12,000/month',
+              type: 'Full-time',
+              status: 'active',
+              applications: 6,
+              postedDate: '2024-01-12',
+              description: 'Cleaning and maintenance staff needed for office buildings',
+              requirements: ['Cleaning', 'Attention to Detail', 'Reliability']
+            },
+            {
+              _id: '3',
+              title: 'Delivery Driver',
+              company: 'FastDelivery Co.',
+              location: 'Hyderabad',
+              salary: '₹18,000/month',
+              type: 'Full-time',
+              status: 'active',
+              applications: 4,
+              postedDate: '2024-01-08',
+              description: 'Delivery drivers needed for local package delivery',
+              requirements: ['Driving License', 'Navigation', 'Customer Service']
+            }
+          ],
+          applications: [
+            {
+              _id: '1',
+              student: { name: 'Rahul Kumar', email: 'rahul@email.com' },
+              job: { title: 'Warehouse Worker', company: 'Logistics Solutions' },
+              status: 'pending',
+              appliedDate: '2024-01-14'
+            },
+            {
+              _id: '2',
+              student: { name: 'Priya Sharma', email: 'priya@email.com' },
+              job: { title: 'Housekeeping Staff', company: 'CleanPro Services' },
+              status: 'reviewing',
+              appliedDate: '2024-01-13'
+            }
+          ],
+          topCandidates: [],
+          notifications: []
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, []);
 
+  // Filter jobs based on search and filters
+  useEffect(() => {
+    let filtered = data.jobPostings;
+    
+    if (searchTerm) {
+      filtered = filtered.filter(job => 
+        job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        job.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        job.description.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    
+    if (selectedStatus) {
+      filtered = filtered.filter(job => job.status === selectedStatus);
+    }
+    
+    setFilteredJobs(filtered);
+  }, [data.jobPostings, searchTerm, selectedStatus]);
+
+  const handleUpdateJobStatus = async (jobId: string, newStatus: string) => {
+    try {
+      await apiService.updateJobStatus(jobId, newStatus);
+      
+      // Update local state
+      setData(prev => ({
+        ...prev,
+        jobPostings: prev.jobPostings.map(job => 
+          job._id === jobId ? { ...job, status: newStatus } : job
+        )
+      }));
+      
+      alert('Job status updated successfully!');
+    } catch (error) {
+      console.error('Error updating job status:', error);
+      alert('Failed to update job status. Please try again.');
+    }
+  };
+
+  const handleLogout = () => {
+    logout();
+    router.push('/login');
+  };
+
   const quickActions = [
-    { name: 'Post Job', icon: Plus, href: '/employer/post-job', color: 'orange' },
-    { name: 'View Candidates', icon: Eye, href: '/employer/candidates', color: 'blue' },
-    { name: 'Manage Profile', icon: User, href: '/employer/profile', color: 'green' },
-    { name: 'View Reports', icon: TrendingUp, href: '/employer/reports', color: 'purple' }
+    { name: 'Post New Job', icon: Plus, href: '/employer/post-job', color: 'orange', description: 'Create a new job posting' },
+    { name: 'View Applications', icon: FileText, href: '/employer/applications', color: 'blue', description: 'Review job applications' },
+    { name: 'Manage Jobs', icon: Settings, href: '/employer/jobs', color: 'green', description: 'Edit existing job postings' },
+    { name: 'Analytics', icon: BarChart3, href: '/employer/analytics', color: 'purple', description: 'View hiring insights' }
   ];
+
+  const jobTypes = ['All', 'Full-time', 'Part-time', 'Daily Labor', 'Contract'];
+  const statuses = ['All', 'active', 'pending', 'closed'];
 
   if (loading) {
     return (
@@ -119,7 +340,40 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+      {/* Navigation Header */}
+      <div className="flex items-center justify-between bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
+        <div className="flex items-center gap-3">
+          <Link 
+            href="/home" 
+            className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
+          >
+            <Building className="w-4 h-4" />
+            Home
+          </Link>
+          <button 
+            onClick={() => window.history.back()} 
+            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+          >
+            <ArrowRight className="w-4 h-4" />
+            Back
+          </button>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <h2 className="text-lg font-semibold text-gray-900">Employer Dashboard</h2>
+            <p className="text-sm text-gray-600">Manage your job postings and applications</p>
+          </div>
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+          >
+            <LogOut className="w-4 h-4" />
+            Logout
+          </button>
+        </div>
+      </div>
+
       {/* Welcome Banner */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -131,10 +385,17 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
           <div className="p-3 bg-white/20 rounded-full">
             <Building className="w-8 h-8" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold">Hi {user?.companyName || 'Employer'}!</h1>
-            <p className="text-orange-100">Here's your hiring overview and latest updates</p>
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold">Welcome back, {user?.companyName || 'Employer'}!</h1>
+            <p className="text-orange-100">Manage your job postings and find the perfect candidates for your non-IT and daily labor positions</p>
           </div>
+          <Link
+            href="/employer/post-job"
+            className="flex items-center gap-2 px-6 py-3 bg-white text-orange-600 rounded-lg hover:bg-orange-50 transition-colors font-medium"
+          >
+            <Plus className="w-5 h-5" />
+            Post New Job
+          </Link>
         </div>
       </motion.div>
 
@@ -145,7 +406,7 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
           value={data.stats.activeJobs}
           icon={Briefcase}
           color="orange"
-          change="+2 this week"
+          change={`${data.jobPostings.length} total posted`}
           changeType="positive"
         />
         <StatsCard
@@ -153,7 +414,7 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
           value={data.stats.totalApplications}
           icon={Users}
           color="blue"
-          change="+15 this week"
+          change={`+${data.applications.filter(app => new Date(app.appliedDate) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length} this week`}
           changeType="positive"
         />
         <StatsCard
@@ -169,60 +430,259 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
           value={data.stats.hiredStudents}
           icon={CheckCircle}
           color="green"
-          change="+3 this month"
+          change="+2 this month"
           changeType="positive"
         />
       </div>
 
+      {/* Quick Actions */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6"
+      >
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {quickActions.map((action) => (
+            <Link
+              key={action.name}
+              href={action.href}
+              className="group p-4 bg-gray-50 rounded-xl hover:bg-orange-50 hover:border-orange-200 border border-transparent transition-all duration-200"
+            >
+              <div className="flex items-center gap-3">
+                <div className={`p-3 bg-${action.color}-100 rounded-full group-hover:bg-${action.color}-200 transition-colors`}>
+                  <action.icon className={`w-6 h-6 text-${action.color}-600`} />
+                </div>
+                <div>
+                  <h3 className="font-medium text-gray-900 group-hover:text-orange-700">
+                    {action.name}
+                  </h3>
+                  <p className="text-sm text-gray-600">{action.description}</p>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </motion.div>
+
+      {/* Job Management Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
+        className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6"
+      >
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
+            <Briefcase className="w-5 h-5 text-orange-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Your Job Postings</h2>
+          </div>
+          <Link
+            href="/employer/post-job"
+            className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
+          >
+            <Plus className="w-4 h-4" />
+            Post New Job
+          </Link>
+        </div>
+        
+        {/* Search and Filters */}
+        <div className="flex flex-col md:flex-row gap-4 mb-6">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search jobs by title, company, or description..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            />
+          </div>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="flex items-center gap-2 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            <Filter className="w-5 h-5" />
+            Filters
+            {showFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {/* Filters */}
+        {showFilters && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 rounded-lg"
+          >
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Job Type</label>
+              <select
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              >
+                {statuses.map(status => (
+                  <option key={status} value={status === 'All' ? '' : status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Job Listings */}
+        <div className="space-y-4">
+          {filteredJobs.length === 0 ? (
+            <div className="text-center py-8">
+              <Briefcase className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No jobs found</h3>
+              <p className="text-gray-600 mb-4">Start by posting your first job to attract candidates</p>
+              <Link
+                href="/employer/post-job"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium"
+              >
+                <Plus className="w-4 h-4" />
+                Post Your First Job
+              </Link>
+            </div>
+          ) : (
+            filteredJobs.map((job) => (
+              <motion.div
+                key={job._id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="border border-gray-200 rounded-xl p-6 hover:shadow-md transition-shadow"
+              >
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className="text-xl font-semibold text-gray-900 mb-1">{job.title}</h3>
+                        <p className="text-lg text-orange-600 font-medium">{job.company}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          job.status === 'active' ? 'bg-green-100 text-green-600' : 
+                          job.status === 'pending' ? 'bg-orange-100 text-orange-600' :
+                          'bg-gray-100 text-gray-600'
+                        }`}>
+                          {job.status}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-gray-600">
+                      <div className="flex items-center gap-1">
+                        <MapPin className="w-4 h-4" />
+                        <span>{job.location}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <DollarSign className="w-4 h-4" />
+                        <span>{job.salary}</span>
+                      </div>
+                      <span className="px-2 py-1 bg-blue-100 text-blue-600 rounded-full text-xs">
+                        {job.type}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <Users className="w-4 h-4" />
+                        <span>{job.applications} applications</span>
+                      </div>
+                    </div>
+                    
+                    <p className="text-gray-700 mb-4 line-clamp-2">{job.description}</p>
+                    
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {job.requirements.slice(0, 3).map((req, index) => (
+                        <span key={index} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
+                          {req}
+                        </span>
+                      ))}
+                      {job.requirements.length > 3 && (
+                        <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
+                          +{job.requirements.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col gap-3 lg:w-48">
+                    <div className="text-sm text-gray-500">
+                      Posted {new Date(job.postedDate).toLocaleDateString()}
+                    </div>
+                    
+                    <div className="flex flex-col gap-2">
+                      <Link 
+                        href={`/employer/applications/${job._id}`}
+                        className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                      >
+                        <Eye className="w-4 h-4" />
+                        View Applications ({job.applications})
+                      </Link>
+                      
+                      <Link 
+                        href={`/employer/jobs/${job._id}/edit`}
+                        className="flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <Settings className="w-4 h-4" />
+                        Edit Job
+                      </Link>
+                      
+                      {job.status === 'active' ? (
+                        <button
+                          onClick={() => handleUpdateJobStatus(job._id, 'closed')}
+                          className="flex items-center justify-center gap-2 px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                          Close Job
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleUpdateJobStatus(job._id, 'active')}
+                          className="flex items-center justify-center gap-2 px-4 py-2 border border-green-300 text-green-700 rounded-lg hover:bg-green-50 transition-colors"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          Activate Job
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ))
+          )}
+        </div>
+      </motion.div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Job Postings */}
+        {/* Recent Applications */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
           className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6"
         >
-          <div className="flex items-center gap-2 mb-4">
-            <Briefcase className="w-5 h-5 text-orange-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Job Postings</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Recent Applications</h2>
+            </div>
+            <Link
+              href="/employer/applications"
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              View All
+            </Link>
           </div>
           <div className="space-y-3">
-            {data.jobPostings.map((job: any) => (
-              <div key={job.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            {data.applications.slice(0, 3).map((application) => (
+              <div key={application._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div>
-                  <h3 className="font-medium text-gray-900">{job.title}</h3>
-                  <p className="text-sm text-gray-600">{job.applications} applications</p>
-                </div>
-                <div className="text-right">
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    job.status === 'active' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'
-                  }`}>
-                    {job.status}
-                  </span>
-                  <p className="text-xs text-gray-500 mt-1">{job.postedDate}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Recent Applications */}
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <Users className="w-5 h-5 text-blue-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Recent Applications</h2>
-          </div>
-          <div className="space-y-3">
-            {data.applications.map((application: any) => (
-              <div key={application.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div>
-                  <h3 className="font-medium text-gray-900">{application.student}</h3>
-                  <p className="text-sm text-gray-600">{application.job}</p>
+                  <h3 className="font-medium text-gray-900">{application.student.name}</h3>
+                  <p className="text-sm text-gray-600">{application.job.title} • {application.job.company}</p>
                 </div>
                 <div className="text-right">
                   <span className={`text-xs px-2 py-1 rounded-full ${
@@ -236,143 +696,90 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
                 </div>
               </div>
             ))}
+            {data.applications.length === 0 && (
+              <div className="text-center py-4 text-gray-500">
+                No applications yet. Your jobs will appear here when students apply!
+              </div>
+            )}
+          </div>
+        </motion.div>
+
+        {/* Top Candidates */}
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+          className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Star className="w-5 h-5 text-orange-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Top Candidates</h2>
+          </div>
+          <div className="space-y-3">
+            {data.topCandidates.map((candidate) => (
+              <div key={candidate._id} className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                    <span className="text-orange-600 font-semibold">
+                      {candidate.name.split(' ').map((n: string) => n[0]).join('')}
+                    </span>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-medium text-gray-900">{candidate.name}</h3>
+                    <div className="flex items-center gap-1">
+                      <Star className="w-4 h-4 text-orange-500 fill-current" />
+                      <span className="text-sm text-gray-600">{candidate.rating}</span>
+                      <span className="text-sm text-gray-500">• {candidate.experience} experience</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-1">
+                    {candidate.skills.map((skill: string, index: number) => (
+                      <span key={index} className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500">Applied to {candidate.appliedJobs} jobs</p>
+                </div>
+              </div>
+            ))}
+            {data.topCandidates.length === 0 && (
+              <div className="text-center py-4 text-gray-500">
+                No top candidates yet. Start posting jobs to attract talent!
+              </div>
+            )}
           </div>
         </motion.div>
       </div>
 
-      {/* Top Candidates */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.3 }}
-        className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6"
-      >
-        <div className="flex items-center gap-2 mb-4">
-          <Star className="w-5 h-5 text-orange-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Top Candidates</h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {data.topCandidates.map((candidate: any) => (
-            <div key={candidate.id} className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                  <span className="text-blue-600 font-semibold">
-                    {candidate.name.split(' ').map((n: string) => n[0]).join('')}
-                  </span>
-                </div>
-                <div>
-                  <h3 className="font-medium text-gray-900">{candidate.name}</h3>
-                  <div className="flex items-center gap-1">
-                    <Star className="w-4 h-4 text-orange-500 fill-current" />
-                    <span className="text-sm text-gray-600">{candidate.rating}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs text-gray-600">{candidate.experience} experience</p>
-                <div className="flex flex-wrap gap-1">
-                  {candidate.skills.map((skill: string, index: number) => (
-                    <span key={index} className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </motion.div>
-
       {/* Notifications */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.4 }}
-        className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6"
-      >
-        <div className="flex items-center gap-2 mb-4">
-          <Bell className="w-5 h-5 text-green-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Recent Notifications</h2>
-        </div>
-        <div className="space-y-3">
-          {data.notifications.map((notification: any) => (
-            <NotificationCard
-              key={notification.id}
-              title={notification.title}
-              message={notification.message}
-              type={notification.type}
-              timestamp={notification.timestamp}
-              isRead={notification.isRead}
-            />
-          ))}
-        </div>
-      </motion.div>
-
-      {/* Quick Actions */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.5 }}
-        className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6"
-      >
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {quickActions.map((action) => (
-            <a
-              key={action.name}
-              href={action.href}
-              className="flex flex-col items-center gap-2 p-4 bg-gray-50 rounded-xl hover:bg-orange-50 hover:border-orange-200 border border-transparent transition-all duration-200 group"
-            >
-              <div className={`p-3 bg-${action.color}-100 rounded-full group-hover:bg-${action.color}-200 transition-colors`}>
-                <action.icon className={`w-6 h-6 text-${action.color}-600`} />
-              </div>
-              <span className="text-sm font-medium text-gray-700 group-hover:text-orange-700 text-center">
-                {action.name}
-              </span>
-            </a>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* Temporary Navigation Buttons */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.6 }}
-        className="mt-8 p-6 bg-white rounded-2xl shadow-sm border border-gray-200"
-      >
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Navigation</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <a 
-            href="/employer" 
-            className="flex items-center justify-center px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
-          >
-            <Building className="w-4 h-4 mr-2" />
-            Dashboard
-          </a>
-          <a 
-            href="/employer/post-job" 
-            className="flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Post Job
-          </a>
-          <a 
-            href="/employer/candidates" 
-            className="flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-          >
-            <Users className="w-4 h-4 mr-2" />
-            View Candidates
-          </a>
-          <a 
-            href="/employer/profile" 
-            className="flex items-center justify-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
-          >
-            <User className="w-4 h-4 mr-2" />
-            Profile
-          </a>
-        </div>
-      </motion.div>
+      {data.notifications.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.5 }}
+          className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Bell className="w-5 h-5 text-green-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Recent Notifications</h2>
+          </div>
+          <div className="space-y-3">
+            {data.notifications.map((notification) => (
+              <NotificationCard
+                key={notification._id}
+                title={notification.title}
+                message={notification.message}
+                type={notification.type}
+                timestamp={notification.timestamp}
+                isRead={notification.isRead}
+              />
+            ))}
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 };

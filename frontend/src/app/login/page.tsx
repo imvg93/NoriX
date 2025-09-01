@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { apiService } from '../../services/api';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function Login() {
+  const { login } = useAuth();
   const [step, setStep] = useState<'email' | 'otp'>('email');
   const [formData, setFormData] = useState({
     email: '',
@@ -39,9 +41,14 @@ export default function Login() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    let nextValue = value;
+    if (name === 'otp') {
+      // Accept only digits and limit to 6
+      nextValue = value.replace(/\D/g, '').slice(0, 6);
+    }
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: nextValue
     }));
   };
 
@@ -76,7 +83,8 @@ export default function Login() {
     setError('');
     setSuccess('');
 
-    if (!formData.otp) {
+    const cleanOtp = (formData.otp || '').toString().replace(/\D/g, '').slice(0, 6);
+    if (!cleanOtp || cleanOtp.length !== 6) {
       setError('Please enter the OTP');
       setLoading(false);
       return;
@@ -84,14 +92,17 @@ export default function Login() {
 
     try {
       // Login with OTP verification
-      const response: any = await apiService.loginVerifyOTP(formData.email, 'student', formData.otp);
+      const response: any = await apiService.loginVerifyOTP(formData.email.trim(), formData.userType, cleanOtp);
       
       if (response.token) {
-        // Store the token
+        // Store the token and user data
         localStorage.setItem('token', response.token);
         localStorage.setItem('user', JSON.stringify(response.user));
         
-        setSuccess('Login successful!');
+        // Login the user using AuthContext
+        login(response.user, response.token);
+        
+        setSuccess('Login successful! Redirecting to your dashboard...');
         
         // Redirect to appropriate dashboard based on user type
         setTimeout(() => {

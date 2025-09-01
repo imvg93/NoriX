@@ -71,16 +71,9 @@ export const errorHandler = (
   let error = { ...err };
   error.message = err.message;
 
-  // Log error for debugging
-  console.error('Error:', {
-    message: err.message,
-    stack: err.stack,
-    url: req.url,
-    method: req.method,
-    ip: req.ip,
-    userAgent: req.get('User-Agent'),
-    timestamp: new Date().toISOString()
-  });
+  // Concise logging
+  const timestamp = new Date().toISOString();
+  console.warn(`[${timestamp}] ${req.method} ${req.url} -> ${err.message}`);
 
   // Mongoose bad ObjectId
   if (err.name === 'CastError') {
@@ -129,27 +122,13 @@ export const errorHandler = (
   const statusCode = error.statusCode || 500;
   const message = error.message || 'Internal Server Error';
 
-  // Development error response
-  if (process.env.NODE_ENV === 'development') {
-    res.status(statusCode).json({
-      success: false,
-      error: {
-        message,
-        statusCode,
-        stack: err.stack,
-        name: err.name
-      }
-    });
-  } else {
-    // Production error response
-    res.status(statusCode).json({
-      success: false,
-      error: {
-        message: statusCode === 500 ? 'Internal Server Error' : message,
-        statusCode
-      }
-    });
-  }
+  // Unified, user-friendly error response
+  res.status(statusCode).json({
+    success: false,
+    message: statusCode === 500 ? 'Internal Server Error' : message,
+    statusCode,
+    ...(process.env.NODE_ENV === 'development' ? { error: { name: err.name } } : {})
+  });
 };
 
 // Not found middleware

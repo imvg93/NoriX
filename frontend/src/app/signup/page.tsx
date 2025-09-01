@@ -2,7 +2,9 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { apiService } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Helper function to safely access localStorage
 const setLocalStorage = (key: string, value: string): void => {
@@ -12,6 +14,8 @@ const setLocalStorage = (key: string, value: string): void => {
 };
 
 export default function Signup() {
+  const router = useRouter();
+  const { login } = useAuth();
   const [userType, setUserType] = useState<'student' | 'employer'>('student');
   const [formData, setFormData] = useState({
     name: '',
@@ -158,19 +162,22 @@ export default function Signup() {
       const response = await apiService.register(userData) as any;
       
       if (response.token) {
-        // Store the token
+        // Store the token and user data
         setLocalStorage('token', response.token);
         setLocalStorage('user', JSON.stringify(response.user));
         
+        // Login the user using AuthContext
+        login(response.user, response.token);
+        
         setStep('success');
-        setSuccess('Account created successfully!');
+        setSuccess('Account created successfully! Redirecting to your dashboard...');
         
         // Redirect to appropriate dashboard based on user type
         setTimeout(() => {
           if (userType === 'student') {
-            window.location.href = '/student-home';
+            router.push('/student-home');
           } else if (userType === 'employer') {
-            window.location.href = '/employer-home';
+            router.push('/employer-home');
           }
         }, 2000);
       }
@@ -503,19 +510,16 @@ export default function Signup() {
           {step === 'success' && (
             <>
               <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                Account Created!
+                Welcome, {formData.name}!
               </h2>
               <p className="mt-2 text-center text-sm text-gray-600">
-                Your account has been created successfully. You can now sign in to your account.
+                Your account has been created successfully. You're being redirected to your dashboard...
               </p>
 
               <div className="mt-6">
-                <Link
-                  href="/login"
-                  className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  Sign in
-                </Link>
+                <div className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white">
+                  Redirecting...
+                </div>
               </div>
             </>
           )}
