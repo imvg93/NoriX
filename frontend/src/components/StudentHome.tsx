@@ -32,26 +32,8 @@ import {
 import StatsCard from './StatsCard';
 import TaskCard from './TaskCard';
 import NotificationCard from './NotificationCard';
-import { apiService } from '../services/api';
+import { apiService, type JobsResponse, type ApplicationsResponse, type Job, type Application } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-
-interface Job {
-  _id: string;
-  title: string;
-  company: string;
-  location: string;
-  salary: string;
-  description: string;
-  requirements: string[];
-  type: string;
-  postedDate: string;
-  status: string;
-  employer: {
-    _id: string;
-    companyName: string;
-    email: string;
-  };
-}
 
 interface AppliedJob {
   _id: string;
@@ -112,33 +94,37 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
         setLoading(true);
         
         // Fetch jobs
-        const jobsData = await apiService.getJobs();
-        setJobs(jobsData.jobs || jobsData || []);
+        const jobsData: JobsResponse = await apiService.getJobs();
+        setJobs(jobsData.jobs || []);
         
         // Fetch user applications
-        const applicationsData = await apiService.getUserApplications();
-        setAppliedJobs(applicationsData.applications || applicationsData || []);
+        const applicationsData: ApplicationsResponse = await apiService.getUserApplications();
+        console.log('📊 Applications data:', applicationsData); // Debug log
+        const applications = applicationsData.applications || [];
+        console.log('📊 Processed applications:', applications); // Debug log
+        setAppliedJobs(Array.isArray(applications) ? applications : []);
         
         // Mock data for saved jobs, interviews, and notifications (replace with real API calls)
-        setSavedJobs([
+        const firstJob = jobsData.jobs?.[0];
+        setSavedJobs(firstJob ? [
           {
             _id: '1',
-            job: jobsData.jobs?.[0] || jobsData?.[0],
+            job: firstJob,
             savedDate: '2024-01-14'
           }
-        ]);
+        ] : []);
         
-        setInterviews([
+        setInterviews(firstJob ? [
           {
             _id: '1',
-            job: jobsData.jobs?.[0] || jobsData?.[0],
+            job: firstJob,
             date: '2024-01-20',
             time: '10:00 AM',
             type: 'In-person',
             location: 'Hyderabad',
             status: 'scheduled'
           }
-        ]);
+        ] : []);
         
         setNotifications([
           {
@@ -166,87 +152,87 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
           {
             _id: '1',
             title: 'Warehouse Worker',
+            description: 'Looking for reliable warehouse workers for loading and unloading goods. Perfect for students looking for part-time work.',
             company: 'Logistics Solutions',
             location: 'Hyderabad',
-            salary: '₹15,000/month',
-            description: 'Looking for reliable warehouse workers for loading and unloading goods. Perfect for students looking for part-time work.',
-            requirements: ['Manual Labor', 'Team Work', 'Physical Stamina'],
+            salary: 15000,
+            payType: 'monthly',
             type: 'Full-time',
-            postedDate: '2024-01-15',
+            category: 'Labor',
             status: 'active',
-            employer: {
-              _id: '1',
-              companyName: 'Logistics Solutions',
-              email: 'hr@logistics.com'
-            }
+            employer: '1',
+            createdAt: '2024-01-15T10:00:00Z',
+            views: 50,
+            applicationsCount: 8,
+            requirements: ['Manual Labor', 'Team Work', 'Physical Stamina']
           },
           {
             _id: '2',
             title: 'Housekeeping Staff',
+            description: 'Cleaning and maintenance staff needed for office buildings. Flexible hours available for students.',
             company: 'CleanPro Services',
             location: 'Hyderabad',
-            salary: '₹12,000/month',
-            description: 'Cleaning and maintenance staff needed for office buildings. Flexible hours available for students.',
-            requirements: ['Cleaning', 'Attention to Detail', 'Reliability'],
+            salary: 12000,
+            payType: 'monthly',
             type: 'Part-time',
-            postedDate: '2024-01-12',
+            category: 'Service',
             status: 'active',
-            employer: {
-              _id: '2',
-              companyName: 'CleanPro Services',
-              email: 'careers@cleanpro.com'
-            }
+            employer: '2',
+            createdAt: '2024-01-12T10:00:00Z',
+            views: 40,
+            applicationsCount: 6,
+            requirements: ['Cleaning', 'Attention to Detail', 'Reliability']
           },
           {
             _id: '3',
             title: 'Delivery Driver',
+            description: 'Delivery drivers needed for local package delivery. Own vehicle preferred but not required.',
             company: 'FastDelivery Co.',
             location: 'Hyderabad',
-            salary: '₹18,000/month',
-            description: 'Delivery drivers needed for local package delivery. Own vehicle preferred but not required.',
-            requirements: ['Driving License', 'Navigation', 'Customer Service'],
+            salary: 18000,
+            payType: 'monthly',
             type: 'Full-time',
-            postedDate: '2024-01-10',
+            category: 'Transportation',
             status: 'active',
-            employer: {
-              _id: '3',
-              companyName: 'FastDelivery Co.',
-              email: 'jobs@fastdelivery.com'
-            }
+            employer: '3',
+            createdAt: '2024-01-10T10:00:00Z',
+            views: 60,
+            applicationsCount: 4,
+            requirements: ['Driving License', 'Navigation', 'Customer Service']
           },
           {
             _id: '4',
             title: 'Daily Labor - Construction',
+            description: 'Daily labor work for construction sites. No experience required, training provided.',
             company: 'BuildRight Construction',
             location: 'Hyderabad',
-            salary: '₹500/day',
-            description: 'Daily labor work for construction sites. No experience required, training provided.',
-            requirements: ['Physical Stamina', 'Team Work', 'Reliability'],
+            salary: 500,
+            payType: 'daily',
             type: 'Daily Labor',
-            postedDate: '2024-01-08',
+            category: 'Construction',
             status: 'active',
-            employer: {
-              _id: '4',
-              companyName: 'BuildRight Construction',
-              email: 'hr@buildright.com'
-            }
+            employer: '4',
+            createdAt: '2024-01-08T10:00:00Z',
+            views: 30,
+            applicationsCount: 12,
+            requirements: ['Physical Stamina', 'Team Work', 'Reliability']
           },
           {
             _id: '5',
             title: 'Kitchen Helper',
+            description: 'Kitchen helper position available. Learn cooking skills while earning money.',
             company: 'FoodCourt Restaurant',
             location: 'Hyderabad',
-            salary: '₹10,000/month',
-            description: 'Kitchen helper position available. Learn cooking skills while earning money.',
-            requirements: ['Food Safety', 'Team Work', 'Fast Learning'],
+            salary: 10000,
+            payType: 'monthly',
             type: 'Part-time',
-            postedDate: '2024-01-06',
+            category: 'Food Service',
             status: 'active',
-            employer: {
-              _id: '5',
-              companyName: 'FoodCourt Restaurant',
-              email: 'jobs@foodcourt.com'
-            }
+            employer: '5',
+            createdAt: '2024-01-06T10:00:00Z',
+            views: 35,
+            applicationsCount: 7,
+            requirements: ['Food Safety', 'Team Work', 'Fast Learning']
           }
         ]);
       } finally {
@@ -309,8 +295,12 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
 
   const handleSaveJob = (jobId: string) => {
     const job = jobs.find(j => j._id === jobId);
-    if (job && !savedJobs.find(sj => sj.job._id === jobId)) {
-      setSavedJobs(prev => [...prev, {
+    if (job && Array.isArray(savedJobs) && !savedJobs.find(sj => sj.job._id === jobId)) {
+      setSavedJobs(prev => Array.isArray(prev) ? [...prev, {
+        _id: Date.now().toString(),
+        job,
+        savedDate: new Date().toISOString().split('T')[0]
+      }] : [{
         _id: Date.now().toString(),
         job,
         savedDate: new Date().toISOString().split('T')[0]
@@ -398,18 +388,18 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard
           title="Jobs Applied"
-          value={appliedJobs.length}
+          value={Array.isArray(appliedJobs) ? appliedJobs.length : 0}
           icon={FileText}
           color="blue"
-          change={`+${appliedJobs.filter(job => new Date(job.appliedDate) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length} this week`}
+          change={`+${Array.isArray(appliedJobs) ? appliedJobs.filter(job => new Date(job.appliedDate) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length : 0} this week`}
           changeType="positive"
         />
         <StatsCard
           title="Saved Jobs"
-          value={savedJobs.length}
+          value={Array.isArray(savedJobs) ? savedJobs.length : 0}
           icon={Bookmark}
           color="purple"
-          change={`+${savedJobs.filter(job => new Date(job.savedDate) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length} this week`}
+          change={`+${Array.isArray(savedJobs) ? savedJobs.filter(job => new Date(job.savedDate) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length : 0} this week`}
           changeType="positive"
         />
         <StatsCard
@@ -452,8 +442,8 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
             .filter(job => job.type === 'Daily Labor' || job.type === 'Part-time')
             .slice(0, 3)
             .map((job) => {
-              const isApplied = appliedJobs.some(aj => aj.job._id === job._id);
-              const isSaved = savedJobs.some(sj => sj.job._id === job._id);
+              const isApplied = Array.isArray(appliedJobs) ? appliedJobs.some(aj => aj.job._id === job._id) : false;
+              const isSaved = Array.isArray(savedJobs) ? savedJobs.some(sj => sj.job._id === job._id) : false;
               
               return (
                 <motion.div
@@ -495,12 +485,12 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                   <p className="text-gray-700 text-sm mb-3 line-clamp-2">{job.description}</p>
                   
                   <div className="flex flex-wrap gap-1 mb-3">
-                    {job.requirements.slice(0, 2).map((req, index) => (
+                    {job.requirements?.slice(0, 2).map((req, index) => (
                       <span key={index} className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs">
                         {req}
                       </span>
                     ))}
-                    {job.requirements.length > 2 && (
+                    {job.requirements && job.requirements.length > 2 && (
                       <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">
                         +{job.requirements.length - 2} more
                       </span>
@@ -625,8 +615,8 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
             </div>
           ) : (
             filteredJobs.map((job) => {
-              const isApplied = appliedJobs.some(aj => aj.job._id === job._id);
-              const isSaved = savedJobs.some(sj => sj.job._id === job._id);
+              const isApplied = Array.isArray(appliedJobs) ? appliedJobs.some(aj => aj.job._id === job._id) : false;
+              const isSaved = Array.isArray(savedJobs) ? savedJobs.some(sj => sj.job._id === job._id) : false;
               
               return (
                 <motion.div
@@ -673,12 +663,12 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                       <p className="text-gray-700 mb-4 line-clamp-2">{job.description}</p>
                       
                       <div className="flex flex-wrap gap-2 mb-4">
-                        {job.requirements.slice(0, 3).map((req, index) => (
+                        {job.requirements?.slice(0, 3).map((req, index) => (
                           <span key={index} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
                             {req}
                           </span>
                         ))}
-                        {job.requirements.length > 3 && (
+                        {job.requirements && job.requirements.length > 3 && (
                           <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
                             +{job.requirements.length - 3} more
                           </span>
@@ -688,7 +678,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                     
                     <div className="flex flex-col gap-3 lg:w-48">
                       <div className="text-sm text-gray-500">
-                        Posted {new Date(job.postedDate).toLocaleDateString()}
+                        Posted {new Date(job.createdAt).toLocaleDateString()}
                       </div>
                       
                       <div className="flex flex-col gap-2">
@@ -737,7 +727,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
             <h2 className="text-lg font-semibold text-gray-900">Recent Applications</h2>
           </div>
           <div className="space-y-3">
-            {appliedJobs.slice(0, 3).map((application) => (
+            {Array.isArray(appliedJobs) ? appliedJobs.slice(0, 3).map((application) => (
               <div key={application._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div>
                   <h3 className="font-medium text-gray-900">{application.job.title}</h3>
@@ -754,8 +744,8 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                   <p className="text-xs text-gray-500 mt-1">{application.appliedDate}</p>
                 </div>
               </div>
-            ))}
-            {appliedJobs.length === 0 && (
+            )) : null}
+            {Array.isArray(appliedJobs) && appliedJobs.length === 0 && (
               <div className="text-center py-4 text-gray-500">
                 No applications yet. Start applying to jobs!
               </div>
@@ -775,17 +765,17 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
             <h2 className="text-lg font-semibold text-gray-900">Saved Jobs</h2>
           </div>
           <div className="space-y-3">
-            {savedJobs.slice(0, 3).map((savedJob) => (
+            {Array.isArray(savedJobs) ? savedJobs.slice(0, 3).map((savedJob) => (
               <div key={savedJob._id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <h3 className="font-medium text-gray-900">{savedJob.job.title}</h3>
-                    <p className="text-sm text-gray-600">{savedJob.job.company}</p>
+                    <h3 className="font-medium text-gray-900">{savedJob.job?.title || 'Job Title Not Available'}</h3>
+                    <p className="text-sm text-gray-600">{savedJob.job?.company || 'Company Not Available'}</p>
                     <div className="flex items-center gap-2 mt-2">
                       <span className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded-full">
-                        {savedJob.job.salary}
+                        {savedJob.job?.salary || 'Salary Not Available'}
                       </span>
-                      <span className="text-xs text-gray-500">{savedJob.job.location}</span>
+                      <span className="text-xs text-gray-500">{savedJob.job?.location || 'Location Not Available'}</span>
                     </div>
                   </div>
                   <button className="text-purple-600 hover:text-purple-700">
@@ -793,8 +783,8 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                   </button>
                 </div>
               </div>
-            ))}
-            {savedJobs.length === 0 && (
+            )) : null}
+            {Array.isArray(savedJobs) && savedJobs.length === 0 && (
               <div className="text-center py-4 text-gray-500">
                 No saved jobs yet. Save interesting positions for later!
               </div>

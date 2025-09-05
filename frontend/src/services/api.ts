@@ -4,6 +4,78 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/a
 console.log('🔧 API_BASE_URL:', API_BASE_URL);
 console.log('🔧 NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
 
+// API Response Types
+interface Job {
+  _id: string;
+  title: string;
+  description: string;
+  company: string;
+  location: string;
+  salary?: number;
+  payType?: string;
+  type: string;
+  category: string;
+  status: string;
+  employer: string;
+  createdAt: string;
+  views?: number;
+  applicationsCount?: number;
+  requirements?: string[];
+}
+
+interface Application {
+  _id: string;
+  job: Job;
+  student: string;
+  employer: string;
+  status: string;
+  appliedDate: string;
+  coverLetter?: string;
+  expectedPay?: number;
+  availability?: string;
+}
+
+interface JobsResponse {
+  jobs: Job[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
+interface ApplicationsResponse {
+  applications: Application[];
+  pagination: {
+    current: number;
+    pages: number;
+    total: number;
+  };
+}
+
+interface User {
+  _id: string;
+  name: string;
+  email: string;
+  phone: string;
+  userType: 'student' | 'employer' | 'admin';
+  college?: string;
+  skills?: string[];
+  availability?: string;
+  companyName?: string;
+  businessType?: string;
+  address?: string;
+  isVerified?: boolean;
+  emailVerified?: boolean;
+  createdAt: string;
+}
+
+interface AuthResponse {
+  user: User;
+  token: string;
+}
+
 class ApiService {
   private getToken(): string | null {
     if (typeof window !== 'undefined') {
@@ -70,21 +142,21 @@ class ApiService {
   }
 
   // Authentication APIs
-  async loginRequestOTP(email: string, userType: string) {
+  async loginRequestOTP(email: string, userType: string): Promise<{ message: string; email: string; userType: string }> {
     return this.request('/auth/login-request-otp', {
       method: 'POST',
       body: JSON.stringify({ email, userType }),
     });
   }
 
-  async loginVerifyOTP(email: string, userType: string, otp: string) {
+  async loginVerifyOTP(email: string, userType: string, otp: string): Promise<AuthResponse> {
     return this.request('/auth/login-verify-otp', {
       method: 'POST',
       body: JSON.stringify({ email, userType, otp }),
     });
   }
 
-  async register(userData: any) {
+  async register(userData: any): Promise<AuthResponse> {
     return this.request('/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
@@ -111,8 +183,8 @@ class ApiService {
     });
   }
 
-  async getProfile() {
-    return this.request('/users/profile');
+  async getProfile(): Promise<User> {
+    return this.request<User>('/users/profile');
   }
 
   // Test API connectivity
@@ -148,14 +220,14 @@ class ApiService {
   }
 
   // Job APIs
-  async getJobs(filters?: any) {
+  async getJobs(filters?: any): Promise<JobsResponse> {
     const queryParams = filters ? new URLSearchParams(filters).toString() : '';
     const endpoint = queryParams ? `/jobs?${queryParams}` : '/jobs';
-    return this.request(endpoint);
+    return this.request<JobsResponse>(endpoint);
   }
 
-  async getJob(id: string) {
-    return this.request(`/jobs/${id}`);
+  async getJob(id: string): Promise<Job> {
+    return this.request<Job>(`/jobs/${id}`);
   }
 
   async createJob(jobData: any) {
@@ -178,8 +250,8 @@ class ApiService {
     });
   }
 
-  async getEmployerJobs() {
-    return this.request('/jobs/employer');
+  async getEmployerJobs(): Promise<JobsResponse> {
+    return this.request<JobsResponse>('/jobs/employer');
   }
 
   async updateJobStatus(id: string, status: string) {
@@ -202,12 +274,12 @@ class ApiService {
     });
   }
 
-  async getUserApplications() {
-    return this.request('/applications/user');
+  async getUserApplications(): Promise<ApplicationsResponse> {
+    return this.request<ApplicationsResponse>('/applications/my-applications');
   }
 
-  async getJobApplications(jobId: string) {
-    return this.request(`/applications/job/${jobId}`);
+  async getJobApplications(jobId: string): Promise<ApplicationsResponse> {
+    return this.request<ApplicationsResponse>(`/applications/job/${jobId}`);
   }
 
   async updateApplicationStatus(id: string, status: string, notes?: string) {
@@ -334,3 +406,6 @@ class ApiService {
 
 export const apiService = new ApiService();
 export default apiService;
+
+// Export types for use in components
+export type { Job, Application, JobsResponse, ApplicationsResponse, User, AuthResponse };

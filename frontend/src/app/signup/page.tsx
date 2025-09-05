@@ -161,25 +161,37 @@ export default function Signup() {
       // Register the user
       const response = await apiService.register(userData) as any;
       
-      if (response.token) {
+      console.log('🔐 Registration response:', response); // Debug log
+      
+      // The response structure is { success: true, message: "...", data: { user: {...}, token: "..." } }
+      const { user, token } = response.data || response;
+      
+      console.log('👤 User data:', user); // Debug log
+      console.log('🔑 Token:', token ? 'Present' : 'Missing'); // Debug log
+      
+      if (token && user) {
         // Store the token and user data
-        setLocalStorage('token', response.token);
-        setLocalStorage('user', JSON.stringify(response.user));
+        setLocalStorage('token', token);
+        setLocalStorage('user', JSON.stringify(user));
         
         // Login the user using AuthContext
-        login(response.user, response.token);
+        login(user, token);
         
         setStep('success');
         setSuccess('Account created successfully! Redirecting to your dashboard...');
         
-        // Redirect to appropriate dashboard based on user type
-        setTimeout(() => {
-          if (userType === 'student') {
-            router.push('/student-home');
-          } else if (userType === 'employer') {
-            router.push('/employer-home');
-          }
-        }, 2000);
+        // Redirect immediately to appropriate dashboard based on user type
+        const redirectPath = userType === 'student' ? '/student-home' 
+                           : userType === 'employer' ? '/employer-home'
+                           : '/';
+        
+        console.log('🚀 Redirecting to:', redirectPath); // Debug log
+        
+        // Use router.push immediately instead of setTimeout
+        router.push(redirectPath);
+      } else {
+        console.error('❌ Missing user or token in response:', { user, token }); // Debug log
+        setError('Registration failed. Please try again.');
       }
     } catch (error: any) {
       setError(apiService.handleError(error));

@@ -17,25 +17,7 @@ import {
   ChevronUp,
   Briefcase
 } from 'lucide-react';
-import { apiService } from '../../services/api';
-
-interface Job {
-  _id: string;
-  title: string;
-  company: string;
-  location: string;
-  salary: string;
-  description: string;
-  requirements: string[];
-  type: string;
-  postedDate: string;
-  status: string;
-  employer: {
-    _id: string;
-    companyName: string;
-    email: string;
-  };
-}
+import { apiService, type JobsResponse, type ApplicationsResponse, type Job } from '../../services/api';
 
 const JobsPage = () => {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -53,104 +35,104 @@ const JobsPage = () => {
     const fetchJobs = async () => {
       try {
         setLoading(true);
-        const jobsData = await apiService.getJobs();
-        const jobsList = jobsData.jobs || jobsData || [];
-        setJobs(jobsList);
-        setFilteredJobs(jobsList);
-        
-        // Fetch user applications to check which jobs they've applied to
-        const applications = await apiService.getUserApplications();
-        const appliedJobIds = applications.map((app: any) => app.job);
-        setAppliedJobs(appliedJobIds);
+              const jobsData: JobsResponse = await apiService.getJobs();
+      const jobsList = jobsData.jobs || [];
+      setJobs(jobsList);
+      setFilteredJobs(jobsList);
+      
+      // Fetch user applications to check which jobs they've applied to
+      const applications: ApplicationsResponse = await apiService.getUserApplications();
+      const appliedJobIds = applications.applications.map((app) => app.job._id);
+      setAppliedJobs(appliedJobIds);
         
       } catch (error) {
         console.error('Error fetching jobs:', error);
         // Fallback to mock data
-        const mockJobs = [
+        const mockJobs: Job[] = [
           {
             _id: '1',
             title: 'Frontend Developer Intern',
+            description: 'We are looking for a talented frontend developer intern...',
             company: 'TechCorp Inc.',
             location: 'Hyderabad',
-            salary: '₹25,000/month',
-            description: 'We are looking for a talented frontend developer intern...',
-            requirements: ['React', 'JavaScript', 'HTML/CSS'],
+            salary: 25000,
+            payType: 'monthly',
             type: 'Internship',
-            postedDate: '2024-01-15',
+            category: 'Technology',
             status: 'active',
-            employer: {
-              _id: '1',
-              companyName: 'TechCorp Inc.',
-              email: 'hr@techcorp.com'
-            }
+            employer: '1',
+            createdAt: '2024-01-15T10:00:00Z',
+            views: 100,
+            applicationsCount: 15,
+            requirements: ['React', 'JavaScript', 'HTML/CSS']
           },
           {
             _id: '2',
             title: 'Data Analyst',
+            description: 'Join our data team to analyze and visualize complex datasets...',
             company: 'DataFlow Solutions',
             location: 'Remote',
-            salary: '₹35,000/month',
-            description: 'Join our data team to analyze and visualize complex datasets...',
-            requirements: ['Python', 'SQL', 'Excel'],
+            salary: 35000,
+            payType: 'monthly',
             type: 'Full-time',
-            postedDate: '2024-01-12',
+            category: 'Analytics',
             status: 'active',
-            employer: {
-              _id: '2',
-              companyName: 'DataFlow Solutions',
-              email: 'careers@dataflow.com'
-            }
+            employer: '2',
+            createdAt: '2024-01-12T10:00:00Z',
+            views: 120,
+            applicationsCount: 18,
+            requirements: ['Python', 'SQL', 'Excel']
           },
           {
             _id: '3',
             title: 'Marketing Assistant',
+            description: 'Support our marketing team with digital campaigns...',
             company: 'Growth Marketing Co.',
             location: 'Hyderabad',
-            salary: '₹20,000/month',
-            description: 'Support our marketing team with digital campaigns...',
-            requirements: ['Social Media', 'Content Writing', 'Analytics'],
+            salary: 20000,
+            payType: 'monthly',
             type: 'Part-time',
-            postedDate: '2024-01-10',
+            category: 'Marketing',
             status: 'active',
-            employer: {
-              _id: '3',
-              companyName: 'Growth Marketing Co.',
-              email: 'jobs@growthmarketing.com'
-            }
+            employer: '3',
+            createdAt: '2024-01-10T10:00:00Z',
+            views: 80,
+            applicationsCount: 12,
+            requirements: ['Social Media', 'Content Writing', 'Analytics']
           },
           {
             _id: '4',
             title: 'Backend Developer',
+            description: 'Build scalable backend systems and APIs...',
             company: 'TechCorp Inc.',
             location: 'Hyderabad',
-            salary: '₹40,000/month',
-            description: 'Build scalable backend systems and APIs...',
-            requirements: ['Node.js', 'MongoDB', 'Express'],
+            salary: 40000,
+            payType: 'monthly',
             type: 'Full-time',
-            postedDate: '2024-01-08',
+            category: 'Technology',
             status: 'active',
-            employer: {
-              _id: '1',
-              companyName: 'TechCorp Inc.',
-              email: 'hr@techcorp.com'
-            }
+            employer: '1',
+            createdAt: '2024-01-08T10:00:00Z',
+            views: 200,
+            applicationsCount: 35,
+            requirements: ['Node.js', 'MongoDB', 'Express']
           },
           {
             _id: '5',
             title: 'UI/UX Designer',
+            description: 'Create beautiful and intuitive user interfaces...',
             company: 'Creative Studio',
             location: 'Remote',
-            salary: '₹30,000/month',
-            description: 'Create beautiful and intuitive user interfaces...',
-            requirements: ['Figma', 'Adobe XD', 'Prototyping'],
+            salary: 30000,
+            payType: 'monthly',
             type: 'Full-time',
-            postedDate: '2024-01-05',
+            category: 'Design',
             status: 'active',
-            employer: {
-              _id: '4',
-              companyName: 'Creative Studio',
-              email: 'design@creativestudio.com'
-            }
+            employer: '4',
+            createdAt: '2024-01-05T10:00:00Z',
+            views: 150,
+            applicationsCount: 22,
+            requirements: ['Figma', 'Adobe XD', 'Prototyping']
           }
         ];
         setJobs(mockJobs);
@@ -382,19 +364,19 @@ const JobsPage = () => {
                       </div>
                       <div className="flex items-center gap-1">
                         <Calendar className="w-4 h-4" />
-                        <span>Posted {new Date(job.postedDate).toLocaleDateString()}</span>
+                        <span>Posted {new Date(job.createdAt).toLocaleDateString()}</span>
                       </div>
                     </div>
                     
                     <p className="text-gray-700 mb-4 line-clamp-2">{job.description}</p>
                     
                     <div className="flex flex-wrap gap-2 mb-4">
-                      {job.requirements.slice(0, 3).map((req, index) => (
+                      {job.requirements?.slice(0, 3).map((req, index) => (
                         <span key={index} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
                           {req}
                         </span>
                       ))}
-                      {job.requirements.length > 3 && (
+                      {job.requirements && job.requirements.length > 3 && (
                         <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
                           +{job.requirements.length - 3} more
                         </span>
@@ -410,7 +392,7 @@ const JobsPage = () => {
                   
                   <div className="flex flex-col gap-3 lg:w-48">
                     <div className="text-sm text-gray-500">
-                      Posted {new Date(job.postedDate).toLocaleDateString()}
+                      Posted {new Date(job.createdAt).toLocaleDateString()}
                     </div>
                     
                     <div className="flex flex-col gap-2">

@@ -33,24 +33,14 @@ import {
 } from 'lucide-react';
 import StatsCard from './StatsCard';
 import NotificationCard from './NotificationCard';
-import { apiService } from '../services/api';
+import { apiService, type JobsResponse, type Job, type ApplicationsResponse } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
-interface JobPosting {
-  _id: string;
-  title: string;
-  company: string;
-  location: string;
-  salary: string;
-  type: string;
-  status: string;
+interface JobPosting extends Job {
   applications: number;
-  postedDate: string;
-  description: string;
-  requirements: string[];
 }
 
-interface Application {
+interface EmployerApplication {
   _id: string;
   student: {
     name: string;
@@ -98,7 +88,7 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
       hiredStudents: 0
     },
     jobPostings: [] as JobPosting[],
-    applications: [] as Application[],
+    applications: [] as EmployerApplication[],
     topCandidates: [] as TopCandidate[],
     notifications: [] as Notification[]
   });
@@ -115,23 +105,41 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
         setLoading(true);
         
         // Fetch employer's jobs
-        const jobsData = await apiService.getEmployerJobs();
+        const jobsData: JobsResponse = await apiService.getEmployerJobs();
+        const jobPostings: JobPosting[] = (jobsData.jobs || []).map(job => ({
+          ...job,
+          applications: job.applicationsCount || 0
+        }));
         setData(prev => ({
           ...prev,
-          jobPostings: jobsData.jobs || jobsData || []
+          jobPostings
         }));
         
         // Fetch applications for employer's jobs
-        const applicationsData = await apiService.getJobApplications('all');
+        const applicationsData: ApplicationsResponse = await apiService.getJobApplications('all');
+        const employerApplications: EmployerApplication[] = (applicationsData.applications || []).map(app => ({
+          _id: app._id,
+          student: {
+            name: 'Student Name', // This would need to be populated from the API
+            email: 'student@email.com'
+          },
+          job: {
+            title: app.job.title,
+            company: app.job.company
+          },
+          status: app.status,
+          appliedDate: app.appliedDate,
+          coverLetter: app.coverLetter
+        }));
         setData(prev => ({
           ...prev,
-          applications: applicationsData.applications || applicationsData || []
+          applications: employerApplications
         }));
         
         // Calculate stats
-        const activeJobs = (jobsData.jobs || jobsData || []).filter((job: JobPosting) => job.status === 'active').length;
-        const totalApplications = applicationsData.applications?.length || applicationsData?.length || 0;
-        const pendingApprovals = (applicationsData.applications || applicationsData || []).filter((app: Application) => app.status === 'pending').length;
+        const activeJobs = jobPostings.filter(job => job.status === 'active').length;
+        const totalApplications = applicationsData.applications?.length || 0;
+        const pendingApprovals = (applicationsData.applications || []).filter(app => app.status === 'pending').length;
         
         setData(prev => ({
           ...prev,
@@ -214,40 +222,55 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
             {
               _id: '1',
               title: 'Warehouse Worker',
+              description: 'Looking for reliable warehouse workers for loading and unloading goods',
               company: 'Logistics Solutions',
               location: 'Hyderabad',
-              salary: '₹15,000/month',
+              salary: 15000,
+              payType: 'monthly',
               type: 'Full-time',
+              category: 'Labor',
               status: 'active',
+              employer: '1',
+              createdAt: '2024-01-10T10:00:00Z',
+              views: 50,
+              applicationsCount: 8,
               applications: 8,
-              postedDate: '2024-01-10',
-              description: 'Looking for reliable warehouse workers for loading and unloading goods',
               requirements: ['Manual Labor', 'Team Work', 'Physical Stamina']
             },
             {
               _id: '2',
               title: 'Housekeeping Staff',
+              description: 'Cleaning and maintenance staff needed for office buildings',
               company: 'CleanPro Services',
               location: 'Hyderabad',
-              salary: '₹12,000/month',
+              salary: 12000,
+              payType: 'monthly',
               type: 'Full-time',
+              category: 'Service',
               status: 'active',
+              employer: '2',
+              createdAt: '2024-01-12T10:00:00Z',
+              views: 40,
+              applicationsCount: 6,
               applications: 6,
-              postedDate: '2024-01-12',
-              description: 'Cleaning and maintenance staff needed for office buildings',
               requirements: ['Cleaning', 'Attention to Detail', 'Reliability']
             },
             {
               _id: '3',
               title: 'Delivery Driver',
+              description: 'Delivery drivers needed for local package delivery',
               company: 'FastDelivery Co.',
               location: 'Hyderabad',
-              salary: '₹18,000/month',
+              salary: 18000,
+              payType: 'monthly',
               type: 'Full-time',
+              category: 'Transportation',
               status: 'active',
+              employer: '3',
+              createdAt: '2024-01-08T10:00:00Z',
+              views: 60,
+              applicationsCount: 4,
               applications: 4,
-              postedDate: '2024-01-08',
-              description: 'Delivery drivers needed for local package delivery',
               requirements: ['Driving License', 'Navigation', 'Customer Service']
             }
           ],
@@ -596,12 +619,12 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
                     <p className="text-gray-700 mb-4 line-clamp-2">{job.description}</p>
                     
                     <div className="flex flex-wrap gap-2 mb-4">
-                      {job.requirements.slice(0, 3).map((req, index) => (
+                      {job.requirements?.slice(0, 3).map((req, index) => (
                         <span key={index} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
                           {req}
                         </span>
                       ))}
-                      {job.requirements.length > 3 && (
+                      {job.requirements && job.requirements.length > 3 && (
                         <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
                           +{job.requirements.length - 3} more
                         </span>
@@ -611,7 +634,7 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
                   
                   <div className="flex flex-col gap-3 lg:w-48">
                     <div className="text-sm text-gray-500">
-                      Posted {new Date(job.postedDate).toLocaleDateString()}
+                      Posted {new Date(job.createdAt).toLocaleDateString()}
                     </div>
                     
                     <div className="flex flex-col gap-2">

@@ -94,26 +94,37 @@ export default function Login() {
       // Login with OTP verification
       const response: any = await apiService.loginVerifyOTP(formData.email.trim(), formData.userType, cleanOtp);
       
-      if (response.token) {
+      console.log('🔐 Login response:', response); // Debug log
+      
+      // The response structure is { success: true, message: "...", data: { user: {...}, token: "..." } }
+      const { user, token } = response.data || response;
+      
+      console.log('👤 User data:', user); // Debug log
+      console.log('🔑 Token:', token ? 'Present' : 'Missing'); // Debug log
+      
+      if (token && user) {
         // Store the token and user data
-        localStorage.setItem('token', response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
         
         // Login the user using AuthContext
-        login(response.user, response.token);
+        login(user, token);
         
         setSuccess('Login successful! Redirecting to your dashboard...');
         
-        // Redirect to appropriate dashboard based on user type
-        setTimeout(() => {
-          if (response.user.userType === 'student') {
-            router.push('/student-home');
-          } else if (response.user.userType === 'employer') {
-            router.push('/employer-home');
-          } else if (response.user.userType === 'admin') {
-            router.push('/admin-home');
-          }
-        }, 2000);
+        // Redirect immediately to appropriate dashboard based on user type
+        const redirectPath = user.userType === 'student' ? '/student-home' 
+                           : user.userType === 'employer' ? '/employer-home'
+                           : user.userType === 'admin' ? '/admin-home'
+                           : '/';
+        
+        console.log('🚀 Redirecting to:', redirectPath); // Debug log
+        
+        // Use router.push immediately instead of setTimeout
+        router.push(redirectPath);
+      } else {
+        console.error('❌ Missing user or token in response:', { user, token }); // Debug log
+        setError('Invalid response from server. Please try again.');
       }
     } catch (error: any) {
       setError(apiService.handleError(error));
