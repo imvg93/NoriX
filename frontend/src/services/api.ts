@@ -93,15 +93,17 @@ class ApiService {
 
     console.log('🌐 Making API request to:', url);
 
-    const { skipAuth, headers: extraHeaders, ...restOptions } = options as any;
+    const { skipAuth, headers: extraHeaders, body, ...restOptions } = options as any;
 
     const config: RequestInit = {
       headers: {
-        'Content-Type': 'application/json',
         ...(!skipAuth && token ? { Authorization: `Bearer ${token}` } : {}),
         ...extraHeaders,
+        // Don't set Content-Type for FormData - let browser set it with boundary
+        ...(body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
       },
       credentials: 'include', // Include cookies for CORS
+      body,
       ...restOptions,
     };
 
@@ -190,6 +192,38 @@ class ApiService {
   // Test API connectivity
   async testConnection() {
     return this.request('/test');
+  }
+
+  // Generic HTTP methods for KYC service
+  async get<T = any>(endpoint: string): Promise<{ data: T }> {
+    const data = await this.request<T>(endpoint);
+    return { data };
+  }
+
+  async post<T = any>(endpoint: string, body?: any, options?: RequestInit): Promise<{ data: T }> {
+    const data = await this.request<T>(endpoint, {
+      method: 'POST',
+      body: body instanceof FormData ? body : JSON.stringify(body),
+      ...options,
+    });
+    return { data };
+  }
+
+  async put<T = any>(endpoint: string, body?: any, options?: RequestInit): Promise<{ data: T }> {
+    const data = await this.request<T>(endpoint, {
+      method: 'PUT',
+      body: body instanceof FormData ? body : JSON.stringify(body),
+      ...options,
+    });
+    return { data };
+  }
+
+  async delete<T = any>(endpoint: string, options?: RequestInit): Promise<{ data: T }> {
+    const data = await this.request<T>(endpoint, {
+      method: 'DELETE',
+      ...options,
+    });
+    return { data };
   }
 
   async updateProfile(userData: any) {
@@ -382,25 +416,73 @@ class ApiService {
 
   // Error handling
   handleError(error: any): string {
+    // Check if error has a specific message
     if (error.message) {
+      // Handle specific authentication errors
+      if (error.message.includes('Invalid email or password')) {
+        return 'The email or password you entered is incorrect. Please check and try again.';
+      }
+      if (error.message.includes('User not found')) {
+        return 'No account found with this email address. Please check your email or sign up for a new account.';
+      }
+      if (error.message.includes('Invalid OTP')) {
+        return 'The OTP you entered is incorrect. Please check the 6-digit code sent to your email.';
+      }
+      if (error.message.includes('OTP expired')) {
+        return 'The OTP has expired. Please request a new one.';
+      }
+      if (error.message.includes('Email not verified')) {
+        return 'Please verify your email address before logging in. Check your inbox for a verification email.';
+      }
+      if (error.message.includes('Account suspended')) {
+        return 'Your account has been suspended. Please contact support for assistance.';
+      }
+      if (error.message.includes('Too many attempts')) {
+        return 'Too many login attempts. Please wait a few minutes before trying again.';
+      }
+      
+      // Handle validation errors
+      if (error.message.includes('Email is required')) {
+        return 'Please enter your email address.';
+      }
+      if (error.message.includes('Password is required')) {
+        return 'Please enter your password.';
+      }
+      if (error.message.includes('Invalid email format')) {
+        return 'Please enter a valid email address (e.g., user@example.com).';
+      }
+      if (error.message.includes('Password too short')) {
+        return 'Password must be at least 6 characters long.';
+      }
+      
+      // Return the original message if it's user-friendly
       return error.message;
     }
+    
+    // Handle HTTP status codes
     if (error.status === 401) {
       // Token expired or invalid
       localStorage.removeItem('token');
       window.location.href = '/login';
-      return 'Session expired. Please login again.';
+      return 'Your session has expired. Please log in again.';
     }
     if (error.status === 403) {
-      return 'Access denied. You do not have permission to perform this action.';
+      return 'You do not have permission to perform this action. Please contact support if you believe this is an error.';
     }
     if (error.status === 404) {
-      return 'Resource not found.';
+      return 'The requested resource was not found. Please check your request and try again.';
+    }
+    if (error.status === 422) {
+      return 'Please check your input and try again. Some fields may be missing or invalid.';
+    }
+    if (error.status === 429) {
+      return 'Too many requests. Please wait a moment before trying again.';
     }
     if (error.status >= 500) {
-      return 'Server error. Please try again later.';
+      return 'Server error occurred. Please try again in a few moments. If the problem persists, contact support.';
     }
-    return 'An unexpected error occurred. Please try again.';
+    
+    return 'Something went wrong. Please try again or contact support if the problem continues.';
   }
 }
 

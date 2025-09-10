@@ -11,6 +11,7 @@ import userRoutes from './routes/users';
 import jobRoutes from './routes/jobs';
 import applicationRoutes from './routes/applications';
 import adminRoutes from './routes/admin';
+import kycRoutes from './routes/kyc';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -20,7 +21,7 @@ import { notFound } from './middleware/notFound';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 // CORS configuration
 const corsOptions = {
@@ -72,6 +73,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/kyc', kycRoutes);
 
 // Error handling middleware
 app.use(notFound);

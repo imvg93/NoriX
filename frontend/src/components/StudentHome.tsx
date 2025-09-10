@@ -27,13 +27,15 @@ import {
   X,
   ChevronDown,
   ChevronUp,
-  LogOut
+  LogOut,
+  Shield
 } from 'lucide-react';
 import StatsCard from './StatsCard';
 import TaskCard from './TaskCard';
 import NotificationCard from './NotificationCard';
 import { apiService, type JobsResponse, type ApplicationsResponse, type Job, type Application } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { kycStatusService } from '../services/kycStatusService';
 
 interface AppliedJob {
   _id: string;
@@ -86,6 +88,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
   const [selectedType, setSelectedType] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [filteredJobs, setFilteredJobs] = useState<Job[]>([]);
+  const [kycStatus, setKycStatus] = useState<{isCompleted: boolean, status: string}>({isCompleted: false, status: 'not-submitted'});
 
   // Fetch data from API
   useEffect(() => {
@@ -144,6 +147,18 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
             isRead: true
           }
         ]);
+        
+        // Check KYC status
+        try {
+          const kycStatusData = await kycStatusService.checkKYCStatus();
+          setKycStatus({
+            isCompleted: kycStatusData.isCompleted,
+            status: kycStatusData.status
+          });
+        } catch (error) {
+          console.error('Error checking KYC status:', error);
+          // Keep default state if KYC check fails
+        }
         
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -343,6 +358,20 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
             <Home className="w-4 h-4" />
             Home
           </Link>
+          {kycStatus.isCompleted ? (
+            <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium cursor-not-allowed opacity-75">
+              <Shield className="w-4 h-4" />
+              KYC Verified
+            </div>
+          ) : (
+            <Link 
+              href="/kyc-profile" 
+              className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium bg-orange-600 text-white hover:bg-orange-700"
+            >
+              <Shield className="w-4 h-4" />
+              Complete KYC
+            </Link>
+          )}
           <button 
             onClick={() => window.history.back()} 
             className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
@@ -383,6 +412,45 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
           </div>
         </div>
       </motion.div>
+
+      {/* KYC Status Banner */}
+      {!kycStatus.isCompleted ? (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-r from-orange-500 to-red-500 rounded-lg p-4 mb-6"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Shield className="w-6 h-6 text-white" />
+              <div>
+                <h3 className="text-white font-semibold">Complete Your KYC Verification</h3>
+                <p className="text-orange-100 text-sm">Verify your identity to access all job opportunities</p>
+              </div>
+            </div>
+            <Link 
+              href="/kyc-profile"
+              className="bg-white text-orange-600 px-4 py-2 rounded-lg font-medium hover:bg-orange-50 transition-colors"
+            >
+              Complete Now
+            </Link>
+          </div>
+        </motion.div>
+      ) : (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg p-4 mb-6"
+        >
+          <div className="flex items-center gap-3">
+            <Shield className="w-6 h-6 text-white" />
+            <div>
+              <h3 className="text-white font-semibold">✅ KYC Verification Complete</h3>
+              <p className="text-green-100 text-sm">Your identity has been verified. You can now access all job opportunities!</p>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

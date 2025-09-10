@@ -29,7 +29,7 @@ export default function StudentHomePage() {
     }
   }, [isAuthenticated, user, router]);
 
-  // Show loading or redirect if not authenticated
+  // Show loading if not authenticated
   if (!isAuthenticated || !user || user.userType !== 'student') {
     return (
       <div className="min-h-screen flex items-center justify-center">
