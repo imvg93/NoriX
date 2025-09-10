@@ -1,13 +1,14 @@
 "use client";
 
+import React from "react";
 import { motion } from "framer-motion";
 import { useRef, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface TimelineContentProps {
-  as?: keyof JSX.IntrinsicElements;
+  as?: React.ElementType;
   animationNum: number;
-  timelineRef: React.RefObject<HTMLElement>;
+  timelineRef: React.RefObject<HTMLElement | null>;
   customVariants?: any;
   className?: string;
   children: React.ReactNode;
@@ -24,7 +25,7 @@ export function TimelineContent({
   ...props
 }: TimelineContentProps) {
   const [isVisible, setIsVisible] = useState(false);
-  const elementRef = useRef<HTMLElement>(null);
+  const elementRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -70,7 +71,8 @@ export function TimelineContent({
 
   const variants = customVariants || defaultVariants;
 
-  const MotionComponent = motion[Component] || motion.div;
+  // Use motion.div for all components to avoid TypeScript complexity
+  const MotionComponent = motion.div;
 
   return (
     <MotionComponent

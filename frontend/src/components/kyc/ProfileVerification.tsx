@@ -150,7 +150,7 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
         fullName: 'Rajesh Kumar',
         dob: '2000-05-15',
         gender: 'male',
-        phone: '+91 98765 43210',
+        phone: '+1 234 567 8900',
         email: 'rajesh.kumar@example.com',
         address: '123 Main Street, Sector 5, Hyderabad, Telangana 500001',
              college: 'Osmania University',
@@ -158,14 +158,14 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
         stayType: 'pg',
         pgName: 'Green Valley PG',
         pgAddress: '456 Park Avenue, Near Metro Station, Hyderabad',
-        pgContact: '+91 98765 43211',
+        pgContact: '+1 234 567 8901',
         hoursPerWeek: 25,
         availableDays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'],
         // govtIdType: 'aadhaar',
         // govtIdFiles: [],
         // photoFile: [],
         emergencyContactName: 'Suresh Kumar',
-        emergencyContactPhone: '+91 98765 43212',
+        emergencyContactPhone: '+1 234 567 8902',
         bloodGroup: 'O+',
         preferredJobTypes: ['warehouse', 'delivery', 'housekeeping'],
         experienceSkills: 'Previous experience in warehouse work and delivery services. Good communication skills and reliable.',
@@ -179,7 +179,7 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
         fullName: 'Priya Sharma',
         dob: '2001-08-22',
         gender: 'female',
-        phone: '+91 87654 32109',
+        phone: '+1 234 567 8903',
         email: 'priya.sharma@example.com',
         address: '789 Tech Park Road, HITEC City, Hyderabad, Telangana 500081',
              college: 'JNTU Hyderabad',
@@ -194,7 +194,7 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
         // govtIdFiles: [],
         // photoFile: [],
         emergencyContactName: 'Ravi Sharma',
-        emergencyContactPhone: '+91 87654 32110',
+        emergencyContactPhone: '+1 234 567 8904',
         bloodGroup: 'A+',
         preferredJobTypes: ['retail', 'data-entry'],
         experienceSkills: 'Good at data entry and customer service. Fluent in English and Hindi.',
@@ -455,8 +455,13 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
       
       case 'phone':
         if (!value) return 'Please enter your phone number';
-        if (!/^(\+91|0)?[789]\d{9}$/.test(value.replace(/\s/g, ''))) {
-          return 'Please enter a valid Indian phone number (e.g., +91 98765 43210)';
+        // More flexible phone validation - accepts international formats
+        const cleanPhone = value.replace(/[\s\-\(\)]/g, '');
+        if (!/^(\+?[1-9]\d{1,14})$/.test(cleanPhone)) {
+          return 'Please enter a valid phone number (e.g., +1 234 567 8900 or 9876543210)';
+        }
+        if (cleanPhone.length < 10 || cleanPhone.length > 15) {
+          return 'Phone number should be between 10-15 digits';
         }
         return '';
       
@@ -501,8 +506,13 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
       
       case 'emergencyContactPhone':
         if (!value) return 'Please enter emergency contact phone number';
-        if (!/^(\+91|0)?[789]\d{9}$/.test(value.replace(/\s/g, ''))) {
-          return 'Please enter a valid Indian phone number';
+        // More flexible phone validation - accepts international formats
+        const cleanEmergencyPhone = value.replace(/[\s\-\(\)]/g, '');
+        if (!/^(\+?[1-9]\d{1,14})$/.test(cleanEmergencyPhone)) {
+          return 'Please enter a valid phone number (e.g., +1 234 567 8900 or 9876543210)';
+        }
+        if (cleanEmergencyPhone.length < 10 || cleanEmergencyPhone.length > 15) {
+          return 'Phone number should be between 10-15 digits';
         }
         return '';
       
@@ -907,10 +917,10 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
                 type="tel"
                 value={formData.phone}
                 onChange={(value) => updateField('phone', value)}
-                placeholder="+91 98765 43210"
+                placeholder="+1 234 567 8900"
                 required
                 error={errors.phone}
-                help="Include country code"
+                help="Include country code (e.g., +1 for US, +91 for India)"
               />
             </div>
 
@@ -948,7 +958,7 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
             className="space-y-6"
           >
             <div className="kyc-section-header">
-              <GraduationCap className="w-6 h-6 text-blue-600" />
+              <GraduationCap className="w-4 h-4 text-blue-600" />
               <div>
                 <h2 className="kyc-section-title">Academic Details</h2>
                 <p className="kyc-section-subtitle">Your educational background</p>
@@ -989,7 +999,7 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
             className="space-y-6"
           >
             <div className="kyc-section-header">
-              <Home className="w-6 h-6 text-blue-600" />
+              <Home className="w-4 h-4 text-blue-600" />
               <div>
                 <h2 className="kyc-section-title">Stay & Availability</h2>
                 <p className="kyc-section-subtitle">Where you're staying and your availability</p>
@@ -1138,7 +1148,7 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
                 type="tel"
                 value={formData.emergencyContactPhone}
                 onChange={(value) => updateField('emergencyContactPhone', value)}
-                placeholder="+91 98765 43210"
+                placeholder="+1 234 567 8900"
                 required
                 error={errors.emergencyContactPhone}
               />

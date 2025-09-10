@@ -134,7 +134,7 @@ POST /api/kyc/verify-otp
   "fullName": "string",
   "dob": "YYYY-MM-DD",
   "gender": "male|female|other|prefer-not-to-say",
-  "phone": "+91-9999999999",
+  "phone": "+1-234-567-8900",
   "email": "student@example.com",
   "address": "string",
   "college": "string",

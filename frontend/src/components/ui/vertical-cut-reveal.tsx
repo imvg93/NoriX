@@ -9,13 +9,13 @@ import {
   useRef,
   useState,
 } from "react"
-import { DynamicAnimationOptions, motion } from "framer-motion"
+import { AnimationOptions, motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 
 interface TextProps {
   children: React.ReactNode
   reverse?: boolean
-  transition?: DynamicAnimationOptions
+  transition?: AnimationOptions
   splitBy?: "words" | "characters" | "lines" | string
   staggerDuration?: number
   staggerFrom?: "first" | "last" | "center" | "random" | number
@@ -69,8 +69,12 @@ const VerticalCutReveal = forwardRef<VerticalCutRevealRef, TextProps>(
     // Разделение текста на символы с поддержкой Unicode и эмодзи
     const splitIntoCharacters = (text: string): string[] => {
       if (typeof Intl !== "undefined" && "Segmenter" in Intl) {
-        const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" })
-        return Array.from(segmenter.segment(text), ({ segment }) => segment)
+        try {
+          const segmenter = new (Intl as any).Segmenter("en", { granularity: "grapheme" })
+          return Array.from(segmenter.segment(text), ({ segment }: any) => segment)
+        } catch {
+          return Array.from(text)
+        }
       }
       return Array.from(text)
     }

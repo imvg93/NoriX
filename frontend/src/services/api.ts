@@ -144,6 +144,13 @@ class ApiService {
   }
 
   // Authentication APIs
+  async login(email: string, password: string, userType: string): Promise<AuthResponse> {
+    return this.request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, userType }),
+    });
+  }
+
   async loginRequestOTP(email: string, userType: string): Promise<{ message: string; email: string; userType: string }> {
     return this.request('/auth/login-request-otp', {
       method: 'POST',

@@ -12,7 +12,7 @@ class KYCStatusService {
   // Check if KYC is completed for the current user
   async checkKYCStatus(): Promise<KYCStatus> {
     try {
-      const response = await apiService.request('/kyc/status');
+      const response = await apiService.get('/kyc/status');
       return {
         isCompleted: response.data.status === 'approved',
         status: response.data.status,
@@ -46,7 +46,7 @@ class KYCStatusService {
   // Get KYC profile data
   async getKYCProfile() {
     try {
-      const response = await apiService.request('/kyc/profile');
+      const response = await apiService.get('/kyc/profile');
       return response.data.kyc;
     } catch (error: any) {
       if (error.status === 404) {

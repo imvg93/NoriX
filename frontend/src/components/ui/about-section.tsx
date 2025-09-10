@@ -6,7 +6,7 @@ import { useRef } from "react";
 import Link from "next/link";
 
 export default function AboutSection() {
-  const heroRef = useRef<HTMLDivElement>(null);
+  const heroRef = useRef<HTMLElement>(null);
   const revealVariants = {
     visible: (i: number) => ({
       y: 0,

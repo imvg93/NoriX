@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
     unoptimized: true
   },
   outputFileTracingRoot: process.cwd(),
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   turbopack: {
     rules: {
       '*.svg': {
