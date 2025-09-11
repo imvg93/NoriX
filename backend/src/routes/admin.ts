@@ -3,8 +3,9 @@ import mongoose from 'mongoose';
 import User from '../models/User';
 import Job from '../models/Job';
 import KYC from '../models/KYC';
+import { AdminLogin } from '../models/AdminLogin';
 import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth';
-import { asyncHandler, sendSuccessResponse, ValidationError } from '../middleware/errorHandler';
+import { asyncHandler, sendSuccessResponse, sendErrorResponse, ValidationError } from '../middleware/errorHandler';
 
 const router = express.Router();
 
@@ -327,10 +328,8 @@ router.put('/kyc/:id/approve', authenticateToken, requireRole(['admin']), asyncH
     currentStatus: kyc.verificationStatus
   });
   
-  if (kyc.verificationStatus !== 'pending') {
-    console.log('❌ Admin KYC Approve - KYC not pending:', kyc.verificationStatus);
-    throw new ValidationError('KYC submission is not pending review');
-  }
+  // Admin has full control - can approve from any status
+  console.log('✅ Admin KYC Approve - Admin has full control, proceeding with approval');
   
   kyc.verificationStatus = 'approved';
   kyc.approvedAt = new Date();
@@ -389,10 +388,8 @@ router.put('/kyc/:id/reject', authenticateToken, requireRole(['admin']), asyncHa
     currentStatus: kyc.verificationStatus
   });
   
-  if (kyc.verificationStatus !== 'pending') {
-    console.log('❌ Admin KYC Reject - KYC not pending:', kyc.verificationStatus);
-    throw new ValidationError('KYC submission is not pending review');
-  }
+  // Admin has full control - can reject from any status
+  console.log('✅ Admin KYC Reject - Admin has full control, proceeding with rejection');
   
   kyc.verificationStatus = 'rejected';
   kyc.rejectedAt = new Date();
@@ -415,6 +412,52 @@ router.put('/kyc/:id/reject', authenticateToken, requireRole(['admin']), asyncHa
   console.log('✅ Admin KYC Reject - User KYC status updated');
   
   sendSuccessResponse(res, { kyc }, 'KYC submission rejected successfully');
+}));
+
+// @route   PUT /api/admin/kyc/:id/pending
+// @desc    Set KYC submission to pending status
+// @access  Private (Admin only)
+router.put('/kyc/:id/pending', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { id } = req.params;
+  
+  console.log('🔍 Admin KYC Pending - Starting pending process');
+  console.log('  KYC ID:', id);
+  console.log('  Admin User ID:', req.user!._id);
+  
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    console.log('❌ Admin KYC Pending - Invalid KYC ID');
+    return sendErrorResponse(res, 400, 'Invalid KYC ID');
+  }
+  
+  const kyc = await KYC.findById(id).populate('userId', 'name email phone userType');
+  
+  if (!kyc) {
+    console.log('❌ Admin KYC Pending - KYC not found');
+    return sendErrorResponse(res, 404, 'KYC submission not found');
+  }
+  
+  console.log('✅ Admin KYC Pending - KYC found:', {
+    id: kyc._id,
+    userId: kyc.userId,
+    currentStatus: kyc.verificationStatus
+  });
+  
+  // Update KYC status to pending
+  kyc.verificationStatus = 'pending';
+  kyc.lastUpdated = new Date();
+  await kyc.save();
+  
+  console.log('✅ Admin KYC Pending - KYC status updated to pending');
+  
+  // Update user's KYC status
+  await User.findByIdAndUpdate(kyc.userId, { 
+    kycStatus: 'pending',
+    kycPendingAt: new Date()
+  });
+  
+  console.log('✅ Admin KYC Pending - User KYC status updated');
+  
+  sendSuccessResponse(res, { kyc }, 'KYC submission set to pending successfully');
 }));
 
 // @route   GET /api/admin/kyc/stats
@@ -553,6 +596,263 @@ router.patch('/users/:id/activate', authenticateToken, requireRole(['admin']), a
   await user.save();
 
   sendSuccessResponse(res, { user }, 'User activated successfully');
+}));
+
+// @route   GET /api/admin/login-history
+// @desc    Get admin login history
+// @access  Private (Admin only)
+router.get('/login-history', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { page = 1, limit = 20, status, adminId, startDate, endDate } = req.query;
+  
+  // Build filter object
+  const filter: any = {};
+  
+  if (status && ['success', 'failed'].includes(status as string)) {
+    filter.loginStatus = status;
+  }
+  
+  if (adminId && mongoose.Types.ObjectId.isValid(adminId as string)) {
+    filter.adminId = new mongoose.Types.ObjectId(adminId as string);
+  }
+  
+  if (startDate || endDate) {
+    filter.loginTime = {};
+    if (startDate) {
+      filter.loginTime.$gte = new Date(startDate as string);
+    }
+    if (endDate) {
+      filter.loginTime.$lte = new Date(endDate as string);
+    }
+  }
+  
+  // Calculate pagination
+  const skip = (Number(page) - 1) * Number(limit);
+  
+  // Get login history with pagination
+  const [loginHistory, totalCount] = await Promise.all([
+    AdminLogin.find(filter)
+      .populate('adminId', 'name email')
+      .sort({ loginTime: -1 })
+      .skip(skip)
+      .limit(Number(limit)),
+    AdminLogin.countDocuments(filter)
+  ]);
+  
+  // Calculate pagination info
+  const totalPages = Math.ceil(totalCount / Number(limit));
+  
+  sendSuccessResponse(res, {
+    loginHistory,
+    pagination: {
+      currentPage: Number(page),
+      totalPages,
+      totalCount,
+      hasNext: Number(page) < totalPages,
+      hasPrev: Number(page) > 1
+    }
+  }, 'Admin login history retrieved successfully');
+}));
+
+// @route   GET /api/admin/login-stats
+// @desc    Get admin login statistics
+// @access  Private (Admin only)
+router.get('/login-stats', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { days = 30 } = req.query;
+  
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - Number(days));
+  
+  // Get login statistics
+  const [
+    totalLogins,
+    successfulLogins,
+    failedLogins,
+    uniqueAdmins,
+    recentLogins
+  ] = await Promise.all([
+    AdminLogin.countDocuments({ loginTime: { $gte: startDate } }),
+    AdminLogin.countDocuments({ 
+      loginTime: { $gte: startDate },
+      loginStatus: 'success'
+    }),
+    AdminLogin.countDocuments({ 
+      loginTime: { $gte: startDate },
+      loginStatus: 'failed'
+    }),
+    AdminLogin.distinct('adminId', { loginTime: { $gte: startDate } }),
+    AdminLogin.find({ loginTime: { $gte: startDate } })
+      .populate('adminId', 'name email')
+      .sort({ loginTime: -1 })
+      .limit(10)
+  ]);
+  
+  // Get daily login counts for the last 7 days
+  const dailyStats = await AdminLogin.aggregate([
+    {
+      $match: {
+        loginTime: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+      }
+    },
+    {
+      $group: {
+        _id: {
+          $dateToString: { format: '%Y-%m-%d', date: '$loginTime' }
+        },
+        successCount: {
+          $sum: { $cond: [{ $eq: ['$loginStatus', 'success'] }, 1, 0] }
+        },
+        failedCount: {
+          $sum: { $cond: [{ $eq: ['$loginStatus', 'failed'] }, 1, 0] }
+        }
+      }
+    },
+    {
+      $sort: { _id: 1 }
+    }
+  ]);
+  
+  sendSuccessResponse(res, {
+    period: `${days} days`,
+    totalLogins,
+    successfulLogins,
+    failedLogins,
+    successRate: totalLogins > 0 ? ((successfulLogins / totalLogins) * 100).toFixed(2) : 0,
+    uniqueAdmins: uniqueAdmins.length,
+    recentLogins,
+    dailyStats
+  }, 'Admin login statistics retrieved successfully');
+}));
+
+// @route   GET /api/admin/dashboard-data
+// @desc    Get comprehensive admin dashboard data
+// @access  Private (Admin only)
+router.get('/dashboard-data', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  try {
+    // Get KYC data with student details
+    const kycData = await KYC.find({})
+      .populate('userId', 'name email phone college skills isActive emailVerified phoneVerified approvalStatus')
+      .sort({ submittedAt: -1 });
+
+    // Get admin login history
+    const loginHistory = await AdminLogin.find({})
+      .populate('adminId', 'name email')
+      .sort({ loginTime: -1 })
+      .limit(20);
+
+    // Get statistics
+    const [
+      totalKYC,
+      pendingKYC,
+      approvedKYC,
+      rejectedKYC,
+      totalLogins,
+      successfulLogins,
+      failedLogins,
+      totalStudents,
+      totalEmployers
+    ] = await Promise.all([
+      KYC.countDocuments(),
+      KYC.countDocuments({ verificationStatus: 'pending' }),
+      KYC.countDocuments({ verificationStatus: 'approved' }),
+      KYC.countDocuments({ verificationStatus: 'rejected' }),
+      AdminLogin.countDocuments(),
+      AdminLogin.countDocuments({ loginStatus: 'success' }),
+      AdminLogin.countDocuments({ loginStatus: 'failed' }),
+      User.countDocuments({ userType: 'student' }),
+      User.countDocuments({ userType: 'employer' })
+    ]);
+
+    // Format KYC data
+    const formattedKYC = kycData.map(kyc => ({
+      _id: kyc._id,
+      studentId: kyc.userId._id,
+      studentName: kyc.fullName,
+      studentEmail: kyc.email,
+      studentPhone: kyc.phone,
+      college: kyc.college,
+      courseYear: kyc.courseYear,
+      status: kyc.verificationStatus,
+      submittedAt: kyc.submittedAt,
+      approvedAt: kyc.approvedAt,
+      approvedBy: kyc.approvedBy,
+      rejectedAt: kyc.rejectedAt,
+      rejectedBy: kyc.rejectedBy,
+      rejectionReason: kyc.rejectionReason,
+      documents: {
+        aadharCard: kyc.aadharCard,
+        collegeIdCard: kyc.collegeIdCard
+      },
+      availability: {
+        hoursPerWeek: kyc.hoursPerWeek,
+        availableDays: kyc.availableDays,
+        stayType: kyc.stayType
+      },
+      jobPreferences: {
+        preferredJobTypes: kyc.preferredJobTypes,
+        experienceSkills: kyc.experienceSkills
+      },
+      emergencyContact: kyc.emergencyContact,
+      payroll: kyc.payroll,
+      userDetails: kyc.userId && typeof kyc.userId === 'object' && 'name' in kyc.userId ? {
+        name: (kyc.userId as any).name,
+        email: (kyc.userId as any).email,
+        phone: (kyc.userId as any).phone,
+        college: (kyc.userId as any).college,
+        skills: (kyc.userId as any).skills,
+        isActive: (kyc.userId as any).isActive,
+        emailVerified: (kyc.userId as any).emailVerified,
+        phoneVerified: (kyc.userId as any).phoneVerified,
+        approvalStatus: (kyc.userId as any).approvalStatus
+      } : null
+    }));
+
+    // Format login history
+    const formattedLogins = loginHistory.map(login => ({
+      _id: login._id,
+      adminId: login.adminId && typeof login.adminId === 'object' && '_id' in login.adminId ? (login.adminId as any)._id : login.adminId,
+      adminName: login.adminName,
+      adminEmail: login.adminEmail,
+      loginTime: login.loginTime,
+      loginStatus: login.loginStatus,
+      ipAddress: login.ipAddress,
+      userAgent: login.userAgent,
+      failureReason: login.failureReason,
+      sessionDuration: login.sessionDuration,
+      logoutTime: login.logoutTime
+    }));
+
+    // Calculate success rate
+    const loginSuccessRate = totalLogins > 0 ? ((successfulLogins / totalLogins) * 100).toFixed(2) : 0;
+    const kycApprovalRate = totalKYC > 0 ? ((approvedKYC / totalKYC) * 100).toFixed(2) : 0;
+
+    sendSuccessResponse(res, {
+      kycData: formattedKYC,
+      loginHistory: formattedLogins,
+      statistics: {
+        kyc: {
+          total: totalKYC,
+          pending: pendingKYC,
+          approved: approvedKYC,
+          rejected: rejectedKYC,
+          approvalRate: kycApprovalRate
+        },
+        logins: {
+          total: totalLogins,
+          successful: successfulLogins,
+          failed: failedLogins,
+          successRate: loginSuccessRate
+        },
+        users: {
+          students: totalStudents,
+          employers: totalEmployers,
+          total: totalStudents + totalEmployers
+        }
+      }
+    }, 'Admin dashboard data retrieved successfully');
+  } catch (error) {
+    console.error('Error fetching admin dashboard data:', error);
+    throw new ValidationError('Failed to fetch admin dashboard data');
+  }
 }));
 
 export default router;

@@ -76,7 +76,7 @@ async function fixAdminUser() {
     console.log('   Password: admin1234');
     console.log('   User Type: admin');
     
-    console.log('\n🔗 Login URL: http://localhost:3001/admin-login');
+    console.log('\n🔗 Login URL: http://localhost:3001/login (use admin credentials)');
     console.log('   (Note: Frontend is running on port 3001)');
 
   } catch (error) {

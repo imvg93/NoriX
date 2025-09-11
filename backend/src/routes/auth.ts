@@ -1,7 +1,9 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import User from '../models/User';
 import OTP from '../models/OTP';
+import { AdminLogin } from '../models/AdminLogin';
 import { authenticateToken, rateLimit, AuthRequest } from '../middleware/auth';
 import { asyncHandler, sendSuccessResponse, sendErrorResponse, ValidationError } from '../middleware/errorHandler';
 import { generateOTP, sendOTPEmail, verifyOTP, getEmailConfigStatus } from '../services/emailService';
@@ -160,10 +162,42 @@ router.post('/login', asyncHandler(async (req: express.Request, res: express.Res
     const adminUser = await User.findOne({ email, userType: 'admin' });
     if (!adminUser) {
       console.log('❌ Admin login attempt with non-existent admin email:', email);
+      
+      // Log failed admin login attempt
+      try {
+        await AdminLogin.create({
+          adminId: new mongoose.Types.ObjectId(), // Dummy ID for non-existent admin
+          adminEmail: email,
+          adminName: 'Unknown',
+          loginStatus: 'failed',
+          failureReason: 'Admin account not found',
+          ipAddress: req.ip || req.connection.remoteAddress,
+          userAgent: req.get('User-Agent')
+        });
+      } catch (logError) {
+        console.error('Failed to log admin login attempt:', logError);
+      }
+      
       throw new ValidationError('Access denied. Admin account not found.');
     }
     if (!adminUser.isActive) {
       console.log('❌ Admin login attempt with inactive admin account:', email);
+      
+      // Log failed admin login attempt
+      try {
+        await AdminLogin.create({
+          adminId: adminUser._id,
+          adminEmail: email,
+          adminName: adminUser.name,
+          loginStatus: 'failed',
+          failureReason: 'Admin account is deactivated',
+          ipAddress: req.ip || req.connection.remoteAddress,
+          userAgent: req.get('User-Agent')
+        });
+      } catch (logError) {
+        console.error('Failed to log admin login attempt:', logError);
+      }
+      
       throw new ValidationError('Access denied. Admin account is deactivated.');
     }
   }
@@ -194,6 +228,24 @@ router.post('/login', asyncHandler(async (req: express.Request, res: express.Res
   const isPasswordValid = await user.comparePassword(password);
   if (!isPasswordValid) {
     console.log('❌ Password mismatch for:', email);
+    
+    // Log failed admin login attempt (wrong password)
+    if (userType === 'admin') {
+      try {
+        await AdminLogin.create({
+          adminId: user._id,
+          adminEmail: user.email,
+          adminName: user.name,
+          loginStatus: 'failed',
+          failureReason: 'Incorrect password',
+          ipAddress: req.ip || req.connection.remoteAddress,
+          userAgent: req.get('User-Agent')
+        });
+      } catch (logError) {
+        console.error('Failed to log admin login attempt:', logError);
+      }
+    }
+    
     throw new ValidationError('Incorrect password');
   }
 
@@ -203,6 +255,23 @@ router.post('/login', asyncHandler(async (req: express.Request, res: express.Res
   const token = generateToken((user._id as any).toString());
 
   console.log('🎉 Login successful for:', email);
+
+  // Log successful admin login
+  if (userType === 'admin') {
+    try {
+      await AdminLogin.create({
+        adminId: user._id,
+        adminEmail: user.email,
+        adminName: user.name,
+        loginStatus: 'success',
+        ipAddress: req.ip || req.connection.remoteAddress,
+        userAgent: req.get('User-Agent')
+      });
+      console.log('📝 Admin login logged successfully');
+    } catch (logError) {
+      console.error('Failed to log admin login:', logError);
+    }
+  }
 
   // Send response
   sendSuccessResponse(res, {

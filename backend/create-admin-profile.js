@@ -124,7 +124,7 @@ async function createAdminProfile() {
     console.log('   Password:', password);
     console.log('   User Type: admin');
     
-    console.log('\n🔗 Login URL: http://localhost:3000/admin-login');
+    console.log('\n🔗 Login URL: http://localhost:3000/login (use admin credentials)');
     
     // Test the login
     console.log('\n🧪 Testing admin login...');
@@ -142,7 +142,7 @@ async function createAdminProfile() {
     console.log('\n📋 Next Steps:');
     console.log('   1. Make sure backend server is running: npm run dev');
     console.log('   2. Make sure frontend server is running: npm run dev');
-    console.log('   3. Go to: http://localhost:3000/admin-login');
+    console.log('   3. Go to: http://localhost:3000/login (use admin credentials)');
     console.log('   4. Use the credentials above to login');
 
   } catch (error) {

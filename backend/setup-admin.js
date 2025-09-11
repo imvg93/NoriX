@@ -88,7 +88,7 @@ async function setupAdmin() {
     console.log('   Password: admin123456');
     console.log('   User Type: admin');
     
-    console.log('\n🔗 Login URL: http://localhost:3000/admin-login');
+    console.log('\n🔗 Login URL: http://localhost:3000/login (use admin credentials)');
     
     // Test the login
     console.log('\n🧪 Testing admin login...');

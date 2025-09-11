@@ -321,6 +321,13 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
             <Shield className="w-4 h-4" />
             Home
           </Link>
+          <Link 
+            href="/admin-dashboard" 
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+          >
+            <FileText className="w-4 h-4" />
+            KYC Dashboard
+          </Link>
           <button 
             onClick={() => window.history.back()} 
             className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
@@ -331,7 +338,7 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
         </div>
         <div className="flex items-center gap-4">
           <div className="text-right">
-            <h2 className="text-lg font-semibold text-gray-900">Admin Dashboard</h2>
+            <h2 className="text-lg font-semibold text-gray-900">{user?.name || user?.email || 'Admin'} Dashboard</h2>
             <p className="text-sm text-gray-600">System Management & Analytics</p>
           </div>
           <button 
@@ -356,7 +363,7 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
             <Shield className="w-8 h-8" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">Welcome back, Admin!</h1>
+            <h1 className="text-2xl font-bold">Welcome back, {user?.name || user?.email || 'Admin'}!</h1>
             <p className="text-green-100">Here's your system overview and recent activities</p>
           </div>
         </div>
@@ -703,13 +710,20 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
         className="mt-8 p-6 bg-white rounded-2xl shadow-sm border border-gray-200"
       >
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Navigation</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <a 
             href="/admin" 
             className="flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
           >
             <Shield className="w-4 h-4 mr-2" />
             Dashboard
+          </a>
+          <a 
+            href="/admin-dashboard" 
+            className="flex items-center justify-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            KYC Dashboard
           </a>
           <a 
             href="/admin/users" 

@@ -100,9 +100,10 @@ interface Section {
 
 interface ProfileVerificationProps {
   isDisabled?: boolean;
+  onFormSubmitted?: () => void;
 }
 
-const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = false }) => {
+const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = false, onFormSubmitted }) => {
   const { user } = useAuth();
   
   // Form state
@@ -255,15 +256,15 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
     }
   };
 
-  // Sections configuration
+  // Sections configuration - Document Upload moved to last position
   const sections: Section[] = [
     { id: 'basic', title: 'Basic Information', icon: User, completed: false, required: true },
     { id: 'academic', title: 'Academic Details', icon: GraduationCap, completed: false, required: true },
     { id: 'stay', title: 'Stay & Availability', icon: Home, completed: false, required: true },
-    { id: 'documents', title: 'Documents Upload', icon: Upload, completed: false, required: true },
     { id: 'emergency', title: 'Emergency Contact', icon: Heart, completed: false, required: true },
     { id: 'preferences', title: 'Work Preferences', icon: Briefcase, completed: false, required: false },
-    { id: 'payroll', title: 'Payroll Details', icon: CreditCard, completed: false, required: false }
+    { id: 'payroll', title: 'Payroll Details', icon: CreditCard, completed: false, required: false },
+    { id: 'documents', title: 'Documents Upload', icon: Upload, completed: false, required: true }
   ];
 
   // Options
@@ -848,6 +849,13 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
       
       // Show success animation
       setShowSuccess(true);
+      
+      // Call the callback to notify parent component
+      if (onFormSubmitted) {
+        setTimeout(() => {
+          onFormSubmitted();
+        }, 2000); // Wait for success animation to complete
+      }
     } catch (error: any) {
       console.error('Submission failed:', error);
       alert(`Failed to submit: ${error.message}`);
@@ -1099,58 +1107,6 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
           </motion.div>
         );
 
-      case 'documents':
-        return (
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="space-y-6"
-          >
-            <div className="kyc-section-header">
-              <Upload className="w-4 h-4 text-blue-600" />
-              <div>
-                <h2 className="kyc-section-title">Documents Upload</h2>
-                <p className="kyc-section-subtitle">Upload your Aadhaar card and College ID for verification</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <DocumentUpload
-                documentType="aadhar"
-                label="Aadhaar Card"
-                description="Upload a clear photo of your Aadhaar card (front side)"
-                currentUrl={formData.aadharCard}
-                onUpload={(url) => updateField('aadharCard', url)}
-                onDelete={() => updateField('aadharCard', '')}
-              />
-
-              <DocumentUpload
-                documentType="college-id"
-                label="College ID Card"
-                description="Upload a clear photo of your College ID card"
-                currentUrl={formData.collegeIdCard}
-                onUpload={(url) => updateField('collegeIdCard', url)}
-                onDelete={() => updateField('collegeIdCard', '')}
-              />
-            </div>
-
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-blue-800 dark:text-blue-200">
-                  <p className="font-medium mb-1">Document Upload Guidelines:</p>
-                  <ul className="space-y-1 text-xs">
-                    <li>• Ensure documents are clear and readable</li>
-                    <li>• Supported formats: JPG, PNG, GIF (max 5MB)</li>
-                    <li>• Documents are stored securely and privately</li>
-                    <li>• You can replace documents anytime before submission</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        );
-
       case 'emergency':
         return (
           <motion.div
@@ -1344,6 +1300,58 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
                 </motion.div>
               )}
             </AnimatePresence>
+          </motion.div>
+        );
+
+      case 'documents':
+        return (
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="space-y-6"
+          >
+            <div className="kyc-section-header">
+              <Upload className="w-4 h-4 text-blue-600" />
+              <div>
+                <h2 className="kyc-section-title">Documents Upload</h2>
+                <p className="kyc-section-subtitle">Upload your Aadhaar card and College ID for verification</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <DocumentUpload
+                documentType="aadhar"
+                label="Aadhaar Card"
+                description="Upload a clear photo of your Aadhaar card (front side)"
+                currentUrl={formData.aadharCard}
+                onUpload={(url) => updateField('aadharCard', url)}
+                onDelete={() => updateField('aadharCard', '')}
+              />
+
+              <DocumentUpload
+                documentType="college-id"
+                label="College ID Card"
+                description="Upload a clear photo of your College ID card"
+                currentUrl={formData.collegeIdCard}
+                onUpload={(url) => updateField('collegeIdCard', url)}
+                onDelete={() => updateField('collegeIdCard', '')}
+              />
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-blue-800 dark:text-blue-200">
+                  <p className="font-medium mb-1">Document Upload Guidelines:</p>
+                  <ul className="space-y-1 text-xs">
+                    <li>• Ensure documents are clear and readable</li>
+                    <li>• Supported formats: JPG, PNG, GIF (max 5MB)</li>
+                    <li>• Documents are stored securely and privately</li>
+                    <li>• You can replace documents anytime before submission</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           </motion.div>
         );
 

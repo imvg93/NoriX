@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        .student-item { margin: 10px 0; padding: 10px; border: 1px solid #eee; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Admin Dashboard Test</h1>
+        
+        <div class="section">
+            <h2>1. Test Admin Login</h2>
+            <button onclick="testLogin()">Login as Admin</button>
+            <div id="loginResult"></div>
+        </div>
+        
+        <div class="section">
+            <h2>2. Test Dashboard API</h2>
+            <button onclick="testDashboard()" id="dashboardBtn" disabled>Get Dashboard Data</button>
+            <div id="dashboardResult"></div>
+        </div>
+        
+        <div class="section">
+            <h2>3. Student Details</h2>
+            <div id="studentDetails"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:5000/api';
+        let authToken = null;
+
+        async function testLogin() {
+            const resultDiv = document.getElementById('loginResult');
+            resultDiv.innerHTML = '<p>Testing login...</p>';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'mework2003@gmail.com',
+                        password: 'admin1234',
+                        userType: 'admin'
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.data.token;
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <h3>✅ Login Successful!</h3>
+                            <p><strong>User:</strong> ${data.data.user.name}</p>
+                            <p><strong>Email:</strong> ${data.data.user.email}</p>
+                            <p><strong>Token:</strong> ${authToken ? 'Received' : 'Not received'}</p>
+                        </div>
+                    `;
+                    document.getElementById('dashboardBtn').disabled = false;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="error">
+                            <h3>❌ Login Failed</h3>
+                            <p><strong>Error:</strong> ${data.message || 'Unknown error'}</p>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <h3>❌ Network Error</h3>
+                        <p><strong>Error:</strong> ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        async function testDashboard() {
+            const resultDiv = document.getElementById('dashboardResult');
+            const studentDiv = document.getElementById('studentDetails');
+            
+            resultDiv.innerHTML = '<p>Fetching dashboard data...</p>';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/dashboard-data`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <h3>✅ Dashboard API Success!</h3>
+                            <p><strong>KYC Records:</strong> ${data.data.kycData ? data.data.kycData.length : 0}</p>
+                            <p><strong>Login History:</strong> ${data.data.loginHistory ? data.data.loginHistory.length : 0}</p>
+                            <p><strong>Total Students:</strong> ${data.data.statistics?.users?.students || 0}</p>
+                            <p><strong>Total Employers:</strong> ${data.data.statistics?.users?.employers || 0}</p>
+                        </div>
+                    `;
+                    
+                    // Display student details
+                    if (data.data.kycData && data.data.kycData.length > 0) {
+                        let studentHtml = '<h3>📋 Student Details:</h3>';
+                        data.data.kycData.forEach((student, index) => {
+                            studentHtml += `
+                                <div class="student-item">
+                                    <h4>${index + 1}. ${student.studentName}</h4>
+                                    <p><strong>Email:</strong> ${student.studentEmail}</p>
+                                    <p><strong>Phone:</strong> ${student.studentPhone}</p>
+                                    <p><strong>College:</strong> ${student.college}</p>
+                                    <p><strong>Course:</strong> ${student.courseYear}</p>
+                                    <p><strong>Status:</strong> ${student.status}</p>
+                                    <p><strong>Submitted:</strong> ${new Date(student.submittedAt).toLocaleDateString()}</p>
+                                    <p><strong>Documents:</strong> Aadhar ${student.documents?.aadharCard ? '✓' : '✗'}, College ID ${student.documents?.collegeIdCard ? '✓' : '✗'}</p>
+                                </div>
+                            `;
+                        });
+                        studentDiv.innerHTML = studentHtml;
+                    } else {
+                        studentDiv.innerHTML = '<p>No student details found.</p>';
+                    }
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="error">
+                            <h3>❌ Dashboard API Failed</h3>
+                            <p><strong>Error:</strong> ${data.message || 'Unknown error'}</p>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <h3>❌ Network Error</h3>
+                        <p><strong>Error:</strong> ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -181,7 +181,7 @@ async function createTestStudent() {
     console.log('   User Type: student');
     
     console.log('\n🔗 Student Login URL: http://localhost:3000/login');
-    console.log('🔗 Admin Login URL: http://localhost:3000/admin-login');
+    console.log('🔗 Admin Login URL: http://localhost:3000/login (use admin credentials)');
     
     console.log('\n📋 Test Flow:');
     console.log('   1. Login as student: student@test.com / student123');

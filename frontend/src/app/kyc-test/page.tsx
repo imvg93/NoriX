@@ -93,12 +93,6 @@ export default function SimpleKYCTest() {
             >
               Go to KYC Management
             </a>
-            <a 
-              href="/admin-login" 
-              className="block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              Go to Admin Login
-            </a>
           </div>
         </div>
 

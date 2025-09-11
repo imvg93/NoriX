@@ -57,7 +57,7 @@ async function createWorkingAdmin() {
     console.log('Email: admin@studentjobs.com');
     console.log('Password: admin123');
     console.log('User Type: admin');
-    console.log('\n🔗 Login URL: http://localhost:3000/admin-login');
+    console.log('\n🔗 Login URL: http://localhost:3000/login (use admin credentials)');
 
   } catch (error) {
     console.error('❌ Error:', error.message);

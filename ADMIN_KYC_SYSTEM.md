@@ -68,7 +68,7 @@ npm run dev
 
 ### 4. Access Admin Dashboard
 
-Navigate to: `http://localhost:3000/admin-login`
+Navigate to: `http://localhost:3000/login` (use admin credentials)
 
 ## API Endpoints
 
@@ -160,8 +160,8 @@ frontend/
 │   ├── app/
 │   │   ├── admin/
 │   │   │   └── page.tsx (admin dashboard)
-│   │   └── admin-login/
-│   │       └── page.tsx (admin login page)
+│   │   └── login/
+│   │       └── page.tsx (login page - supports admin login)
 │   └── services/
 │       └── api.ts (API service with admin endpoints)
 └── package.json
@@ -170,7 +170,7 @@ frontend/
 ## Testing
 
 ### Test Admin Login
-1. Navigate to `/admin-login`
+1. Navigate to `/login` (use admin credentials)
 2. Use credentials: `admin@studentjobs.com` / `admin123456`
 3. Verify successful login and redirect to dashboard
 
