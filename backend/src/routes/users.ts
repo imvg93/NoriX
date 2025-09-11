@@ -1,9 +1,37 @@
 import express from 'express';
+import multer from 'multer';
 import User from '../models/User';
 import { authenticateToken, requireStudent, requireEmployer, AuthRequest } from '../middleware/auth';
 import { asyncHandler, sendSuccessResponse, ValidationError } from '../middleware/errorHandler';
+import { uploadImage, deleteImage } from '../config/cloudinary';
 
 const router = express.Router();
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/');
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + '.' + file.originalname.split('.').pop());
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Check if file is an image
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'));
+    }
+  }
+});
 
 // @route   GET /api/users/profile
 // @desc    Get user profile
@@ -65,7 +93,11 @@ router.put('/profile', authenticateToken, asyncHandler(async (req: AuthRequest, 
 router.get('/students', authenticateToken, requireEmployer, asyncHandler(async (req: express.Request, res: express.Response) => {
   const { page = 1, limit = 10, skills, availability, location } = req.query;
 
-  const query: any = { userType: 'student', isActive: true };
+  const query: any = { 
+    userType: 'student', 
+    isActive: true,
+    approvalStatus: 'approved' // Only show approved students to employers
+  };
 
   // Add filters
   if (skills) {
@@ -143,13 +175,40 @@ router.get('/:id', asyncHandler(async (req: express.Request, res: express.Respon
 }));
 
 // @route   POST /api/users/upload-avatar
-// @desc    Upload profile picture
+// @desc    Upload profile picture to Cloudinary
 // @access  Private
-router.post('/upload-avatar', authenticateToken, asyncHandler(async (req: express.Request, res: express.Response) => {
-  // TODO: Implement file upload with Multer
-  // For now, just return success message
-  
-  sendSuccessResponse(res, {}, 'Profile picture upload endpoint - implementation pending');
+router.post('/upload-avatar', authenticateToken, upload.single('avatar'), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  if (!req.file) {
+    throw new ValidationError('No file uploaded');
+  }
+
+  const user = await User.findById(req.user!._id);
+  if (!user) {
+    throw new ValidationError('User not found');
+  }
+
+  try {
+    // Delete old profile picture from Cloudinary if exists
+    if (user.cloudinaryPublicId) {
+      await deleteImage(user.cloudinaryPublicId);
+    }
+
+    // Upload new image to Cloudinary
+    const result = await uploadImage(req.file, 'studentjobs/avatars');
+    
+    // Update user with new image URL and public ID
+    user.profilePicture = result.secure_url;
+    user.cloudinaryPublicId = result.public_id;
+    await user.save();
+
+    sendSuccessResponse(res, { 
+      profilePicture: result.secure_url,
+      publicId: result.public_id 
+    }, 'Profile picture uploaded successfully');
+  } catch (error) {
+    console.error('Upload error:', error);
+    throw new ValidationError('Failed to upload profile picture');
+  }
 }));
 
 // @route   DELETE /api/users/account

@@ -107,46 +107,11 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
         console.log('📊 Processed applications:', applications); // Debug log
         setAppliedJobs(Array.isArray(applications) ? applications : []);
         
-        // Mock data for saved jobs, interviews, and notifications (replace with real API calls)
-        const firstJob = jobsData.jobs?.[0];
-        setSavedJobs(firstJob ? [
-          {
-            _id: '1',
-            job: firstJob,
-            savedDate: '2024-01-14'
-          }
-        ] : []);
-        
-        setInterviews(firstJob ? [
-          {
-            _id: '1',
-            job: firstJob,
-            date: '2024-01-20',
-            time: '10:00 AM',
-            type: 'In-person',
-            location: 'Hyderabad',
-            status: 'scheduled'
-          }
-        ] : []);
-        
-        setNotifications([
-          {
-            _id: '1',
-            title: 'Application Viewed',
-            message: 'Logistics Solutions viewed your Warehouse Worker application',
-            type: 'info',
-            timestamp: '2 hours ago',
-            isRead: false
-          },
-          {
-            _id: '2',
-            title: 'Interview Scheduled',
-            message: 'CleanPro Services scheduled your interview for Jan 22',
-            type: 'success',
-            timestamp: '1 day ago',
-            isRead: true
-          }
-        ]);
+        // Initialize empty arrays for saved jobs, interviews, and notifications
+        // TODO: Implement real API calls for these features
+        setSavedJobs([]);
+        setInterviews([]);
+        setNotifications([]);
         
         // Check KYC status
         try {
@@ -162,94 +127,12 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
         
       } catch (error) {
         console.error('Error fetching data:', error);
-        // Fallback to mock data if API fails
-        setJobs([
-          {
-            _id: '1',
-            title: 'Warehouse Worker',
-            description: 'Looking for reliable warehouse workers for loading and unloading goods. Perfect for students looking for part-time work.',
-            company: 'Logistics Solutions',
-            location: 'Hyderabad',
-            salary: 15000,
-            payType: 'monthly',
-            type: 'Full-time',
-            category: 'Labor',
-            status: 'active',
-            employer: '1',
-            createdAt: '2024-01-15T10:00:00Z',
-            views: 50,
-            applicationsCount: 8,
-            requirements: ['Manual Labor', 'Team Work', 'Physical Stamina']
-          },
-          {
-            _id: '2',
-            title: 'Housekeeping Staff',
-            description: 'Cleaning and maintenance staff needed for office buildings. Flexible hours available for students.',
-            company: 'CleanPro Services',
-            location: 'Hyderabad',
-            salary: 12000,
-            payType: 'monthly',
-            type: 'Part-time',
-            category: 'Service',
-            status: 'active',
-            employer: '2',
-            createdAt: '2024-01-12T10:00:00Z',
-            views: 40,
-            applicationsCount: 6,
-            requirements: ['Cleaning', 'Attention to Detail', 'Reliability']
-          },
-          {
-            _id: '3',
-            title: 'Delivery Driver',
-            description: 'Delivery drivers needed for local package delivery. Own vehicle preferred but not required.',
-            company: 'FastDelivery Co.',
-            location: 'Hyderabad',
-            salary: 18000,
-            payType: 'monthly',
-            type: 'Full-time',
-            category: 'Transportation',
-            status: 'active',
-            employer: '3',
-            createdAt: '2024-01-10T10:00:00Z',
-            views: 60,
-            applicationsCount: 4,
-            requirements: ['Driving License', 'Navigation', 'Customer Service']
-          },
-          {
-            _id: '4',
-            title: 'Daily Labor - Construction',
-            description: 'Daily labor work for construction sites. No experience required, training provided.',
-            company: 'BuildRight Construction',
-            location: 'Hyderabad',
-            salary: 500,
-            payType: 'daily',
-            type: 'Daily Labor',
-            category: 'Construction',
-            status: 'active',
-            employer: '4',
-            createdAt: '2024-01-08T10:00:00Z',
-            views: 30,
-            applicationsCount: 12,
-            requirements: ['Physical Stamina', 'Team Work', 'Reliability']
-          },
-          {
-            _id: '5',
-            title: 'Kitchen Helper',
-            description: 'Kitchen helper position available. Learn cooking skills while earning money.',
-            company: 'FoodCourt Restaurant',
-            location: 'Hyderabad',
-            salary: 10000,
-            payType: 'monthly',
-            type: 'Part-time',
-            category: 'Food Service',
-            status: 'active',
-            employer: '5',
-            createdAt: '2024-01-06T10:00:00Z',
-            views: 35,
-            applicationsCount: 7,
-            requirements: ['Food Safety', 'Team Work', 'Fast Learning']
-          }
-        ]);
+        // Initialize with empty data instead of fallback mock data
+        setJobs([]);
+        setAppliedJobs([]);
+        setSavedJobs([]);
+        setInterviews([]);
+        setNotifications([]);
       } finally {
         setLoading(false);
       }

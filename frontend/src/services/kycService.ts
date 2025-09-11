@@ -24,10 +24,9 @@ export interface KYCProfileData {
   hoursPerWeek: number;
   availableDays: string[];
   
-  // Verification Documents
-  govtIdType: string;
-  govtIdFiles: string[];
-  photoFile: string;
+  // Document Uploads (Cloudinary URLs)
+  aadharCard?: string;
+  collegeIdCard?: string;
   
   // Emergency Contact
   emergencyContact: {
@@ -160,6 +159,30 @@ class KYCService {
       return response.data;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to delete KYC profile');
+    }
+  }
+
+  // Upload document to Cloudinary
+  async uploadDocument(file: File, documentType: 'aadhar' | 'college-id'): Promise<{ success: boolean; data: { documentUrl: string; publicId: string; documentType: string } }> {
+    try {
+      const formData = new FormData();
+      formData.append('document', file);
+      formData.append('documentType', documentType);
+
+      const response = await apiService.post(`${this.baseUrl}/upload-document`, formData);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to upload document');
+    }
+  }
+
+  // Delete document from Cloudinary
+  async deleteDocument(documentType: 'aadhar' | 'college-id'): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await apiService.delete(`${this.baseUrl}/document/${documentType}`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to delete document');
     }
   }
 }

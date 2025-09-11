@@ -12,6 +12,9 @@ import jobRoutes from './routes/jobs';
 import applicationRoutes from './routes/applications';
 import adminRoutes from './routes/admin';
 import kycRoutes from './routes/kyc';
+import uploadRoutes from './routes/upload';
+import testUploadRoutes from './routes/test-upload';
+import debugUploadRoutes from './routes/debug-upload';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -74,6 +77,9 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/kyc', kycRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/test-upload', testUploadRoutes);
+app.use('/api/debug-upload', debugUploadRoutes);
 
 // Error handling middleware
 app.use(notFound);

@@ -90,6 +90,41 @@ router.get('/my-applications', authenticateToken, asyncHandler(async (req: AuthR
   }, 'Applications retrieved successfully');
 }));
 
+// @route   GET /api/applications/employer/all
+// @desc    Get all applications for employer's jobs
+// @access  Private (Employers only)
+router.get('/employer/all', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { page = 1, limit = 10, status } = req.query;
+
+  // Get all jobs by this employer
+  const employerJobs = await Job.find({ employer: req.user!._id }).select('_id');
+  const jobIds = employerJobs.map(job => job._id);
+
+  const query: any = { job: { $in: jobIds } };
+
+  if (status) {
+    query.status = status;
+  }
+
+  const applications = await Application.find(query)
+    .populate('job', 'title company location pay payType status')
+    .populate('student', 'name email phone college skills')
+    .limit(Number(limit) * 1)
+    .skip((Number(page) - 1) * Number(limit))
+    .sort({ appliedDate: -1 });
+
+  const total = await Application.countDocuments(query);
+
+  sendSuccessResponse(res, {
+    applications,
+    pagination: {
+      current: Number(page),
+      pages: Math.ceil(total / Number(limit)),
+      total
+    }
+  }, 'Applications retrieved successfully');
+}));
+
 // @route   GET /api/applications/job/:jobId
 // @desc    Get applications for a specific job (employer only)
 // @access  Private (Job owner only)

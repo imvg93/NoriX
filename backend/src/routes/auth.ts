@@ -46,7 +46,7 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
   }
 
   // Validate user type
-  if (!['student', 'employer'].includes(userType)) {
+  if (!['student', 'employer', 'admin'].includes(userType)) {
     throw new ValidationError('Invalid user type');
   }
 
@@ -87,7 +87,9 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
     phone,
     password,
     userType,
-    emailVerified: true // Mark as verified since OTP was verified
+    emailVerified: true, // Mark as verified since OTP was verified
+    approvalStatus: 'pending', // All new users need admin approval
+    submittedAt: new Date()
   };
 
   // Add student-specific fields
@@ -133,6 +135,97 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
   }, 'User registered successfully', 201);
 }));
 
+// @route   POST /api/auth/login
+// @desc    Login with email and password
+// @access  Public
+router.post('/login', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const { email, password, userType } = req.body;
+
+  console.log('🔐 Login attempt:', { email, userType, passwordLength: password?.length });
+
+  // Validate input
+  if (!email || !password || !userType) {
+    console.log('❌ Missing required fields');
+    throw new ValidationError('Email, password, and user type are required');
+  }
+
+  // Validate user type
+  if (!['student', 'employer', 'admin'].includes(userType)) {
+    console.log('❌ Invalid user type:', userType);
+    throw new ValidationError('Invalid user type');
+  }
+
+  // Admin access validation - check if admin exists in MongoDB
+  if (userType === 'admin') {
+    const adminUser = await User.findOne({ email, userType: 'admin' });
+    if (!adminUser) {
+      console.log('❌ Admin login attempt with non-existent admin email:', email);
+      throw new ValidationError('Access denied. Admin account not found.');
+    }
+    if (!adminUser.isActive) {
+      console.log('❌ Admin login attempt with inactive admin account:', email);
+      throw new ValidationError('Access denied. Admin account is deactivated.');
+    }
+  }
+
+  // Find user by email
+  const user = await User.findOne({ email });
+  if (!user) {
+    console.log('❌ User not found:', email);
+    throw new ValidationError('No account found with this email address');
+  }
+
+  console.log('✅ User found:', { id: user._id, email: user.email, userType: user.userType });
+
+  // Check if user type matches
+  if (user.userType !== userType) {
+    console.log('❌ User type mismatch:', { expected: userType, actual: user.userType });
+    throw new ValidationError('Invalid user type for this account');
+  }
+
+  // Check if user is active
+  if (!user.isActive) {
+    console.log('❌ Account deactivated:', email);
+    throw new ValidationError('Account is deactivated');
+  }
+
+  // Compare password
+  console.log('🔍 Comparing password...');
+  const isPasswordValid = await user.comparePassword(password);
+  if (!isPasswordValid) {
+    console.log('❌ Password mismatch for:', email);
+    throw new ValidationError('Incorrect password');
+  }
+
+  console.log('✅ Password verified for:', email);
+
+  // Generate token
+  const token = generateToken((user._id as any).toString());
+
+  console.log('🎉 Login successful for:', email);
+
+  // Send response
+  sendSuccessResponse(res, {
+    user: {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      userType: user.userType,
+      college: user.college,
+      skills: user.skills,
+      availability: user.availability,
+      companyName: user.companyName,
+      businessType: user.businessType,
+      address: user.address,
+      isVerified: user.isVerified,
+      emailVerified: user.emailVerified,
+      createdAt: user.createdAt
+    },
+    token
+  }, 'Login successful');
+}));
+
 // @route   POST /api/auth/login-request-otp
 // @desc    Request OTP for login
 // @access  Public
@@ -145,8 +238,14 @@ router.post('/login-request-otp', asyncHandler(async (req: express.Request, res:
   }
 
   // Validate user type
-  if (!['student', 'employer'].includes(userType)) {
+  if (!['student', 'employer', 'admin'].includes(userType)) {
     throw new ValidationError('Invalid user type');
+  }
+
+  // Admin email restriction - only allow specific admin emails
+  const allowedAdminEmails = ['mework2003@gmail.com', 'admin@studentjobs.com'];
+  if (userType === 'admin' && !allowedAdminEmails.includes(email)) {
+    throw new ValidationError('Access denied. Only authorized admin can log in.');
   }
 
   // Find user by email
@@ -206,8 +305,14 @@ router.post('/login-verify-otp', asyncHandler(async (req: express.Request, res: 
   }
 
   // Validate user type
-  if (!['student', 'employer'].includes(userType)) {
+  if (!['student', 'employer', 'admin'].includes(userType)) {
     throw new ValidationError('Invalid user type');
+  }
+
+  // Admin email restriction - only allow specific admin emails
+  const allowedAdminEmails = ['mework2003@gmail.com', 'admin@studentjobs.com'];
+  if (userType === 'admin' && !allowedAdminEmails.includes(email)) {
+    throw new ValidationError('Access denied. Only authorized admin can log in.');
   }
 
   // Find user by email

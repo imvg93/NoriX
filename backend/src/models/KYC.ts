@@ -26,10 +26,9 @@ export interface IKYCDocument extends Document {
   hoursPerWeek: number;
   availableDays: string[];
   
-  // Verification Documents (Removed)
-  // govtIdType: 'aadhaar' | 'passport' | 'voter-id' | 'driving-license';
-  // govtIdFiles: string[]; // Array of file URLs
-  // photoFile: string; // Passport photo URL
+  // Document Uploads (Cloudinary URLs)
+  aadharCard?: string; // Aadhaar card Cloudinary URL
+  collegeIdCard?: string; // College ID card Cloudinary URL
   
   // Emergency Contact
   emergencyContact: {
@@ -55,6 +54,13 @@ export interface IKYCDocument extends Document {
   verificationNotes?: string;
   verifiedAt?: Date;
   verifiedBy?: mongoose.Types.ObjectId;
+  
+  // Approval/Rejection Details
+  approvedAt?: Date;
+  approvedBy?: mongoose.Types.ObjectId;
+  rejectedAt?: Date;
+  rejectedBy?: mongoose.Types.ObjectId;
+  rejectionReason?: string;
   
   // Metadata
   submittedAt: Date;
@@ -167,20 +173,15 @@ const kycSchema = new Schema<IKYCDocument>({
     enum: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
   }],
   
-  // Verification Documents (Removed)
-  // govtIdType: {
-  //   type: String,
-  //   required: [true, 'Government ID type is required'],
-  //   enum: ['aadhaar', 'passport', 'voter-id', 'driving-license']
-  // },
-  // govtIdFiles: [{
-  //   type: String,
-  //   required: [true, 'Government ID files are required']
-  // }],
-  // photoFile: {
-  //   type: String,
-  //   required: [true, 'Passport photo is required']
-  // },
+  // Document Uploads (Cloudinary URLs)
+  aadharCard: {
+    type: String,
+    default: ''
+  },
+  collegeIdCard: {
+    type: String,
+    default: ''
+  },
   
   // Emergency Contact
   emergencyContact: {
@@ -267,6 +268,23 @@ const kycSchema = new Schema<IKYCDocument>({
     ref: 'User'
   },
   
+  // Approval/Rejection Details
+  approvedAt: Date,
+  approvedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  rejectedAt: Date,
+  rejectedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  rejectionReason: {
+    type: String,
+    trim: true,
+    maxlength: [500, 'Rejection reason cannot exceed 500 characters']
+  },
+  
   // Metadata
   submittedAt: {
     type: Date,
@@ -295,7 +313,7 @@ const kycSchema = new Schema<IKYCDocument>({
 });
 
 // Indexes for better query performance
-kycSchema.index({ userId: 1 });
+// Note: userId index is automatically created due to unique: true constraint
 kycSchema.index({ verificationStatus: 1 });
 kycSchema.index({ submittedAt: -1 });
 kycSchema.index({ preferredJobTypes: 1 });

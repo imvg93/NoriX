@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KYC Document Upload Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="file"], input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .image-preview {
+            max-width: 200px;
+            max-height: 200px;
+            margin-top: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .status-check {
+            background-color: #e2e3e5;
+            color: #383d41;
+            border: 1px solid #d6d8db;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 KYC Document Upload Test</h1>
+        <p>This page allows you to test the KYC document upload functionality manually.</p>
+
+        <!-- Cloudinary Status Check -->
+        <div class="test-section">
+            <h3>1. Check Cloudinary Configuration</h3>
+            <button onclick="checkCloudinaryStatus()">Check Status</button>
+            <div id="statusResult" class="result" style="display: none;"></div>
+        </div>
+
+        <!-- Direct Cloudinary Upload Test -->
+        <div class="test-section">
+            <h3>2. Test Direct Cloudinary Upload</h3>
+            <div class="form-group">
+                <label for="testImage">Select Test Image:</label>
+                <input type="file" id="testImage" accept="image/*">
+            </div>
+            <button onclick="testDirectUpload()">Test Direct Upload</button>
+            <div id="directResult" class="result" style="display: none;"></div>
+            <img id="directPreview" class="image-preview" style="display: none;">
+        </div>
+
+        <!-- KYC Document Upload Test -->
+        <div class="test-section">
+            <h3>3. Test KYC Document Upload</h3>
+            <div class="form-group">
+                <label for="authToken">JWT Token (get from login):</label>
+                <input type="text" id="authToken" placeholder="Enter your JWT token">
+            </div>
+            <div class="form-group">
+                <label for="kycImage">Select Document Image:</label>
+                <input type="file" id="kycImage" accept="image/*">
+            </div>
+            <div class="form-group">
+                <label for="documentType">Document Type:</label>
+                <select id="documentType">
+                    <option value="aadhar">Aadhaar Card</option>
+                    <option value="college-id">College ID Card</option>
+                </select>
+            </div>
+            <button onclick="testKYCupload()">Test KYC Upload</button>
+            <div id="kycResult" class="result" style="display: none;"></div>
+            <img id="kycPreview" class="image-preview" style="display: none;">
+        </div>
+
+        <!-- Instructions -->
+        <div class="test-section">
+            <h3>📋 Instructions</h3>
+            <div class="info">
+                <p><strong>Step 1:</strong> Check Cloudinary configuration status</p>
+                <p><strong>Step 2:</strong> Test direct upload to verify Cloudinary is working</p>
+                <p><strong>Step 3:</strong> Test KYC upload with authentication</p>
+                <p><strong>Note:</strong> For Step 3, you need to login first and get a JWT token from your application.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:5000/api';
+
+        async function makeRequest(endpoint, options = {}) {
+            const url = `${API_BASE_URL}${endpoint}`;
+            console.log(`Making request to: ${url}`);
+            
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${document.getElementById('authToken').value}`,
+                        ...options.headers,
+                    },
+                    ...options,
+                });
+
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${data.message || 'Request failed'}`);
+                }
+                
+                return data;
+            } catch (error) {
+                console.error('Request failed:', error.message);
+                throw error;
+            }
+        }
+
+        async function checkCloudinaryStatus() {
+            const resultDiv = document.getElementById('statusResult');
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result status-check';
+            resultDiv.innerHTML = 'Checking Cloudinary configuration...';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/test-upload/status`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `
+                        <strong>✅ Cloudinary Configuration Status:</strong><br>
+                        Cloud Name: ${data.data.cloudinary_config.cloud_name}<br>
+                        API Key: ${data.data.cloudinary_config.api_key}<br>
+                        API Secret: ${data.data.cloudinary_config.api_secret}<br>
+                        <strong>Status:</strong> ${data.data.is_configured ? '✅ Properly Configured' : '❌ Incomplete Configuration'}
+                    `;
+                } else {
+                    throw new Error('Failed to check status');
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ Error: ${error.message}`;
+            }
+        }
+
+        async function testDirectUpload() {
+            const fileInput = document.getElementById('testImage');
+            const resultDiv = document.getElementById('directResult');
+            const previewImg = document.getElementById('directPreview');
+            
+            if (!fileInput.files[0]) {
+                alert('Please select an image file first');
+                return;
+            }
+
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result info';
+            resultDiv.innerHTML = 'Uploading to Cloudinary...';
+
+            try {
+                const formData = new FormData();
+                formData.append('image', fileInput.files[0]);
+
+                const response = await fetch(`${API_BASE_URL}/test-upload/cloudinary`, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const data = await response.json();
+                
+                if (data.success && data.data.secure_url) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `
+                        <strong>✅ Direct Upload Successful!</strong><br>
+                        <strong>Image URL:</strong> <a href="${data.data.secure_url}" target="_blank">${data.data.secure_url}</a><br>
+                        <strong>Public ID:</strong> ${data.data.public_id}<br>
+                        <strong>File Size:</strong> ${data.data.file_info.size} bytes
+                    `;
+                    
+                    previewImg.src = data.data.secure_url;
+                    previewImg.style.display = 'block';
+                } else {
+                    throw new Error('No secure_url in response');
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ Upload Failed: ${error.message}`;
+                previewImg.style.display = 'none';
+            }
+        }
+
+        async function testKYCupload() {
+            const fileInput = document.getElementById('kycImage');
+            const documentType = document.getElementById('documentType').value;
+            const authToken = document.getElementById('authToken').value;
+            const resultDiv = document.getElementById('kycResult');
+            const previewImg = document.getElementById('kycPreview');
+            
+            if (!fileInput.files[0]) {
+                alert('Please select an image file first');
+                return;
+            }
+
+            if (!authToken) {
+                alert('Please enter your JWT token first');
+                return;
+            }
+
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result info';
+            resultDiv.innerHTML = `Uploading ${documentType} document...`;
+
+            try {
+                const formData = new FormData();
+                formData.append('document', fileInput.files[0]);
+                formData.append('documentType', documentType);
+
+                const data = await makeRequest('/kyc/upload-document', {
+                    method: 'POST',
+                    body: formData,
+                });
+                
+                if (data.success && data.data.documentUrl) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `
+                        <strong>✅ KYC Upload Successful!</strong><br>
+                        <strong>Document Type:</strong> ${documentType}<br>
+                        <strong>Document URL:</strong> <a href="${data.data.documentUrl}" target="_blank">${data.data.documentUrl}</a><br>
+                        <strong>Public ID:</strong> ${data.data.public_id}<br>
+                        <strong>Message:</strong> ${data.data.message}
+                    `;
+                    
+                    previewImg.src = data.data.documentUrl;
+                    previewImg.style.display = 'block';
+                } else {
+                    throw new Error('No documentUrl in response');
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ KYC Upload Failed: ${error.message}`;
+                previewImg.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>

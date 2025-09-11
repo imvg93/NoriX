@@ -36,6 +36,9 @@ export default function Home() {
               <Link href="/login" className="text-gray-700 hover:text-gray-900 font-medium">
                 Log in
               </Link>
+              <Link href="/admin-login" className="text-gray-700 hover:text-gray-900 font-medium">
+                Admin
+              </Link>
               <Link href="/employer-home" className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors">
                 Post Jobs
               </Link>
@@ -76,6 +79,9 @@ export default function Home() {
             </Link>
             <Link href="/login" className="block text-gray-700 hover:text-gray-900 font-medium py-2">
               Log in
+            </Link>
+            <Link href="/admin-login" className="block text-gray-700 hover:text-gray-900 font-medium py-2">
+              Admin
             </Link>
             <Link href="/employer-home" className="block bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors text-center">
               Post Jobs

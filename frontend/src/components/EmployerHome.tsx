@@ -116,12 +116,12 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
         }));
         
         // Fetch applications for employer's jobs
-        const applicationsData: ApplicationsResponse = await apiService.getJobApplications('all');
+        const applicationsData: ApplicationsResponse = await apiService.getEmployerApplications();
         const employerApplications: EmployerApplication[] = (applicationsData.applications || []).map(app => ({
           _id: app._id,
           student: {
-            name: 'Student Name', // This would need to be populated from the API
-            email: 'student@email.com'
+            name: typeof app.student === 'object' ? app.student?.name || 'Unknown Student' : 'Unknown Student',
+            email: typeof app.student === 'object' ? app.student?.email || 'unknown@email.com' : 'unknown@email.com'
           },
           job: {
             title: app.job.title,
@@ -151,145 +151,26 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
           }
         }));
         
-        // Mock data for top candidates and notifications
+        // Initialize empty arrays for top candidates and notifications
+        // TODO: Implement real API calls for these features
         setData(prev => ({
           ...prev,
-          topCandidates: [
-            {
-              _id: '1',
-              name: 'Rahul Kumar',
-              skills: ['Manual Labor', 'Construction', 'Team Work'],
-              rating: 4.8,
-              experience: '3 years',
-              appliedJobs: 5
-            },
-            {
-              _id: '2',
-              name: 'Priya Sharma',
-              skills: ['Housekeeping', 'Customer Service', 'Cleaning'],
-              rating: 4.9,
-              experience: '2 years',
-              appliedJobs: 3
-            },
-            {
-              _id: '3',
-              name: 'Amit Singh',
-              skills: ['Delivery', 'Driving', 'Logistics'],
-              rating: 4.7,
-              experience: '4 years',
-              appliedJobs: 7
-            }
-          ],
-          notifications: [
-            {
-              _id: '1',
-              title: 'New Application Received',
-              message: 'Rahul Kumar applied for Warehouse Worker position',
-              type: 'info',
-              timestamp: '2 hours ago',
-              isRead: false
-            },
-            {
-              _id: '2',
-              title: 'Job Posting Live',
-              message: 'Daily Labor position is now active and receiving applications',
-              type: 'success',
-              timestamp: '1 day ago',
-              isRead: true
-            },
-            {
-              _id: '3',
-              title: 'Application Status Updated',
-              message: 'Priya Sharma\'s application moved to interview phase',
-              type: 'success',
-              timestamp: '3 hours ago',
-              isRead: true
-            }
-          ]
+          topCandidates: [],
+          notifications: []
         }));
         
       } catch (error) {
         console.error('Error fetching data:', error);
-        // Fallback to mock data
+        // Initialize with empty data instead of fallback mock data
         setData({
           stats: {
-            activeJobs: 3,
-            totalApplications: 12,
-            pendingApprovals: 5,
-            hiredStudents: 4
+            activeJobs: 0,
+            totalApplications: 0,
+            pendingApprovals: 0,
+            hiredStudents: 0
           },
-          jobPostings: [
-            {
-              _id: '1',
-              title: 'Warehouse Worker',
-              description: 'Looking for reliable warehouse workers for loading and unloading goods',
-              company: 'Logistics Solutions',
-              location: 'Hyderabad',
-              salary: 15000,
-              payType: 'monthly',
-              type: 'Full-time',
-              category: 'Labor',
-              status: 'active',
-              employer: '1',
-              createdAt: '2024-01-10T10:00:00Z',
-              views: 50,
-              applicationsCount: 8,
-              applications: 8,
-              requirements: ['Manual Labor', 'Team Work', 'Physical Stamina']
-            },
-            {
-              _id: '2',
-              title: 'Housekeeping Staff',
-              description: 'Cleaning and maintenance staff needed for office buildings',
-              company: 'CleanPro Services',
-              location: 'Hyderabad',
-              salary: 12000,
-              payType: 'monthly',
-              type: 'Full-time',
-              category: 'Service',
-              status: 'active',
-              employer: '2',
-              createdAt: '2024-01-12T10:00:00Z',
-              views: 40,
-              applicationsCount: 6,
-              applications: 6,
-              requirements: ['Cleaning', 'Attention to Detail', 'Reliability']
-            },
-            {
-              _id: '3',
-              title: 'Delivery Driver',
-              description: 'Delivery drivers needed for local package delivery',
-              company: 'FastDelivery Co.',
-              location: 'Hyderabad',
-              salary: 18000,
-              payType: 'monthly',
-              type: 'Full-time',
-              category: 'Transportation',
-              status: 'active',
-              employer: '3',
-              createdAt: '2024-01-08T10:00:00Z',
-              views: 60,
-              applicationsCount: 4,
-              applications: 4,
-              requirements: ['Driving License', 'Navigation', 'Customer Service']
-            }
-          ],
-          applications: [
-            {
-              _id: '1',
-              student: { name: 'Rahul Kumar', email: 'rahul@email.com' },
-              job: { title: 'Warehouse Worker', company: 'Logistics Solutions' },
-              status: 'pending',
-              appliedDate: '2024-01-14'
-            },
-            {
-              _id: '2',
-              student: { name: 'Priya Sharma', email: 'priya@email.com' },
-              job: { title: 'Housekeeping Staff', company: 'CleanPro Services' },
-              status: 'reviewing',
-              appliedDate: '2024-01-13'
-            }
-          ],
+          jobPostings: [],
+          applications: [],
           topCandidates: [],
           notifications: []
         });

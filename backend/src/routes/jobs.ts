@@ -20,7 +20,10 @@ router.get('/', async (req, res, next) => {
       search
     } = req.query;
 
-    const filter: any = { status: 'active' };
+    const filter: any = { 
+      status: 'active',
+      approvalStatus: 'approved' // Only show approved jobs to public
+    };
 
     if (location) filter.location = { $regex: location, $options: 'i' };
     if (type) filter.type = type;
@@ -173,7 +176,9 @@ router.post('/', async (req: AuthRequest, res, next) => {
       schedule: workHours || schedule,
       startDate: immediateStart ? now : startDate,
       employer: (employer as any)._id,
-      status: 'active',
+      status: 'pending', // Jobs need admin approval before going active
+      approvalStatus: 'pending', // All new jobs need admin approval
+      submittedAt: new Date(),
       // Additional fields
       skills: skillsArray,
       workHours,
@@ -259,8 +264,11 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res, next) => 
 // Get jobs by employer (public - no authentication required for now)
 router.get('/employer', async (req, res, next) => {
   try {
-    // For now, return all jobs since we don't have authentication
-    const jobs = await Job.find({ status: 'active' })
+    // Return only approved jobs for public viewing
+    const jobs = await Job.find({ 
+      status: 'active',
+      approvalStatus: 'approved' 
+    })
       .populate('employer', 'name company email')
       .sort({ createdAt: -1 });
 

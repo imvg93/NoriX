@@ -26,7 +26,14 @@ interface Job {
 interface Application {
   _id: string;
   job: Job;
-  student: string;
+  student: string | {
+    _id: string;
+    name: string;
+    email: string;
+    phone?: string;
+    college?: string;
+    skills?: string[];
+  };
   employer: string;
   status: string;
   appliedDate: string;
@@ -323,6 +330,10 @@ class ApiService {
     return this.request<ApplicationsResponse>(`/applications/job/${jobId}`);
   }
 
+  async getEmployerApplications(): Promise<ApplicationsResponse> {
+    return this.request<ApplicationsResponse>('/applications/employer/all');
+  }
+
   async updateApplicationStatus(id: string, status: string, notes?: string) {
     return this.request(`/applications/${id}/status`, {
       method: 'PATCH',
@@ -416,6 +427,77 @@ class ApiService {
     return this.request('/analytics/applications');
   }
 
+  // Admin Approval APIs
+  async getAdminStats() {
+    return this.request('/admin/stats');
+  }
+
+  async getPendingUsers(userType?: string) {
+    const queryParams = userType ? `?userType=${userType}` : '';
+    return this.request(`/admin/users/pending${queryParams}`);
+  }
+
+  async getPendingJobs() {
+    return this.request('/admin/jobs/pending');
+  }
+
+  async approveUser(userId: string) {
+    return this.request(`/admin/users/${userId}/approve`, {
+      method: 'PATCH',
+    });
+  }
+
+  async rejectUser(userId: string, reason: string) {
+    return this.request(`/admin/users/${userId}/reject`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  async approveJob(jobId: string) {
+    return this.request(`/admin/jobs/${jobId}/approve`, {
+      method: 'PATCH',
+    });
+  }
+
+  async rejectJob(jobId: string, reason: string) {
+    return this.request(`/admin/jobs/${jobId}/reject`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  // KYC Management APIs (Admin)
+  async getKYCSubmissions(status = 'all', page = 1, limit = 10) {
+    const queryParams = new URLSearchParams({
+      status,
+      page: page.toString(),
+      limit: limit.toString()
+    });
+    return this.request(`/admin/kyc?${queryParams}`);
+  }
+
+  async getKYCSubmissionDetails(kycId: string) {
+    return this.request(`/admin/kyc/${kycId}`);
+  }
+
+  async approveKYC(kycId: string) {
+    return this.request(`/admin/kyc/${kycId}/approve`, {
+      method: 'PUT',
+    });
+  }
+
+  async rejectKYC(kycId: string, reason: string) {
+    return this.request(`/admin/kyc/${kycId}/reject`, {
+      method: 'PUT',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  async getKYCStats() {
+    return this.request('/admin/kyc/stats');
+  }
+
   // Utility methods
   async healthCheck() {
     return this.request('/health');
@@ -426,6 +508,18 @@ class ApiService {
     // Check if error has a specific message
     if (error.message) {
       // Handle specific authentication errors
+      if (error.message.includes('Incorrect password')) {
+        return 'The password you entered is incorrect. Please check your password and try again.';
+      }
+      if (error.message.includes('No account found')) {
+        return 'No account found with this email address. Please check your email or sign up for a new account.';
+      }
+      if (error.message.includes('Invalid user type')) {
+        return 'Invalid user type for this account. Please try a different user type.';
+      }
+      if (error.message.includes('Account is deactivated')) {
+        return 'Your account has been deactivated. Please contact support for assistance.';
+      }
       if (error.message.includes('Invalid email or password')) {
         return 'The email or password you entered is incorrect. Please check and try again.';
       }

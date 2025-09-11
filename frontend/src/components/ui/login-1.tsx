@@ -139,10 +139,12 @@ const Login1 = ({
       // Try to login with password for different user types
       const userTypes = ['student', 'employer', 'admin'];
       let loginSuccess = false;
+      let lastError = '';
       
       for (const userType of userTypes) {
         try {
-          const response: any = await apiService.login(formData.email, formData.password, userType);
+          console.log(`🔐 Attempting login for userType: ${userType}`);
+          const response: any = await apiService.login(formData.email.trim(), formData.password, userType);
           
           console.log('🔐 Password login response:', response);
           
@@ -170,16 +172,30 @@ const Login1 = ({
             loginSuccess = true;
             break;
           }
-        } catch (error) {
+        } catch (error: any) {
+          console.log(`❌ Login failed for ${userType}:`, error.message);
+          lastError = error.message;
           // Continue to next user type
           continue;
         }
       }
       
       if (!loginSuccess) {
-        setError('Invalid email or password. Please try again or use OTP login.');
+        // Show specific error message based on the last error
+        if (lastError.includes('Incorrect password')) {
+          setError('Incorrect password. Please check your password and try again.');
+        } else if (lastError.includes('No account found')) {
+          setError('No account found with this email address. Please check your email or sign up for a new account.');
+        } else if (lastError.includes('Invalid user type')) {
+          setError('Invalid user type for this account. Please try a different user type.');
+        } else if (lastError.includes('Account is deactivated')) {
+          setError('Your account has been deactivated. Please contact support for assistance.');
+        } else {
+          setError('Invalid email or password. Please try again or use OTP login.');
+        }
       }
     } catch (error: any) {
+      console.error('❌ Login error:', error);
       setError(apiService.handleError(error));
     } finally {
       setLoading(false);
@@ -318,6 +334,84 @@ const Login1 = ({
     localStorage.removeItem('tempUserType');
   };
 
+  const handleDirectAccess = async (userType: 'student' | 'employer' | 'admin') => {
+    setLoading(true);
+    clearFieldErrors();
+
+    try {
+      // Create mock user data for testing
+      const mockUsers = {
+        student: {
+          _id: 'test-student-id',
+          name: 'Test Student',
+          email: 'student@test.com',
+          phone: '9999999999',
+          userType: 'student',
+          college: 'Test University',
+          skills: ['JavaScript', 'React', 'Node.js'],
+          availability: 'weekends',
+          isVerified: true,
+          emailVerified: true,
+          createdAt: new Date().toISOString()
+        },
+        employer: {
+          _id: 'test-employer-id',
+          name: 'Test Employer',
+          email: 'employer@test.com',
+          phone: '9999999998',
+          userType: 'employer',
+          companyName: 'Test Company',
+          businessType: 'Tech Company',
+          address: 'Test Address',
+          isVerified: true,
+          emailVerified: true,
+          createdAt: new Date().toISOString()
+        },
+        admin: {
+          _id: 'test-admin-id',
+          name: 'Test Admin',
+          email: 'admin@test.com',
+          phone: '9999999997',
+          userType: 'admin',
+          isVerified: true,
+          emailVerified: true,
+          createdAt: new Date().toISOString()
+        }
+      };
+
+      const mockUser = mockUsers[userType];
+      const mockToken = `test-token-${userType}-${Date.now()}`;
+
+      // Store the token and user data
+      localStorage.setItem('token', mockToken);
+      localStorage.setItem('user', JSON.stringify(mockUser));
+      
+      // Login the user using AuthContext
+      login(mockUser as any, mockToken);
+      
+      setSuccess(`Direct access granted as ${userType}! Redirecting...`);
+      
+      // Redirect to appropriate dashboard
+      const redirectPath = userType === 'student' ? '/student-home' 
+                         : userType === 'employer' ? '/employer-home'
+                         : userType === 'admin' ? '/admin-home'
+                         : '/';
+      
+      console.log('🚀 Direct access redirecting to:', redirectPath);
+      
+      // Small delay to show success message
+      setTimeout(() => {
+        router.push(redirectPath);
+      }, 1000);
+      
+    } catch (error: any) {
+      console.error('❌ Direct access error:', error);
+      setError('Failed to access dashboard. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <section className="bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 h-screen relative overflow-hidden">
       {/* Animated background elements */}
@@ -365,6 +459,54 @@ const Login1 = ({
               </svg>
               Back to Home
             </Link>
+          </div>
+
+          {/* Direct Access Buttons for Testing */}
+          <div className="w-full animate-fade-in-up delay-400">
+            <div className="text-center mb-4">
+              <p className="text-sm text-gray-500 mb-3">Quick Access for Testing:</p>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <Button 
+                type="button"
+                onClick={() => handleDirectAccess('student')}
+                className="h-10 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-all duration-300 transform hover:scale-105 hover:shadow-lg"
+                disabled={loading}
+              >
+                <span className="flex items-center justify-center gap-1">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  Student
+                </span>
+              </Button>
+              <Button 
+                type="button"
+                onClick={() => handleDirectAccess('employer')}
+                className="h-10 bg-orange-600 hover:bg-orange-700 text-white text-xs font-medium rounded-lg transition-all duration-300 transform hover:scale-105 hover:shadow-lg"
+                disabled={loading}
+              >
+                <span className="flex items-center justify-center gap-1">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  Employer
+                </span>
+              </Button>
+              <Button 
+                type="button"
+                onClick={() => handleDirectAccess('admin')}
+                className="h-10 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-all duration-300 transform hover:scale-105 hover:shadow-lg"
+                disabled={loading}
+              >
+                <span className="flex items-center justify-center gap-1">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                  Admin
+                </span>
+              </Button>
+            </div>
           </div>
 
           <div className="flex w-full flex-col gap-8 animate-fade-in-up delay-500">

@@ -16,7 +16,7 @@ const setLocalStorage = (key: string, value: string): void => {
 export default function Signup() {
   const router = useRouter();
   const { login } = useAuth();
-  const [userType, setUserType] = useState<'student' | 'employer'>('student');
+  const [userType, setUserType] = useState<'student' | 'employer' | 'admin'>('student');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -225,7 +225,7 @@ export default function Signup() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   I am a:
                 </label>
-                <div className="flex space-x-4">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setUserType('student')}
@@ -247,6 +247,17 @@ export default function Signup() {
                     }`}
                   >
                     💼 Employer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUserType('admin')}
+                    className={`flex-1 py-2 px-4 border rounded-md text-sm font-medium ${
+                      userType === 'admin'
+                        ? 'border-red-500 bg-red-50 text-red-700'
+                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    👑 Admin
                   </button>
                 </div>
               </div>

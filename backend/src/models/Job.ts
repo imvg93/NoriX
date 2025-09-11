@@ -17,6 +17,12 @@ export interface IJob extends Document {
   contactEmail: string;
   contactPhone?: string;
   
+  // Image fields
+  posterImage?: string;
+  posterImagePublicId?: string;
+  galleryImages?: string[];
+  galleryImagePublicIds?: string[];
+  
   // New fields for enhanced job postings
   type?: string; // Full-time, Part-time, Daily Labor, etc.
   category?: string; // non-it, it, general
@@ -33,6 +39,13 @@ export interface IJob extends Document {
   status: 'active' | 'paused' | 'closed' | 'expired' | 'pending';
   isVerified: boolean;
   isPremium: boolean;
+  
+  // Admin approval fields
+  approvalStatus: 'pending' | 'approved' | 'rejected';
+  approvedAt?: Date;
+  approvedBy?: mongoose.Types.ObjectId;
+  rejectionReason?: string;
+  submittedAt: Date;
   
   // Analytics
   views: number;
@@ -169,6 +182,22 @@ const jobSchema = new Schema<IJob>({
     match: [/^(\+91|0)?[789]\d{9}$/, 'Please enter a valid Indian phone number']
   },
   
+  // Image fields
+  posterImage: {
+    type: String,
+    default: ''
+  },
+  posterImagePublicId: {
+    type: String,
+    default: ''
+  },
+  galleryImages: [{
+    type: String
+  }],
+  galleryImagePublicIds: [{
+    type: String
+  }],
+  
   // New fields for enhanced job postings
   type: {
     type: String,
@@ -238,6 +267,29 @@ const jobSchema = new Schema<IJob>({
   isPremium: {
     type: Boolean,
     default: false
+  },
+  
+  // Admin approval fields
+  approvalStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending'
+  },
+  approvedAt: {
+    type: Date
+  },
+  approvedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  rejectionReason: {
+    type: String,
+    trim: true,
+    maxlength: [500, 'Rejection reason cannot exceed 500 characters']
+  },
+  submittedAt: {
+    type: Date,
+    default: Date.now
   },
   
   // Analytics

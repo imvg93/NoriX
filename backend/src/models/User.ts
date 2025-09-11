@@ -24,9 +24,20 @@ export interface IUser extends Document {
   
   // Common fields
   profilePicture?: string;
+  cloudinaryPublicId?: string; // Store Cloudinary public ID for easy deletion
+  companyLogo?: string; // For employers
+  companyLogoPublicId?: string; // For employers
   isActive: boolean;
   emailVerified: boolean;
   phoneVerified: boolean;
+  
+  // Admin approval fields
+  approvalStatus: 'pending' | 'approved' | 'rejected';
+  approvedAt?: Date;
+  approvedBy?: mongoose.Types.ObjectId;
+  rejectionReason?: string;
+  submittedAt: Date;
+  
   createdAt: Date;
   updatedAt: Date;
   
@@ -147,6 +158,18 @@ const userSchema = new Schema<IUser>({
     type: String,
     default: ''
   },
+  cloudinaryPublicId: {
+    type: String,
+    default: ''
+  },
+  companyLogo: {
+    type: String,
+    default: ''
+  },
+  companyLogoPublicId: {
+    type: String,
+    default: ''
+  },
   isActive: {
     type: Boolean,
     default: true
@@ -158,6 +181,29 @@ const userSchema = new Schema<IUser>({
   phoneVerified: {
     type: Boolean,
     default: false
+  },
+  
+  // Admin approval fields
+  approvalStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending'
+  },
+  approvedAt: {
+    type: Date
+  },
+  approvedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  rejectionReason: {
+    type: String,
+    trim: true,
+    maxlength: [500, 'Rejection reason cannot exceed 500 characters']
+  },
+  submittedAt: {
+    type: Date,
+    default: Date.now
   }
 }, {
   timestamps: true,

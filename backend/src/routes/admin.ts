@@ -1,368 +1,558 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import User from '../models/User';
 import Job from '../models/Job';
-import Application from '../models/Application';
-import { authenticateToken, requireAdmin } from '../middleware/auth';
+import KYC from '../models/KYC';
+import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth';
 import { asyncHandler, sendSuccessResponse, ValidationError } from '../middleware/errorHandler';
 
 const router = express.Router();
 
-// @route   GET /api/admin/dashboard
+// @route   GET /api/admin/stats
 // @desc    Get admin dashboard statistics
 // @access  Private (Admin only)
-router.get('/dashboard', authenticateToken, requireAdmin, asyncHandler(async (req: express.Request, res: express.Response) => {
-  // Get user statistics
-  const totalUsers = await User.countDocuments();
-  const totalStudents = await User.countDocuments({ userType: 'student' });
-  const totalEmployers = await User.countDocuments({ userType: 'employer' });
-  const pendingVerifications = await User.countDocuments({ userType: 'employer', isVerified: false });
-
-  // Get job statistics
-  const totalJobs = await Job.countDocuments();
-  const activeJobs = await Job.countDocuments({ status: 'active' });
-  const pendingJobVerifications = await Job.countDocuments({ isVerified: false });
-
-  // Get application statistics
-  const totalApplications = await Application.countDocuments();
-  const recentApplications = await Application.countDocuments({
-    appliedDate: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
-  });
-
-  // Get recent activity
-  const recentUsers = await User.find()
-    .sort({ createdAt: -1 })
-    .limit(5)
-    .select('name email userType createdAt');
-
-  const recentJobs = await Job.find()
-    .sort({ postedDate: -1 })
-    .limit(5)
-    .select('title company status postedDate');
+router.get('/stats', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const [
+    totalUsers,
+    totalStudents,
+    totalEmployers,
+    pendingUserApprovals,
+    totalJobs,
+    pendingJobApprovals,
+    approvedJobs,
+    totalApplications
+  ] = await Promise.all([
+    User.countDocuments(),
+    User.countDocuments({ userType: 'student' }),
+    User.countDocuments({ userType: 'employer' }),
+    User.countDocuments({ approvalStatus: 'pending' }),
+    Job.countDocuments(),
+    Job.countDocuments({ approvalStatus: 'pending' }),
+    Job.countDocuments({ approvalStatus: 'approved' }),
+    // Note: Application count would need to be added if Application model exists
+    0 // Placeholder for now
+  ]);
 
   sendSuccessResponse(res, {
-    stats: {
-      users: {
-        total: totalUsers,
-        students: totalStudents,
-        employers: totalEmployers,
-        pendingVerifications
-      },
-      jobs: {
-        total: totalJobs,
-        active: activeJobs,
-        pendingVerifications: pendingJobVerifications
-      },
-      applications: {
-        total: totalApplications,
-        recent: recentApplications
-      }
+    users: {
+      total: totalUsers,
+      students: totalStudents,
+      employers: totalEmployers,
+      pendingApprovals: pendingUserApprovals
     },
-    recentActivity: {
-      users: recentUsers,
-      jobs: recentJobs
+    jobs: {
+      total: totalJobs,
+      pendingApprovals: pendingJobApprovals,
+      approved: approvedJobs
+    },
+    applications: {
+      total: totalApplications
     }
-  }, 'Dashboard statistics retrieved successfully');
+  }, 'Admin statistics retrieved successfully');
 }));
 
-// @route   GET /api/admin/users
-// @desc    Get all users with pagination and filters
+// @route   GET /api/admin/users/pending
+// @desc    Get users pending approval
 // @access  Private (Admin only)
-router.get('/users', authenticateToken, requireAdmin, asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { page = 1, limit = 20, userType, status, search } = req.query;
+router.get('/users/pending', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { page = 1, limit = 10, userType } = req.query;
 
-  const query: any = {};
-
-  // Add filters
-  if (userType) query.userType = userType;
-  if (status === 'active') query.isActive = true;
-  if (status === 'inactive') query.isActive = false;
-  if (status === 'unverified') query.isVerified = false;
-
-  if (search) {
-    query.$or = [
-      { name: { $regex: search, $options: 'i' } },
-      { email: { $regex: search, $options: 'i' } },
-      { phone: { $regex: search, $options: 'i' } }
-    ];
+  const query: any = { approvalStatus: 'pending' };
+  if (userType) {
+    query.userType = userType;
   }
 
   const users = await User.find(query)
     .select('-password')
+    .sort({ submittedAt: -1 })
     .limit(Number(limit) * 1)
-    .skip((Number(page) - 1) * Number(limit))
-    .sort({ createdAt: -1 });
+    .skip((Number(page) - 1) * Number(limit));
 
   const total = await User.countDocuments(query);
 
   sendSuccessResponse(res, {
     users,
     pagination: {
-      current: Number(page),
-      pages: Math.ceil(total / Number(limit)),
-      total
+      page: Number(page),
+      limit: Number(limit),
+      total,
+      pages: Math.ceil(total / Number(limit))
     }
-  }, 'Users retrieved successfully');
+  }, 'Pending users retrieved successfully');
 }));
 
-// @route   GET /api/admin/jobs
-// @desc    Get all jobs with pagination and filters
+// @route   GET /api/admin/jobs/pending
+// @desc    Get jobs pending approval
 // @access  Private (Admin only)
-router.get('/jobs', authenticateToken, requireAdmin, asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { page = 1, limit = 20, status, verified, search } = req.query;
+router.get('/jobs/pending', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { page = 1, limit = 10 } = req.query;
 
-  const query: any = {};
-
-  // Add filters
-  if (status) query.status = status;
-  if (verified === 'true') query.isVerified = true;
-  if (verified === 'false') query.isVerified = false;
-
-  if (search) {
-    query.$or = [
-      { title: { $regex: search, $options: 'i' } },
-      { company: { $regex: search, $options: 'i' } },
-      { location: { $regex: search, $options: 'i' } }
-    ];
-  }
-
-  const jobs = await Job.find(query)
+  const jobs = await Job.find({ approvalStatus: 'pending' })
     .populate('employer', 'name email companyName')
+    .sort({ submittedAt: -1 })
     .limit(Number(limit) * 1)
-    .skip((Number(page) - 1) * Number(limit))
-    .sort({ postedDate: -1 });
+    .skip((Number(page) - 1) * Number(limit));
 
-  const total = await Job.countDocuments(query);
+  const total = await Job.countDocuments({ approvalStatus: 'pending' });
 
   sendSuccessResponse(res, {
     jobs,
     pagination: {
-      current: Number(page),
-      pages: Math.ceil(total / Number(limit)),
-      total
+      page: Number(page),
+      limit: Number(limit),
+      total,
+      pages: Math.ceil(total / Number(limit))
     }
-  }, 'Jobs retrieved successfully');
+  }, 'Pending jobs retrieved successfully');
 }));
 
-// @route   PUT /api/admin/users/:id/verify
-// @desc    Verify employer account
+// @route   PATCH /api/admin/users/:id/approve
+// @desc    Approve a user
 // @access  Private (Admin only)
-router.put('/users/:id/verify', authenticateToken, requireAdmin, asyncHandler(async (req: express.Request, res: express.Response) => {
-  const user = await User.findById(req.params.id);
+router.patch('/users/:id/approve', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { id } = req.params;
 
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ValidationError('Invalid user ID');
+  }
+
+  const user = await User.findById(id);
   if (!user) {
     throw new ValidationError('User not found');
   }
 
-  if (user.userType !== 'employer') {
-    throw new ValidationError('Only employer accounts can be verified');
+  if (user.approvalStatus !== 'pending') {
+    throw new ValidationError('User is not pending approval');
   }
 
-  if (user.isVerified) {
-    throw new ValidationError('User is already verified');
-  }
-
-  user.isVerified = true;
+  user.approvalStatus = 'approved';
+  user.approvedAt = new Date();
+  user.approvedBy = req.user!._id;
   await user.save();
 
-  sendSuccessResponse(res, { user }, 'Employer account verified successfully');
+  sendSuccessResponse(res, { user }, 'User approved successfully');
 }));
 
-// @route   PUT /api/admin/jobs/:id/verify
-// @desc    Verify job posting
+// @route   PATCH /api/admin/users/:id/reject
+// @desc    Reject a user
 // @access  Private (Admin only)
-router.put('/jobs/:id/verify', authenticateToken, requireAdmin, asyncHandler(async (req: express.Request, res: express.Response) => {
-  const job = await Job.findById(req.params.id);
+router.patch('/users/:id/reject', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { id } = req.params;
+  const { reason } = req.body;
 
-  if (!job) {
-    throw new ValidationError('Job not found');
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ValidationError('Invalid user ID');
   }
 
-  if (job.isVerified) {
-    throw new ValidationError('Job is already verified');
-  }
-
-  job.isVerified = true;
-  await job.save();
-
-  sendSuccessResponse(res, { job }, 'Job posting verified successfully');
-}));
-
-// @route   PUT /api/admin/users/:id/status
-// @desc    Update user status (activate/deactivate)
-// @access  Private (Admin only)
-router.put('/users/:id/status', authenticateToken, requireAdmin, asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { isActive } = req.body;
-
-  if (typeof isActive !== 'boolean') {
-    throw new ValidationError('isActive must be a boolean value');
-  }
-
-  const user = await User.findById(req.params.id);
+  const user = await User.findById(id);
   if (!user) {
     throw new ValidationError('User not found');
   }
 
-  user.isActive = isActive;
-  await user.save();
-
-  sendSuccessResponse(res, { user }, `User ${isActive ? 'activated' : 'deactivated'} successfully`);
-}));
-
-// @route   PUT /api/admin/jobs/:id/status
-// @desc    Update job status
-// @access  Private (Admin only)
-router.put('/jobs/:id/status', authenticateToken, requireAdmin, asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { status } = req.body;
-
-  if (!['active', 'paused', 'closed', 'expired'].includes(status)) {
-    throw new ValidationError('Invalid job status');
+  if (user.approvalStatus !== 'pending') {
+    throw new ValidationError('User is not pending approval');
   }
 
-  const job = await Job.findById(req.params.id);
+  user.approvalStatus = 'rejected';
+  user.approvedAt = new Date();
+  user.approvedBy = req.user!._id;
+  user.rejectionReason = reason;
+  await user.save();
+
+  sendSuccessResponse(res, { user }, 'User rejected successfully');
+}));
+
+// @route   PATCH /api/admin/jobs/:id/approve
+// @desc    Approve a job
+// @access  Private (Admin only)
+router.patch('/jobs/:id/approve', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ValidationError('Invalid job ID');
+  }
+
+  const job = await Job.findById(id);
   if (!job) {
     throw new ValidationError('Job not found');
   }
 
-  job.status = status;
+  if (job.approvalStatus !== 'pending') {
+    throw new ValidationError('Job is not pending approval');
+  }
+
+  job.approvalStatus = 'approved';
+  job.status = 'active'; // Make job active after approval
+  job.approvedAt = new Date();
+  job.approvedBy = req.user!._id;
   await job.save();
 
-  sendSuccessResponse(res, { job }, 'Job status updated successfully');
+  sendSuccessResponse(res, { job }, 'Job approved successfully');
+}));
+
+// @route   PATCH /api/admin/jobs/:id/reject
+// @desc    Reject a job
+// @access  Private (Admin only)
+router.patch('/jobs/:id/reject', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { id } = req.params;
+  const { reason } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ValidationError('Invalid job ID');
+  }
+
+  const job = await Job.findById(id);
+  if (!job) {
+    throw new ValidationError('Job not found');
+  }
+
+  if (job.approvalStatus !== 'pending') {
+    throw new ValidationError('Job is not pending approval');
+  }
+
+  job.approvalStatus = 'rejected';
+  job.status = 'closed'; // Close rejected jobs
+  job.approvedAt = new Date();
+  job.approvedBy = req.user!._id;
+  job.rejectionReason = reason;
+  await job.save();
+
+  sendSuccessResponse(res, { job }, 'Job rejected successfully');
+}));
+
+// @route   GET /api/admin/kyc
+// @desc    Get all KYC submissions for admin review
+// @access  Private (Admin only)
+router.get('/kyc', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { status = 'all', page = 1, limit = 10 } = req.query;
+  
+  console.log('🔍 Admin KYC Query - Starting query');
+  console.log('  Admin User ID:', req.user!._id);
+  console.log('  Query params:', { status, page, limit });
+  
+  let filter: any = { isActive: true };
+  if (status !== 'all') {
+    filter.verificationStatus = status;
+  }
+  
+  console.log('🔍 Admin KYC Query - Filter:', JSON.stringify(filter, null, 2));
+  
+  const skip = (Number(page) - 1) * Number(limit);
+  
+  const [kycSubmissions, totalCount] = await Promise.all([
+    KYC.find(filter)
+      .populate('userId', 'name email phone userType')
+      .sort({ submittedAt: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(Number(limit)),
+    KYC.countDocuments(filter)
+  ]);
+  
+  console.log('📊 Admin KYC Query - Results:');
+  console.log('  Total count:', totalCount);
+  console.log('  Returned documents:', kycSubmissions.length);
+  console.log('  Documents:', kycSubmissions.map(k => ({
+    id: k._id,
+    userId: k.userId?._id,
+    userName: (k.userId as any)?.name,
+    userEmail: (k.userId as any)?.email,
+    fullName: k.fullName,
+    email: k.email,
+    phone: k.phone,
+    verificationStatus: k.verificationStatus,
+    submittedAt: k.submittedAt,
+    createdAt: (k as any).createdAt,
+    aadharCard: k.aadharCard ? 'Present' : 'Missing',
+    collegeIdCard: k.collegeIdCard ? 'Present' : 'Missing'
+  })));
+  
+  sendSuccessResponse(res, {
+    kycSubmissions,
+    pagination: {
+      currentPage: Number(page),
+      totalPages: Math.ceil(totalCount / Number(limit)),
+      totalCount,
+      hasNext: skip + kycSubmissions.length < totalCount,
+      hasPrev: Number(page) > 1
+    }
+  }, 'KYC submissions retrieved successfully');
+}));
+
+// @route   GET /api/admin/kyc/:id
+// @desc    Get specific KYC submission details
+// @access  Private (Admin only)
+router.get('/kyc/:id', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { id } = req.params;
+  
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ValidationError('Invalid KYC ID');
+  }
+  
+  const kyc = await KYC.findById(id)
+    .populate('userId', 'name email phone userType college');
+  
+  if (!kyc) {
+    throw new ValidationError('KYC submission not found');
+  }
+  
+  sendSuccessResponse(res, { kyc }, 'KYC submission retrieved successfully');
+}));
+
+// @route   PUT /api/admin/kyc/:id/approve
+// @desc    Approve KYC submission
+// @access  Private (Admin only)
+router.put('/kyc/:id/approve', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { id } = req.params;
+  
+  console.log('🔍 Admin KYC Approve - Starting approval process');
+  console.log('  Admin User ID:', req.user!._id);
+  console.log('  KYC ID:', id);
+  
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    console.log('❌ Admin KYC Approve - Invalid KYC ID:', id);
+    throw new ValidationError('Invalid KYC ID');
+  }
+  
+  const kyc = await KYC.findById(id);
+  if (!kyc) {
+    console.log('❌ Admin KYC Approve - KYC not found:', id);
+    throw new ValidationError('KYC submission not found');
+  }
+  
+  console.log('📋 Admin KYC Approve - Found KYC:', {
+    id: kyc._id,
+    userId: kyc.userId,
+    fullName: kyc.fullName,
+    email: kyc.email,
+    currentStatus: kyc.verificationStatus
+  });
+  
+  if (kyc.verificationStatus !== 'pending') {
+    console.log('❌ Admin KYC Approve - KYC not pending:', kyc.verificationStatus);
+    throw new ValidationError('KYC submission is not pending review');
+  }
+  
+  kyc.verificationStatus = 'approved';
+  kyc.approvedAt = new Date();
+  kyc.approvedBy = req.user!._id;
+  await kyc.save();
+  
+  console.log('✅ Admin KYC Approve - KYC approved successfully');
+  console.log('  New status:', kyc.verificationStatus);
+  console.log('  Approved at:', kyc.approvedAt);
+  console.log('  Approved by:', kyc.approvedBy);
+  
+  // Update user's KYC status
+  await User.findByIdAndUpdate(kyc.userId, { 
+    kycStatus: 'verified',
+    kycVerifiedAt: new Date()
+  });
+  
+  console.log('✅ Admin KYC Approve - User KYC status updated');
+  
+  sendSuccessResponse(res, { kyc }, 'KYC submission approved successfully');
+}));
+
+// @route   PUT /api/admin/kyc/:id/reject
+// @desc    Reject KYC submission
+// @access  Private (Admin only)
+router.put('/kyc/:id/reject', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { id } = req.params;
+  const { reason } = req.body;
+  
+  console.log('🔍 Admin KYC Reject - Starting rejection process');
+  console.log('  Admin User ID:', req.user!._id);
+  console.log('  KYC ID:', id);
+  console.log('  Rejection reason:', reason);
+  
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    console.log('❌ Admin KYC Reject - Invalid KYC ID:', id);
+    throw new ValidationError('Invalid KYC ID');
+  }
+  
+  if (!reason || reason.trim().length === 0) {
+    console.log('❌ Admin KYC Reject - Missing rejection reason');
+    throw new ValidationError('Rejection reason is required');
+  }
+  
+  const kyc = await KYC.findById(id);
+  if (!kyc) {
+    console.log('❌ Admin KYC Reject - KYC not found:', id);
+    throw new ValidationError('KYC submission not found');
+  }
+  
+  console.log('📋 Admin KYC Reject - Found KYC:', {
+    id: kyc._id,
+    userId: kyc.userId,
+    fullName: kyc.fullName,
+    email: kyc.email,
+    currentStatus: kyc.verificationStatus
+  });
+  
+  if (kyc.verificationStatus !== 'pending') {
+    console.log('❌ Admin KYC Reject - KYC not pending:', kyc.verificationStatus);
+    throw new ValidationError('KYC submission is not pending review');
+  }
+  
+  kyc.verificationStatus = 'rejected';
+  kyc.rejectedAt = new Date();
+  kyc.rejectedBy = req.user!._id;
+  kyc.rejectionReason = reason;
+  await kyc.save();
+  
+  console.log('✅ Admin KYC Reject - KYC rejected successfully');
+  console.log('  New status:', kyc.verificationStatus);
+  console.log('  Rejected at:', kyc.rejectedAt);
+  console.log('  Rejected by:', kyc.rejectedBy);
+  console.log('  Rejection reason:', kyc.rejectionReason);
+  
+  // Update user's KYC status
+  await User.findByIdAndUpdate(kyc.userId, { 
+    kycStatus: 'rejected',
+    kycRejectedAt: new Date()
+  });
+  
+  console.log('✅ Admin KYC Reject - User KYC status updated');
+  
+  sendSuccessResponse(res, { kyc }, 'KYC submission rejected successfully');
+}));
+
+// @route   GET /api/admin/kyc/stats
+// @desc    Get KYC statistics for admin dashboard
+// @access  Private (Admin only)
+router.get('/kyc/stats', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  console.log('🔍 Admin KYC Stats - Starting stats query');
+  console.log('  Admin User ID:', req.user!._id);
+  
+  const [
+    totalKYC,
+    pendingKYC,
+    approvedKYC,
+    rejectedKYC
+  ] = await Promise.all([
+    KYC.countDocuments({ isActive: true }),
+    KYC.countDocuments({ verificationStatus: 'pending', isActive: true }),
+    KYC.countDocuments({ verificationStatus: 'approved', isActive: true }),
+    KYC.countDocuments({ verificationStatus: 'rejected', isActive: true })
+  ]);
+  
+  const stats = {
+    total: totalKYC,
+    pending: pendingKYC,
+    approved: approvedKYC,
+    rejected: rejectedKYC
+  };
+  
+  console.log('📊 Admin KYC Stats - Results:', stats);
+  
+  sendSuccessResponse(res, stats, 'KYC statistics retrieved successfully');
+}));
+
+// @route   GET /api/admin/users
+// @desc    Get all users with optional filtering
+// @access  Private (Admin only)
+router.get('/users', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { page = 1, limit = 10, userType, status } = req.query;
+
+  let filter: any = {};
+  if (userType) {
+    filter.userType = userType;
+  }
+  if (status) {
+    filter.approvalStatus = status;
+  }
+
+  const users = await User.find(filter)
+    .select('-password')
+    .sort({ createdAt: -1 })
+    .limit(Number(limit) * 1)
+    .skip((Number(page) - 1) * Number(limit));
+
+  const total = await User.countDocuments(filter);
+
+  sendSuccessResponse(res, {
+    users,
+    pagination: {
+      page: Number(page),
+      limit: Number(limit),
+      total,
+      pages: Math.ceil(total / Number(limit))
+    }
+  }, 'Users retrieved successfully');
 }));
 
 // @route   DELETE /api/admin/users/:id
-// @desc    Delete user account (admin only)
+// @desc    Delete a user (soft delete)
 // @access  Private (Admin only)
-router.delete('/users/:id', authenticateToken, requireAdmin, asyncHandler(async (req: express.Request, res: express.Response) => {
-  const user = await User.findById(req.params.id);
+router.delete('/users/:id', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ValidationError('Invalid user ID');
+  }
+
+  const user = await User.findById(id);
   if (!user) {
     throw new ValidationError('User not found');
   }
 
-  // Check if user has active jobs or applications
-  const activeJobs = await Job.countDocuments({ employer: user._id, status: 'active' });
-  const activeApplications = await Application.countDocuments({
-    $or: [{ student: user._id }, { employer: user._id }],
-    status: { $in: ['applied', 'shortlisted', 'interviewed'] }
-  });
-
-  if (activeJobs > 0 || activeApplications > 0) {
-    throw new ValidationError('Cannot delete user with active jobs or applications');
+  // Prevent admin from deleting themselves
+  if ((user._id as any).toString() === (req.user!._id as string).toString()) {
+    throw new ValidationError('Cannot delete your own account');
   }
 
-  await User.findByIdAndDelete(user._id);
+  // Soft delete by setting isActive to false
+  user.isActive = false;
+  await user.save();
 
-  sendSuccessResponse(res, {}, 'User account deleted successfully');
+  sendSuccessResponse(res, {}, 'User deleted successfully');
 }));
 
-// @route   DELETE /api/admin/jobs/:id
-// @desc    Delete job posting (admin only)
+// @route   PATCH /api/admin/users/:id/suspend
+// @desc    Suspend a user
 // @access  Private (Admin only)
-router.delete('/jobs/:id', authenticateToken, requireAdmin, asyncHandler(async (req: express.Request, res: express.Response) => {
-  const job = await Job.findById(req.params.id);
-  if (!job) {
-    throw new ValidationError('Job not found');
+router.patch('/users/:id/suspend', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ValidationError('Invalid user ID');
   }
 
-  // Check if job has active applications
-  const activeApplications = await Application.countDocuments({
-    job: job._id,
-    status: { $in: ['applied', 'shortlisted', 'interviewed'] }
-  });
-
-  if (activeApplications > 0) {
-    throw new ValidationError('Cannot delete job with active applications');
+  const user = await User.findById(id);
+  if (!user) {
+    throw new ValidationError('User not found');
   }
 
-  await Job.findByIdAndDelete(job._id);
+  // Prevent admin from suspending themselves
+  if ((user._id as any).toString() === (req.user!._id as string).toString()) {
+    throw new ValidationError('Cannot suspend your own account');
+  }
 
-  sendSuccessResponse(res, {}, 'Job posting deleted successfully');
+  user.isActive = false;
+  await user.save();
+
+  sendSuccessResponse(res, { user }, 'User suspended successfully');
 }));
 
-// @route   GET /api/admin/analytics
-// @desc    Get platform analytics
+// @route   PATCH /api/admin/users/:id/activate
+// @desc    Activate a user
 // @access  Private (Admin only)
-router.get('/analytics', authenticateToken, requireAdmin, asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { period = '30' } = req.query; // days
+router.patch('/users/:id/activate', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { id } = req.params;
 
-  const startDate = new Date(Date.now() - Number(period) * 24 * 60 * 60 * 1000);
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ValidationError('Invalid user ID');
+  }
 
-  // User growth
-  const userGrowth = await User.aggregate([
-    { $match: { createdAt: { $gte: startDate } } },
-    {
-      $group: {
-        _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-        count: { $sum: 1 }
-      }
-    },
-    { $sort: { _id: 1 } }
-  ]);
+  const user = await User.findById(id);
+  if (!user) {
+    throw new ValidationError('User not found');
+  }
 
-  // Job growth
-  const jobGrowth = await Job.aggregate([
-    { $match: { postedDate: { $gte: startDate } } },
-    {
-      $group: {
-        _id: { $dateToString: { format: '%Y-%m-%d', date: '$postedDate' } },
-        count: { $sum: 1 }
-      }
-    },
-    { $sort: { _id: 1 } }
-  ]);
+  user.isActive = true;
+  await user.save();
 
-  // Application growth
-  const applicationGrowth = await Application.aggregate([
-    { $match: { appliedDate: { $gte: startDate } } },
-    {
-      $group: {
-        _id: { $dateToString: { format: '%Y-%m-%d', date: '$appliedDate' } },
-        count: { $sum: 1 }
-      }
-    },
-    { $sort: { _id: 1 } }
-  ]);
-
-  // Top performing metrics
-  const topEmployers = await Job.aggregate([
-    { $match: { status: 'active' } },
-    {
-      $group: {
-        _id: '$employer',
-        totalJobs: { $sum: 1 },
-        totalViews: { $sum: '$views' },
-        totalApplications: { $sum: '$applications' }
-      }
-    },
-    { $sort: { totalApplications: -1 } },
-    { $limit: 10 },
-    {
-      $lookup: {
-        from: 'users',
-        localField: '_id',
-        foreignField: '_id',
-        as: 'employerInfo'
-      }
-    },
-    { $unwind: '$employerInfo' },
-    {
-      $project: {
-        name: '$employerInfo.name',
-        companyName: '$employerInfo.companyName',
-        totalJobs: 1,
-        totalViews: 1,
-        totalApplications: 1
-      }
-    }
-  ]);
-
-  sendSuccessResponse(res, {
-    growth: {
-      users: userGrowth,
-      jobs: jobGrowth,
-      applications: applicationGrowth
-    },
-    topEmployers
-  }, 'Analytics retrieved successfully');
+  sendSuccessResponse(res, { user }, 'User activated successfully');
 }));
 
 export default router;

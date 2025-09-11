@@ -20,7 +20,8 @@ const sampleUsers = [
     totalEarnings: 1200,
     emailVerified: true,
     phoneVerified: false,
-    isActive: true
+    isActive: true,
+    approvalStatus: 'approved'
   },
   {
     name: 'Sarah Employer',
@@ -34,7 +35,8 @@ const sampleUsers = [
     isVerified: true,
     emailVerified: true,
     phoneVerified: true,
-    isActive: true
+    isActive: true,
+    approvalStatus: 'approved'
   },
   {
     name: 'Mike Admin',
@@ -44,7 +46,8 @@ const sampleUsers = [
     userType: 'admin',
     emailVerified: true,
     phoneVerified: true,
-    isActive: true
+    isActive: true,
+    approvalStatus: 'approved'
   }
 ];
 

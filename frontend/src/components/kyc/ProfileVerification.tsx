@@ -6,7 +6,7 @@ import {
   User, 
   GraduationCap, 
   Home, 
-  // Upload, // Removed - no longer used
+  Upload,
   Heart, 
   Briefcase, 
   CreditCard,
@@ -42,6 +42,7 @@ import {
 } from './KYCFormComponents';
 import ThemeToggle from './ThemeToggle';
 import SuccessAnimation from './SuccessAnimation';
+import DocumentUpload from './DocumentUpload';
 import { kycService, type KYCProfileData } from '../../services/kycService';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -68,10 +69,9 @@ interface ProfileData {
   hoursPerWeek: number;
   availableDays: string[];
   
-  // Verification Uploads (Removed)
-  // govtIdType: string;
-  // govtIdFiles: File[];
-  // photoFile: File[];
+  // Document Uploads
+  aadharCard?: string;
+  collegeIdCard?: string;
   
   // Emergency & Health
   emergencyContactName: string;
@@ -121,9 +121,8 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
     pgContact: '',
     hoursPerWeek: 20,
     availableDays: [],
-    // govtIdType: '',
-    // govtIdFiles: [],
-    // photoFile: [],
+    aadharCard: '',
+    collegeIdCard: '',
     emergencyContactName: '',
     emergencyContactPhone: '',
     bloodGroup: '',
@@ -261,7 +260,7 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
     { id: 'basic', title: 'Basic Information', icon: User, completed: false, required: true },
     { id: 'academic', title: 'Academic Details', icon: GraduationCap, completed: false, required: true },
     { id: 'stay', title: 'Stay & Availability', icon: Home, completed: false, required: true },
-    // { id: 'verification', title: 'Identity Verification', icon: Upload, completed: false, required: true }, // Removed
+    { id: 'documents', title: 'Documents Upload', icon: Upload, completed: false, required: true },
     { id: 'emergency', title: 'Emergency Contact', icon: Heart, completed: false, required: true },
     { id: 'preferences', title: 'Work Preferences', icon: Briefcase, completed: false, required: false },
     { id: 'payroll', title: 'Payroll Details', icon: CreditCard, completed: false, required: false }
@@ -633,15 +632,17 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
         }
         break;
       
-      // case 'verification':
-      //   ['govtIdType', 'govtIdFiles', 'photoFile'].forEach(field => {
-      //     const error = validateField(field as keyof ProfileData, formData[field as keyof ProfileData]);
-      //     if (error) {
-      //       sectionErrors[field as keyof ProfileData] = error;
-      //       isValid = false;
-      //     }
-      //   });
-      //   break;
+      case 'documents':
+        // Documents are optional but if provided, they should be valid URLs
+        if (formData.aadharCard && !formData.aadharCard.startsWith('http')) {
+          sectionErrors.aadharCard = 'Invalid Aadhaar card URL';
+          isValid = false;
+        }
+        if (formData.collegeIdCard && !formData.collegeIdCard.startsWith('http')) {
+          sectionErrors.collegeIdCard = 'Invalid College ID card URL';
+          isValid = false;
+        }
+        break;
       
       case 'emergency':
         ['emergencyContactName', 'emergencyContactPhone'].forEach(field => {
@@ -1098,23 +1099,57 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
           </motion.div>
         );
 
-      // case 'verification':
-      //   return (
-      //     <motion.div
-      //       initial={{ opacity: 0, x: 20 }}
-      //       animate={{ opacity: 1, x: 0 }}
-      //       className="space-y-6"
-      //     >
-      //       <div className="kyc-section-header">
-      //         <Upload className="w-6 h-6 text-blue-600" />
-      //         <div>
-      //           <h2 className="kyc-section-title">Identity Verification</h2>
-      //           <p className="kyc-section-subtitle">Upload your documents for verification</p>
-      //         </div>
-      //       </div>
-      //       ... (verification form content removed)
-      //     </motion.div>
-      //   );
+      case 'documents':
+        return (
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="space-y-6"
+          >
+            <div className="kyc-section-header">
+              <Upload className="w-4 h-4 text-blue-600" />
+              <div>
+                <h2 className="kyc-section-title">Documents Upload</h2>
+                <p className="kyc-section-subtitle">Upload your Aadhaar card and College ID for verification</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <DocumentUpload
+                documentType="aadhar"
+                label="Aadhaar Card"
+                description="Upload a clear photo of your Aadhaar card (front side)"
+                currentUrl={formData.aadharCard}
+                onUpload={(url) => updateField('aadharCard', url)}
+                onDelete={() => updateField('aadharCard', '')}
+              />
+
+              <DocumentUpload
+                documentType="college-id"
+                label="College ID Card"
+                description="Upload a clear photo of your College ID card"
+                currentUrl={formData.collegeIdCard}
+                onUpload={(url) => updateField('collegeIdCard', url)}
+                onDelete={() => updateField('collegeIdCard', '')}
+              />
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-blue-800 dark:text-blue-200">
+                  <p className="font-medium mb-1">Document Upload Guidelines:</p>
+                  <ul className="space-y-1 text-xs">
+                    <li>• Ensure documents are clear and readable</li>
+                    <li>• Supported formats: JPG, PNG, GIF (max 5MB)</li>
+                    <li>• Documents are stored securely and privately</li>
+                    <li>• You can replace documents anytime before submission</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        );
 
       case 'emergency':
         return (
