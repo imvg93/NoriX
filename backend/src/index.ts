@@ -165,7 +165,7 @@ const startServer = async (): Promise<void> => {
       console.log(`🔗 Health check: http://localhost:${PORT}/health`);
       console.log(`📚 API Documentation: http://localhost:${PORT}/api`);
       console.log(`🔌 Socket.IO enabled for real-time updates`);
-      console.log(`🔒 CORS: COMPLETELY REMOVED - OTP will work now!`);
+      console.log(`🔒 CORS: ENABLED - Supports Vercel, Railway, Render`);
     });
 
     // Verify email configuration

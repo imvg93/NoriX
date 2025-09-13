@@ -157,10 +157,14 @@ class ApiService {
         url,
         method: config.method || 'GET',
         headers: config.headers,
-        credentials: config.credentials
+        credentials: config.credentials,
+        body: config.body
       });
       
       const response = await fetch(url, config);
+      
+      console.log('🌐 Response status:', response.status);
+      console.log('🌐 Response headers:', Object.fromEntries(response.headers.entries()));
       
       if (!response.ok) {
         let errorData: any = null;
@@ -169,6 +173,13 @@ class ApiService {
         } catch (_) {
           // ignore JSON parse failure
         }
+        
+        console.error('🌐 Error response:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData
+        });
+        
         const message =
           errorData?.message ||
           errorData?.error?.message ||
@@ -181,7 +192,9 @@ class ApiService {
         throw err;
       }
 
-      return await response.json();
+      const responseData = await response.json();
+      console.log('🌐 Success response:', responseData);
+      return responseData;
     } catch (error) {
       console.error('API request failed:', error);
       throw error;
@@ -190,6 +203,7 @@ class ApiService {
 
   // Authentication APIs
   async login(email: string, password: string, userType: string): Promise<AuthResponse> {
+    console.log('🔐 Login API call:', { email, userType, apiUrl: API_BASE_URL });
     return this.request('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password, userType }),
