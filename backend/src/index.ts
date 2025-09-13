@@ -43,7 +43,7 @@ const corsOptions = {
   origin: ALLOW_ALL_CORS ? true : 'https://me-work.vercel.app',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-did   optionsSuccessStatus: 200
+  optionsSuccessStatus: 200
 };
 
 app.use(cors(corsOptions));
