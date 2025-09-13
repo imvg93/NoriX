@@ -267,22 +267,67 @@ class ApiService {
     return response.json();
   }
 
-  // Job APIs
+  // Enhanced Job APIs (using the new enhanced job system)
+  async createJob(jobData: any) {
+    return this.request('/enhanced-jobs', {
+      method: 'POST',
+      body: JSON.stringify(jobData),
+    });
+  }
+
+  async getStudentDashboardJobs(showHighlighted = true) {
+    const queryParams = new URLSearchParams({ showHighlighted: showHighlighted.toString() });
+    return this.request(`/enhanced-jobs/student-dashboard?${queryParams}`);
+  }
+
+  async getEmployerDashboardJobs() {
+    return this.request('/enhanced-jobs/employer-dashboard');
+  }
+
+  async applyToJobEnhanced(jobId: string, applicationData: any) {
+    return this.request(`/enhanced-jobs/${jobId}/apply`, {
+      method: 'POST',
+      body: JSON.stringify(applicationData),
+    });
+  }
+
+  async approveApplication(applicationId: string, notes?: string) {
+    return this.request(`/enhanced-jobs/applications/${applicationId}/approve`, {
+      method: 'PATCH',
+      body: JSON.stringify({ notes }),
+    });
+  }
+
+  async rejectApplication(applicationId: string, reason: string) {
+    return this.request(`/enhanced-jobs/applications/${applicationId}/reject`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  async getStudentApplications(status?: string) {
+    const queryParams = status ? new URLSearchParams({ status }) : '';
+    const endpoint = queryParams ? `/enhanced-jobs/applications/student?${queryParams}` : '/enhanced-jobs/applications/student';
+    return this.request(endpoint);
+  }
+
+  async getEmployerApplications(status?: string, jobId?: string): Promise<ApplicationsResponse> {
+    const queryParams = new URLSearchParams();
+    if (status) queryParams.append('status', status);
+    if (jobId) queryParams.append('jobId', jobId);
+    const endpoint = queryParams.toString() ? `/enhanced-jobs/applications/employer?${queryParams}` : '/enhanced-jobs/applications/employer';
+    return this.request<ApplicationsResponse>(endpoint);
+  }
+
+  // Legacy Job APIs (keeping for backward compatibility)
   async getJobs(filters?: any): Promise<JobsResponse> {
     const queryParams = filters ? new URLSearchParams(filters).toString() : '';
     const endpoint = queryParams ? `/jobs?${queryParams}` : '/jobs';
     return this.request<JobsResponse>(endpoint);
   }
 
-  async getJob(id: string): Promise<Job> {
-    return this.request<Job>(`/jobs/${id}`);
-  }
-
-  async createJob(jobData: any) {
-    return this.request('/jobs', {
-      method: 'POST',
-      body: JSON.stringify(jobData),
-    });
+  async getJob(jobId: string) {
+    return this.request(`/jobs/${jobId}`);
   }
 
   async updateJob(id: string, jobData: any) {
@@ -328,10 +373,6 @@ class ApiService {
 
   async getJobApplications(jobId: string): Promise<ApplicationsResponse> {
     return this.request<ApplicationsResponse>(`/applications/job/${jobId}`);
-  }
-
-  async getEmployerApplications(): Promise<ApplicationsResponse> {
-    return this.request<ApplicationsResponse>('/applications/employer/all');
   }
 
   async updateApplicationStatus(id: string, status: string, notes?: string) {
@@ -392,10 +433,35 @@ class ApiService {
     });
   }
 
-  // Verification APIs (Admin)
-  async getPendingVerifications() {
-    return this.request('/verifications/pending');
+  // Admin Dashboard APIs
+  async getPendingUsers(userType: 'student' | 'employer') {
+    return this.request(`/admin/users/pending?userType=${userType}`);
   }
+
+  async getPendingJobs() {
+    return this.request('/admin/jobs/pending');
+  }
+
+  async getKYCStats() {
+    return this.request('/admin/kyc/stats');
+  }
+
+  // User approval methods
+  async approveUser(userId: string) {
+    return this.request(`/admin/users/${userId}/approve`, {
+      method: 'PATCH',
+    });
+  }
+
+  async rejectUser(userId: string, reason: string) {
+    return this.request(`/admin/users/${userId}/reject`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  // Verification APIs (Admin)
+  // Pending verifications removed - no approval needed
 
   async approveVerification(id: string) {
     return this.request(`/verifications/${id}/approve`, {
@@ -432,27 +498,7 @@ class ApiService {
     return this.request('/admin/stats');
   }
 
-  async getPendingUsers(userType?: string) {
-    const queryParams = userType ? `?userType=${userType}` : '';
-    return this.request(`/admin/users/pending${queryParams}`);
-  }
-
-  async getPendingJobs() {
-    return this.request('/admin/jobs/pending');
-  }
-
-  async approveUser(userId: string) {
-    return this.request(`/admin/users/${userId}/approve`, {
-      method: 'PATCH',
-    });
-  }
-
-  async rejectUser(userId: string, reason: string) {
-    return this.request(`/admin/users/${userId}/reject`, {
-      method: 'PATCH',
-      body: JSON.stringify({ reason }),
-    });
-  }
+  // User approval/rejection removed - no approval needed for login/signup
 
   async approveJob(jobId: string) {
     return this.request(`/admin/jobs/${jobId}/approve`, {
@@ -492,10 +538,6 @@ class ApiService {
       method: 'PUT',
       body: JSON.stringify({ reason }),
     });
-  }
-
-  async getKYCStats() {
-    return this.request('/admin/kyc/stats');
   }
 
   // Utility methods

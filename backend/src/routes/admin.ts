@@ -3,9 +3,11 @@ import mongoose from 'mongoose';
 import User from '../models/User';
 import Job from '../models/Job';
 import KYC from '../models/KYC';
+import { KYCAudit } from '../models/KYCAudit';
 import { AdminLogin } from '../models/AdminLogin';
 import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth';
 import { asyncHandler, sendSuccessResponse, sendErrorResponse, ValidationError } from '../middleware/errorHandler';
+import { computeKycStatus } from '../utils/kycStatusHelper';
 
 const router = express.Router();
 
@@ -26,7 +28,7 @@ router.get('/stats', authenticateToken, requireRole(['admin']), asyncHandler(asy
     User.countDocuments(),
     User.countDocuments({ userType: 'student' }),
     User.countDocuments({ userType: 'employer' }),
-    User.countDocuments({ approvalStatus: 'pending' }),
+    0, // No user approval needed
     Job.countDocuments(),
     Job.countDocuments({ approvalStatus: 'pending' }),
     Job.countDocuments({ approvalStatus: 'approved' }),
@@ -39,7 +41,7 @@ router.get('/stats', authenticateToken, requireRole(['admin']), asyncHandler(asy
       total: totalUsers,
       students: totalStudents,
       employers: totalEmployers,
-      pendingApprovals: pendingUserApprovals
+      pendingApprovals: 0 // No user approval needed
     },
     jobs: {
       total: totalJobs,
@@ -52,20 +54,22 @@ router.get('/stats', authenticateToken, requireRole(['admin']), asyncHandler(asy
   }, 'Admin statistics retrieved successfully');
 }));
 
+// User approval routes removed - no approval needed for login/signup
+
 // @route   GET /api/admin/users/pending
-// @desc    Get users pending approval
+// @desc    Get users (simplified - no approval needed)
 // @access  Private (Admin only)
 router.get('/users/pending', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
-  const { page = 1, limit = 10, userType } = req.query;
+  const { userType, page = 1, limit = 10 } = req.query;
 
-  const query: any = { approvalStatus: 'pending' };
+  const query: any = { isActive: true };
   if (userType) {
     query.userType = userType;
   }
 
   const users = await User.find(query)
     .select('-password')
-    .sort({ submittedAt: -1 })
+    .sort({ createdAt: -1 })
     .limit(Number(limit) * 1)
     .skip((Number(page) - 1) * Number(limit));
 
@@ -74,41 +78,39 @@ router.get('/users/pending', authenticateToken, requireRole(['admin']), asyncHan
   sendSuccessResponse(res, {
     users,
     pagination: {
-      page: Number(page),
-      limit: Number(limit),
-      total,
-      pages: Math.ceil(total / Number(limit))
+      current: Number(page),
+      pages: Math.ceil(total / Number(limit)),
+      total
     }
-  }, 'Pending users retrieved successfully');
+  }, 'Users retrieved successfully');
 }));
 
 // @route   GET /api/admin/jobs/pending
-// @desc    Get jobs pending approval
+// @desc    Get active jobs (simplified - no approval needed)
 // @access  Private (Admin only)
 router.get('/jobs/pending', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { page = 1, limit = 10 } = req.query;
 
-  const jobs = await Job.find({ approvalStatus: 'pending' })
-    .populate('employer', 'name email companyName')
-    .sort({ submittedAt: -1 })
+  const jobs = await Job.find({ status: 'active' })
+    .populate('employerId', 'name email companyName')
+    .sort({ createdAt: -1 })
     .limit(Number(limit) * 1)
     .skip((Number(page) - 1) * Number(limit));
 
-  const total = await Job.countDocuments({ approvalStatus: 'pending' });
+  const total = await Job.countDocuments({ status: 'active' });
 
   sendSuccessResponse(res, {
     jobs,
     pagination: {
-      page: Number(page),
-      limit: Number(limit),
-      total,
-      pages: Math.ceil(total / Number(limit))
+      current: Number(page),
+      pages: Math.ceil(total / Number(limit)),
+      total
     }
-  }, 'Pending jobs retrieved successfully');
+  }, 'Active jobs retrieved successfully');
 }));
 
 // @route   PATCH /api/admin/users/:id/approve
-// @desc    Approve a user
+// @desc    Approve a user (simplified - just activate)
 // @access  Private (Admin only)
 router.patch('/users/:id/approve', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { id } = req.params;
@@ -122,20 +124,14 @@ router.patch('/users/:id/approve', authenticateToken, requireRole(['admin']), as
     throw new ValidationError('User not found');
   }
 
-  if (user.approvalStatus !== 'pending') {
-    throw new ValidationError('User is not pending approval');
-  }
-
-  user.approvalStatus = 'approved';
-  user.approvedAt = new Date();
-  user.approvedBy = req.user!._id;
+  user.isActive = true;
   await user.save();
 
   sendSuccessResponse(res, { user }, 'User approved successfully');
 }));
 
 // @route   PATCH /api/admin/users/:id/reject
-// @desc    Reject a user
+// @desc    Reject a user (simplified - just deactivate)
 // @access  Private (Admin only)
 router.patch('/users/:id/reject', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { id } = req.params;
@@ -150,18 +146,13 @@ router.patch('/users/:id/reject', authenticateToken, requireRole(['admin']), asy
     throw new ValidationError('User not found');
   }
 
-  if (user.approvalStatus !== 'pending') {
-    throw new ValidationError('User is not pending approval');
-  }
-
-  user.approvalStatus = 'rejected';
-  user.approvedAt = new Date();
-  user.approvedBy = req.user!._id;
-  user.rejectionReason = reason;
+  user.isActive = false;
   await user.save();
 
   sendSuccessResponse(res, { user }, 'User rejected successfully');
 }));
+
+// User approve/reject routes removed - no approval needed for login/signup
 
 // @route   PATCH /api/admin/jobs/:id/approve
 // @desc    Approve a job
@@ -178,14 +169,11 @@ router.patch('/jobs/:id/approve', authenticateToken, requireRole(['admin']), asy
     throw new ValidationError('Job not found');
   }
 
-  if (job.approvalStatus !== 'pending') {
-    throw new ValidationError('Job is not pending approval');
+  if (job.status !== 'active') {
+    throw new ValidationError('Job is not active');
   }
 
-  job.approvalStatus = 'approved';
-  job.status = 'active'; // Make job active after approval
-  job.approvedAt = new Date();
-  job.approvedBy = req.user!._id;
+  job.status = 'active'; // Ensure job is active
   await job.save();
 
   sendSuccessResponse(res, { job }, 'Job approved successfully');
@@ -207,15 +195,11 @@ router.patch('/jobs/:id/reject', authenticateToken, requireRole(['admin']), asyn
     throw new ValidationError('Job not found');
   }
 
-  if (job.approvalStatus !== 'pending') {
-    throw new ValidationError('Job is not pending approval');
+  if (job.status !== 'active') {
+    throw new ValidationError('Job is not active');
   }
 
-  job.approvalStatus = 'rejected';
   job.status = 'closed'; // Close rejected jobs
-  job.approvedAt = new Date();
-  job.approvedBy = req.user!._id;
-  job.rejectionReason = reason;
   await job.save();
 
   sendSuccessResponse(res, { job }, 'Job rejected successfully');
@@ -300,12 +284,13 @@ router.get('/kyc/:id', authenticateToken, requireRole(['admin']), asyncHandler(a
 }));
 
 // @route   PUT /api/admin/kyc/:id/approve
-// @desc    Approve KYC submission
+// @desc    Approve KYC submission (atomic transaction)
 // @access  Private (Admin only)
 router.put('/kyc/:id/approve', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { id } = req.params;
+  const { reason } = req.body; // Optional approval reason
   
-  console.log('🔍 Admin KYC Approve - Starting approval process');
+  console.log('🔍 Admin KYC Approve - Starting atomic approval process');
   console.log('  Admin User ID:', req.user!._id);
   console.log('  KYC ID:', id);
   
@@ -314,52 +299,101 @@ router.put('/kyc/:id/approve', authenticateToken, requireRole(['admin']), asyncH
     throw new ValidationError('Invalid KYC ID');
   }
   
-  const kyc = await KYC.findById(id);
-  if (!kyc) {
-    console.log('❌ Admin KYC Approve - KYC not found:', id);
-    throw new ValidationError('KYC submission not found');
+  // Use MongoDB transaction for atomic updates
+  const session = await mongoose.startSession();
+  
+  try {
+    await session.withTransaction(async () => {
+      const kyc = await KYC.findById(id).session(session);
+      if (!kyc) {
+        console.log('❌ Admin KYC Approve - KYC not found:', id);
+        throw new ValidationError('KYC submission not found');
+      }
+      
+      console.log('📋 Admin KYC Approve - Found KYC:', {
+        id: kyc._id,
+        userId: kyc.userId,
+        fullName: kyc.fullName,
+        email: kyc.email,
+        currentStatus: kyc.verificationStatus
+      });
+      
+      const prevStatus = kyc.verificationStatus;
+      
+      // Update KYC status
+      kyc.verificationStatus = 'approved';
+      kyc.approvedAt = new Date();
+      kyc.approvedBy = req.user!._id;
+      kyc.verificationNotes = reason || 'Approved by admin';
+      await kyc.save({ session });
+      
+      // Update user status atomically
+      await User.findByIdAndUpdate(kyc.userId, { 
+        kycStatus: 'approved',
+        isVerified: true,
+        kycVerifiedAt: new Date()
+      }, { session });
+      
+      // Create audit entry
+      const auditEntry = new KYCAudit({
+        userId: kyc.userId,
+        adminId: req.user!._id,
+        action: 'approved',
+        reason: reason || 'KYC approved by admin',
+        prevStatus,
+        newStatus: 'approved',
+        timestamp: new Date(),
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+      
+      await auditEntry.save({ session });
+      
+      console.log('✅ Admin KYC Approve - Atomic approval completed');
+    });
+    
+    // Get updated data for response
+    const updatedKYC = await KYC.findById(id).populate('userId', 'name email phone');
+    const updatedUser = await User.findById(updatedKYC?.userId);
+    
+    // Emit real-time update to user
+    const socketManager = (global as any).socketManager;
+    if (socketManager && updatedKYC) {
+      socketManager.emitKYCStatusUpdate(updatedKYC.userId.toString(), {
+        status: 'approved',
+        isVerified: true,
+        message: 'Your KYC has been approved! You can now explore and apply for jobs.',
+        action: 'approved',
+        reason: reason || 'Approved by admin'
+      });
+    }
+    
+    // Compute canonical status
+    const canonicalStatus = computeKycStatus(updatedUser!, updatedKYC);
+    
+    sendSuccessResponse(res, {
+      kyc: updatedKYC,
+      user: updatedUser,
+      status: canonicalStatus,
+      message: 'KYC approved successfully'
+    }, 'KYC approved successfully');
+    
+  } catch (error) {
+    console.error('❌ Admin KYC Approve - Transaction failed:', error);
+    throw error;
+  } finally {
+    await session.endSession();
   }
-  
-  console.log('📋 Admin KYC Approve - Found KYC:', {
-    id: kyc._id,
-    userId: kyc.userId,
-    fullName: kyc.fullName,
-    email: kyc.email,
-    currentStatus: kyc.verificationStatus
-  });
-  
-  // Admin has full control - can approve from any status
-  console.log('✅ Admin KYC Approve - Admin has full control, proceeding with approval');
-  
-  kyc.verificationStatus = 'approved';
-  kyc.approvedAt = new Date();
-  kyc.approvedBy = req.user!._id;
-  await kyc.save();
-  
-  console.log('✅ Admin KYC Approve - KYC approved successfully');
-  console.log('  New status:', kyc.verificationStatus);
-  console.log('  Approved at:', kyc.approvedAt);
-  console.log('  Approved by:', kyc.approvedBy);
-  
-  // Update user's KYC status
-  await User.findByIdAndUpdate(kyc.userId, { 
-    kycStatus: 'verified',
-    kycVerifiedAt: new Date()
-  });
-  
-  console.log('✅ Admin KYC Approve - User KYC status updated');
-  
-  sendSuccessResponse(res, { kyc }, 'KYC submission approved successfully');
 }));
 
 // @route   PUT /api/admin/kyc/:id/reject
-// @desc    Reject KYC submission
+// @desc    Reject KYC submission (atomic transaction)
 // @access  Private (Admin only)
 router.put('/kyc/:id/reject', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { id } = req.params;
   const { reason } = req.body;
   
-  console.log('🔍 Admin KYC Reject - Starting rejection process');
+  console.log('🔍 Admin KYC Reject - Starting atomic rejection process');
   console.log('  Admin User ID:', req.user!._id);
   console.log('  KYC ID:', id);
   console.log('  Rejection reason:', reason);
@@ -374,44 +408,92 @@ router.put('/kyc/:id/reject', authenticateToken, requireRole(['admin']), asyncHa
     throw new ValidationError('Rejection reason is required');
   }
   
-  const kyc = await KYC.findById(id);
-  if (!kyc) {
-    console.log('❌ Admin KYC Reject - KYC not found:', id);
-    throw new ValidationError('KYC submission not found');
+  // Use MongoDB transaction for atomic updates
+  const session = await mongoose.startSession();
+  
+  try {
+    await session.withTransaction(async () => {
+      const kyc = await KYC.findById(id).session(session);
+      if (!kyc) {
+        console.log('❌ Admin KYC Reject - KYC not found:', id);
+        throw new ValidationError('KYC submission not found');
+      }
+      
+      console.log('📋 Admin KYC Reject - Found KYC:', {
+        id: kyc._id,
+        userId: kyc.userId,
+        fullName: kyc.fullName,
+        email: kyc.email,
+        currentStatus: kyc.verificationStatus
+      });
+      
+      const prevStatus = kyc.verificationStatus;
+      
+      // Update KYC status
+      kyc.verificationStatus = 'rejected';
+      kyc.rejectedAt = new Date();
+      kyc.rejectedBy = req.user!._id;
+      kyc.rejectionReason = reason;
+      await kyc.save({ session });
+      
+      // Update user status atomically
+      await User.findByIdAndUpdate(kyc.userId, { 
+        kycStatus: 'rejected',
+        isVerified: false,
+        kycRejectedAt: new Date()
+      }, { session });
+      
+      // Create audit entry
+      const auditEntry = new KYCAudit({
+        userId: kyc.userId,
+        adminId: req.user!._id,
+        action: 'rejected',
+        reason: reason,
+        prevStatus,
+        newStatus: 'rejected',
+        timestamp: new Date(),
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+      
+      await auditEntry.save({ session });
+      
+      console.log('✅ Admin KYC Reject - Atomic rejection completed');
+    });
+    
+    // Get updated data for response
+    const updatedKYC = await KYC.findById(id).populate('userId', 'name email phone');
+    const updatedUser = await User.findById(updatedKYC?.userId);
+    
+    // Emit real-time update to user
+    const socketManager = (global as any).socketManager;
+    if (socketManager && updatedKYC) {
+      socketManager.emitKYCStatusUpdate(updatedKYC.userId.toString(), {
+        status: 'rejected',
+        isVerified: false,
+        message: `Your KYC was rejected. Please re-submit with proper details. Reason: ${reason}`,
+        action: 'rejected',
+        reason: reason,
+        canResubmit: true
+      });
+    }
+    
+    // Compute canonical status
+    const canonicalStatus = computeKycStatus(updatedUser!, updatedKYC);
+    
+    sendSuccessResponse(res, {
+      kyc: updatedKYC,
+      user: updatedUser,
+      status: canonicalStatus,
+      message: 'KYC rejected successfully'
+    }, 'KYC rejected successfully');
+    
+  } catch (error) {
+    console.error('❌ Admin KYC Reject - Transaction failed:', error);
+    throw error;
+  } finally {
+    await session.endSession();
   }
-  
-  console.log('📋 Admin KYC Reject - Found KYC:', {
-    id: kyc._id,
-    userId: kyc.userId,
-    fullName: kyc.fullName,
-    email: kyc.email,
-    currentStatus: kyc.verificationStatus
-  });
-  
-  // Admin has full control - can reject from any status
-  console.log('✅ Admin KYC Reject - Admin has full control, proceeding with rejection');
-  
-  kyc.verificationStatus = 'rejected';
-  kyc.rejectedAt = new Date();
-  kyc.rejectedBy = req.user!._id;
-  kyc.rejectionReason = reason;
-  await kyc.save();
-  
-  console.log('✅ Admin KYC Reject - KYC rejected successfully');
-  console.log('  New status:', kyc.verificationStatus);
-  console.log('  Rejected at:', kyc.rejectedAt);
-  console.log('  Rejected by:', kyc.rejectedBy);
-  console.log('  Rejection reason:', kyc.rejectionReason);
-  
-  // Update user's KYC status
-  await User.findByIdAndUpdate(kyc.userId, { 
-    kycStatus: 'rejected',
-    kycRejectedAt: new Date()
-  });
-  
-  console.log('✅ Admin KYC Reject - User KYC status updated');
-  
-  sendSuccessResponse(res, { kyc }, 'KYC submission rejected successfully');
 }));
 
 // @route   PUT /api/admin/kyc/:id/pending
@@ -449,13 +531,14 @@ router.put('/kyc/:id/pending', authenticateToken, requireRole(['admin']), asyncH
   
   console.log('✅ Admin KYC Pending - KYC status updated to pending');
   
-  // Update user's KYC status
+  // SECURITY: Update user's KYC status in both collections
   await User.findByIdAndUpdate(kyc.userId, { 
     kycStatus: 'pending',
+    isVerified: false,
     kycPendingAt: new Date()
   });
   
-  console.log('✅ Admin KYC Pending - User KYC status updated');
+  console.log('✅ Admin KYC Pending - User KYC status updated in both collections');
   
   sendSuccessResponse(res, { kyc }, 'KYC submission set to pending successfully');
 }));
@@ -501,9 +584,7 @@ router.get('/users', authenticateToken, requireRole(['admin']), asyncHandler(asy
   if (userType) {
     filter.userType = userType;
   }
-  if (status) {
-    filter.approvalStatus = status;
-  }
+  // No approval status filter - approval removed from login/signup
 
   const users = await User.find(filter)
     .select('-password')
@@ -730,7 +811,7 @@ router.get('/dashboard-data', authenticateToken, requireRole(['admin']), asyncHa
   try {
     // Get KYC data with student details
     const kycData = await KYC.find({})
-      .populate('userId', 'name email phone college skills isActive emailVerified phoneVerified approvalStatus')
+      .populate('userId', 'name email phone college skills isActive emailVerified phoneVerified')
       .sort({ submittedAt: -1 });
 
     // Get admin login history
@@ -802,7 +883,7 @@ router.get('/dashboard-data', authenticateToken, requireRole(['admin']), asyncHa
         isActive: (kyc.userId as any).isActive,
         emailVerified: (kyc.userId as any).emailVerified,
         phoneVerified: (kyc.userId as any).phoneVerified,
-        approvalStatus: (kyc.userId as any).approvalStatus
+        // approvalStatus removed - no approval needed for login/signup
       } : null
     }));
 

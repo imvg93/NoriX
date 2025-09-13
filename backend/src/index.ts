@@ -1,9 +1,11 @@
 import express from 'express';
+import { createServer } from 'http';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import { connectDB } from './config/database';
 import nodemailer from 'nodemailer';
 import path from 'path';
+import SocketManager from './utils/socketManager';
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -15,6 +17,8 @@ import kycRoutes from './routes/kyc';
 import uploadRoutes from './routes/upload';
 import testUploadRoutes from './routes/test-upload';
 import debugUploadRoutes from './routes/debug-upload';
+import enhancedJobRoutes from './routes/enhanced-jobs';
+import notificationRoutes from './routes/notifications';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -24,7 +28,14 @@ import { notFound } from './middleware/notFound';
 dotenv.config();
 
 const app = express();
+const server = createServer(app);
 const PORT = process.env.PORT || 5001;
+
+// Initialize Socket.IO
+const socketManager = new SocketManager(server);
+
+// Make socketManager available globally for use in routes
+(global as any).socketManager = socketManager;
 
 // CORS configuration
 const corsOptions = {
@@ -80,6 +91,8 @@ app.use('/api/kyc', kycRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/test-upload', testUploadRoutes);
 app.use('/api/debug-upload', debugUploadRoutes);
+app.use('/api/enhanced-jobs', enhancedJobRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Error handling middleware
 app.use(notFound);
@@ -90,11 +103,12 @@ const startServer = async (): Promise<void> => {
   try {
     await connectDB();
     
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📱 Environment: ${process.env.NODE_ENV}`);
       console.log(`🔗 Health check: http://localhost:${PORT}/health`);
       console.log(`📚 API Documentation: http://localhost:${PORT}/api`);
+      console.log(`🔌 Socket.IO enabled for real-time updates`);
       console.log(`🔒 CORS: COMPLETELY REMOVED - OTP will work now!`);
     });
 

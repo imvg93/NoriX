@@ -49,8 +49,8 @@ export interface IKYCDocument extends Document {
     beneficiaryName?: string;
   };
   
-  // Verification Status
-  verificationStatus: 'pending' | 'in-review' | 'approved' | 'rejected';
+  // Verification Status - Canonical status enum
+  verificationStatus: 'not_submitted' | 'pending' | 'approved' | 'rejected';
   verificationNotes?: string;
   verifiedAt?: Date;
   verifiedBy?: mongoose.Types.ObjectId;
@@ -251,10 +251,10 @@ const kycSchema = new Schema<IKYCDocument>({
     }
   },
   
-  // Verification Status
+  // Verification Status - Canonical status enum
   verificationStatus: {
     type: String,
-    enum: ['pending', 'in-review', 'approved', 'rejected'],
+    enum: ['not_submitted', 'pending', 'approved', 'rejected'],
     default: 'pending'
   },
   verificationNotes: {
@@ -318,6 +318,10 @@ kycSchema.index({ verificationStatus: 1 });
 kycSchema.index({ submittedAt: -1 });
 kycSchema.index({ preferredJobTypes: 1 });
 kycSchema.index({ availableDays: 1 });
+
+// CRITICAL: Unique compound index to prevent duplicate KYC submissions
+// This ensures no duplicate email+phone combinations across different users
+kycSchema.index({ email: 1, phone: 1 }, { unique: true });
 
 // Update lastUpdated before saving
 kycSchema.pre('save', function(next) {

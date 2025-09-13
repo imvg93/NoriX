@@ -90,7 +90,6 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
     password,
     userType,
     emailVerified: true, // Mark as verified since OTP was verified
-    approvalStatus: 'pending', // All new users need admin approval
     submittedAt: new Date()
   };
 

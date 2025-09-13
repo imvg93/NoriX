@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { 
@@ -12,35 +12,47 @@ import {
   FileText,
   Users,
   ArrowLeft,
-  Save,
   Send,
   Briefcase,
   Clock,
-  Star
+  Star,
+  Eye,
+  CheckCircle,
+  X
 } from 'lucide-react';
 import { apiService } from '../../../services/api';
 
 const PostJobPage = () => {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [employerData, setEmployerData] = useState<any>(null);
   const [formData, setFormData] = useState({
-    title: '',
-    company: '',
-    location: '',
-    salary: '',
+    jobTitle: '',
     description: '',
-    requirements: '',
-    type: 'Full-time',
-    experience: 'Entry Level',
-    education: 'Any',
-    skills: '',
-    benefits: '',
-    contactEmail: '',
-    contactPhone: '',
-    workHours: '',
-    shiftType: 'Day',
-    immediateStart: false
+    location: '',
+    salaryRange: '',
+    workType: 'Full-time',
+    skillsRequired: [] as string[],
+    applicationDeadline: ''
   });
+
+  // Load employer data on component mount
+  useEffect(() => {
+    const loadEmployerData = async () => {
+      try {
+        // Get current user data (employer)
+        const userData = await apiService.getProfile();
+        if (userData && userData.userType === 'employer') {
+          setEmployerData(userData);
+        }
+      } catch (error) {
+        console.error('Error loading employer data:', error);
+      }
+    };
+
+    loadEmployerData();
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -50,11 +62,27 @@ const PostJobPage = () => {
     }));
   };
 
-  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, checked } = e.target;
+  const handleSkillsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const skills = e.target.value.split(',').map(skill => skill.trim()).filter(skill => skill);
     setFormData(prev => ({
       ...prev,
-      [name]: checked
+      skillsRequired: skills
+    }));
+  };
+
+  const addSkillTag = (skill: string) => {
+    if (!formData.skillsRequired.includes(skill)) {
+      setFormData(prev => ({
+        ...prev,
+        skillsRequired: [...prev.skillsRequired, skill]
+      }));
+    }
+  };
+
+  const removeSkillTag = (skillToRemove: string) => {
+    setFormData(prev => ({
+      ...prev,
+      skillsRequired: prev.skillsRequired.filter(skill => skill !== skillToRemove)
     }));
   };
 
@@ -63,22 +91,19 @@ const PostJobPage = () => {
     setLoading(true);
 
     try {
-      // Convert requirements and skills to arrays
-      const requirements = formData.requirements.split(',').map(req => req.trim()).filter(req => req);
-      const skills = formData.skills.split(',').map(skill => skill.trim()).filter(skill => skill);
-
       const jobData = {
-        ...formData,
-        requirements,
-        skills,
-        status: 'active',
-        postedDate: new Date().toISOString(),
-        category: 'non-it' // Mark as non-IT job
+        jobTitle: formData.jobTitle,
+        description: formData.description,
+        location: formData.location,
+        salaryRange: formData.salaryRange,
+        workType: formData.workType,
+        skillsRequired: formData.skillsRequired,
+        applicationDeadline: formData.applicationDeadline
       };
 
       await apiService.createJob(jobData);
       
-      alert('Job posted successfully! Your job will now appear on the student home page.');
+      alert('Job posted successfully! Your job will be highlighted for 24 hours to attract more applicants.');
       router.push('/employer-home');
     } catch (error) {
       console.error('Error posting job:', error);
@@ -88,140 +113,173 @@ const PostJobPage = () => {
     }
   };
 
-  const jobTypes = ['Full-time', 'Part-time', 'Daily Labor', 'Contract', 'Temporary'];
-  const experienceLevels = ['Entry Level', 'Mid Level', 'Senior Level', 'Any'];
-  const educationLevels = ['Any', 'High School', 'Bachelor\'s', 'Master\'s', 'No Education Required'];
-  const shiftTypes = ['Day', 'Night', 'Rotating', 'Flexible'];
-  const workHourOptions = ['8 hours/day', '6 hours/day', '4 hours/day', 'Flexible', 'As needed'];
-
-  const commonRequirements = [
-    'Manual Labor',
-    'Physical Stamina', 
-    'Team Work',
-    'Reliability',
-    'Punctuality',
-    'Communication Skills',
-    'Basic Computer Skills',
-    'Customer Service',
-    'Attention to Detail',
-    'Safety Awareness'
-  ];
-
   const commonSkills = [
     'Team Collaboration',
     'Problem Solving',
     'Time Management',
-    'Adaptability',
-    'Physical Fitness',
     'Communication',
+    'Physical Fitness',
+    'Customer Service',
     'Organization',
-    'Quality Control'
+    'Adaptability',
+    'Manual Labor',
+    'Reliability',
+    'Punctuality',
+    'Safety Awareness'
   ];
-
-  const addRequirement = (req: string) => {
-    const currentReqs = formData.requirements.split(',').map(r => r.trim()).filter(r => r);
-    if (!currentReqs.includes(req)) {
-      setFormData(prev => ({
-        ...prev,
-        requirements: [...currentReqs, req].join(', ')
-      }));
-    }
-  };
-
-  const addSkill = (skill: string) => {
-    const currentSkills = formData.skills.split(',').map(s => s.trim()).filter(s => s);
-    if (!currentSkills.includes(skill)) {
-      setFormData(prev => ({
-        ...prev,
-        skills: [...currentSkills, skill].join(', ')
-      }));
-    }
-  };
 
   const fillTestData = () => {
     const testJobs = [
       {
-        title: 'Warehouse Worker',
-        company: 'LogiTech Solutions',
-        location: 'Hyderabad, Telangana',
-        salary: '₹18,000/month',
+        jobTitle: 'Warehouse Worker',
         description: 'Looking for hardworking individuals to join our warehouse team. Responsibilities include package sorting, inventory management, and maintaining warehouse cleanliness. No prior experience required - we provide full training.',
-        requirements: 'Physical fitness, Team work, Reliability, Punctuality',
-        skills: 'Team Collaboration, Time Management, Physical Fitness',
-        benefits: 'Health insurance, Transportation allowance, Overtime pay, Free lunch',
-        contactEmail: 'hr@logitech-solutions.com',
-        contactPhone: '+91 98765 43210',
-        workHours: '8 hours/day',
-        type: 'Full-time',
-        experience: 'Entry Level',
-        education: 'High School'
+        location: 'Hyderabad, Telangana',
+        salaryRange: '₹18,000/month',
+        workType: 'Full-time',
+        skillsRequired: ['Team Collaboration', 'Physical Fitness', 'Reliability'],
+        applicationDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
       },
       {
-        title: 'Delivery Executive',
-        company: 'QuickServe Delivery',
-        location: 'Bangalore, Karnataka', 
-        salary: '₹500/day',
+        jobTitle: 'Delivery Executive',
         description: 'Join our delivery team and earn daily wages! Deliver packages across the city using our company vehicles. Flexible timing and good incentives for performance.',
-        requirements: 'Valid driving license, Physical stamina, Customer service skills',
-        skills: 'Navigation, Communication, Problem Solving',
-        benefits: 'Daily payment, Fuel allowance, Performance bonus, Flexible hours',
-        contactEmail: 'jobs@quickserve.in',
-        contactPhone: '+91 87654 32109',
-        workHours: 'Flexible',
-        type: 'Part-time',
-        experience: 'Entry Level',
-        education: 'Any'
+        location: 'Bangalore, Karnataka',
+        salaryRange: '₹500/day',
+        workType: 'Part-time',
+        skillsRequired: ['Communication', 'Time Management', 'Reliability'],
+        applicationDeadline: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
       },
       {
-        title: 'Restaurant Helper',
-        company: 'Spice Garden Restaurant',
-        location: 'Mumbai, Maharashtra',
-        salary: '₹400/day',
+        jobTitle: 'Restaurant Helper',
         description: 'Assist kitchen staff with food preparation, cleaning, and customer service. Great opportunity for students to earn while learning hospitality skills.',
-        requirements: 'Food safety awareness, Team work, Cleanliness, Reliability',
-        skills: 'Customer Service, Organization, Adaptability',
-        benefits: 'Free meals, Flexible timing, Tips from customers, Weekend bonuses',
-        contactEmail: 'careers@spicegarden.com',
-        contactPhone: '+91 76543 21098',
-        workHours: '6 hours/day',
-        type: 'Part-time',
-        experience: 'Entry Level',
-        education: 'No Education Required'
+        location: 'Mumbai, Maharashtra',
+        salaryRange: '₹400/day',
+        workType: 'Part-time',
+        skillsRequired: ['Customer Service', 'Organization', 'Adaptability'],
+        applicationDeadline: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
       }
     ];
 
     const randomJob = testJobs[Math.floor(Math.random() * testJobs.length)];
     
-    console.log('🧪 Filling test data:', randomJob);
-    
-    setFormData(prev => {
-      const newData = {
-        ...prev,
-        title: randomJob.title,
-        company: randomJob.company,
-        location: randomJob.location,
-        salary: randomJob.salary,
-        description: randomJob.description,
-        requirements: randomJob.requirements,
-        type: randomJob.type,
-        experience: randomJob.experience,
-        education: randomJob.education,
-        skills: randomJob.skills,
-        benefits: randomJob.benefits,
-        contactEmail: randomJob.contactEmail,
-        contactPhone: randomJob.contactPhone,
-        workHours: randomJob.workHours,
-        shiftType: 'Day',
-        immediateStart: Math.random() > 0.5
-      };
-      
-      console.log('🧪 New form data:', newData);
-      return newData;
-    });
+    setFormData(prev => ({
+      ...prev,
+      jobTitle: randomJob.jobTitle,
+      description: randomJob.description,
+      location: randomJob.location,
+      salaryRange: randomJob.salaryRange,
+      workType: randomJob.workType,
+      skillsRequired: randomJob.skillsRequired,
+      applicationDeadline: randomJob.applicationDeadline
+    }));
   };
 
+  const JobPreview = () => (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+    >
+      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">Job Preview</h2>
+            <button
+              onClick={() => setShowPreview(false)}
+              className="p-2 hover:bg-gray-100 rounded-full"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="space-y-6">
+            {/* Job Header */}
+            <div className="border-b pb-6">
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">{formData.jobTitle}</h1>
+              <div className="flex items-center gap-4 text-gray-600">
+                <div className="flex items-center gap-1">
+                  <Building className="w-4 h-4" />
+                  <span>{employerData?.companyName || employerData?.name || 'Company Name'}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <MapPin className="w-4 h-4" />
+                  <span>{formData.location}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <DollarSign className="w-4 h-4" />
+                  <span>{formData.salaryRange}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Briefcase className="w-4 h-4" />
+                  <span>{formData.workType}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Job Description */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Job Description</h3>
+              <p className="text-gray-700 whitespace-pre-wrap">{formData.description}</p>
+            </div>
+
+            {/* Skills Required */}
+            {formData.skillsRequired.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Skills Required</h3>
+                <div className="flex flex-wrap gap-2">
+                  {formData.skillsRequired.map((skill, index) => (
+                    <span
+                      key={index}
+                      className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                    >
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Application Deadline */}
+            {formData.applicationDeadline && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Application Deadline</h3>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Calendar className="w-4 h-4" />
+                  <span>{new Date(formData.applicationDeadline).toLocaleDateString()}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Contact Information */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Contact Information</h3>
+              <div className="space-y-2 text-gray-700">
+                <div>Email: {employerData?.email || 'contact@company.com'}</div>
+                {employerData?.phone && <div>Phone: {employerData.phone}</div>}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-4 mt-8 pt-6 border-t">
+            <button
+              onClick={() => setShowPreview(false)}
+              className="flex-1 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium"
+            >
+              Looks Good - Post Job
+            </button>
+            <button
+              onClick={() => setShowPreview(false)}
+              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+            >
+              Edit Details
+            </button>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+    <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
         <div className="flex items-center gap-3">
@@ -242,7 +300,7 @@ const PostJobPage = () => {
         </div>
         <div className="text-right">
           <h2 className="text-lg font-semibold text-gray-900">Post New Job</h2>
-          <p className="text-sm text-gray-600">Create a job posting for non-IT and daily labor positions</p>
+          <p className="text-sm text-gray-600">Essential fields only</p>
         </div>
       </div>
 
@@ -258,55 +316,74 @@ const PostJobPage = () => {
             <Plus className="w-8 h-8" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">Post a New Job</h1>
-            <p className="text-orange-100">Fill out the form below to create your job posting for non-IT and daily labor positions</p>
+            <h1 className="text-2xl font-bold">Post a Job in 2 Minutes</h1>
+            <p className="text-orange-100">Only essential fields - no hassle, just results</p>
           </div>
         </div>
       </motion.div>
 
-      {/* Job Posting Form */}
+      {/* Employer Info Display */}
+      {employerData && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="bg-green-50 border border-green-200 rounded-2xl p-4"
+        >
+          <div className="flex items-center gap-3">
+            <CheckCircle className="w-5 h-5 text-green-600" />
+            <div>
+              <h3 className="font-semibold text-green-800">Employer Details Auto-filled</h3>
+              <p className="text-sm text-green-700">
+                Company: {employerData.companyName || employerData.name} • Email: {employerData.email}
+                {employerData.phone && ` • Phone: ${employerData.phone}`}
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Essential Fields Only Form */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
         className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6"
       >
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Basic Information */}
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Building className="w-5 h-5 text-orange-600" />
-              Basic Information
-            </h3>
+          {/* Essential Fields Only */}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Job Title *
+              </label>
+              <input
+                type="text"
+                name="jobTitle"
+                value={formData.jobTitle}
+                onChange={handleInputChange}
+                required
+                placeholder="e.g., Warehouse Worker, Delivery Executive, Restaurant Helper"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Job Description *
+              </label>
+              <textarea
+                name="description"
+                value={formData.description}
+                onChange={handleInputChange}
+                required
+                rows={4}
+                placeholder="Describe the role, responsibilities, and what makes this position suitable for students..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              />
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Job Title *
-                </label>
-                <input
-                  type="text"
-                  name="title"
-                  value={formData.title}
-                  onChange={handleInputChange}
-                  required
-                  placeholder="e.g., Warehouse Worker, Housekeeping Staff, Delivery Driver"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Company Name *
-                </label>
-                <input
-                  type="text"
-                  name="company"
-                  value={formData.company}
-                  onChange={handleInputChange}
-                  required
-                  placeholder="e.g., Logistics Solutions, CleanPro Services"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                />
-              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Location *
@@ -321,14 +398,15 @@ const PostJobPage = () => {
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 />
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Salary Range *
                 </label>
                 <input
                   type="text"
-                  name="salary"
-                  value={formData.salary}
+                  name="salaryRange"
+                  value={formData.salaryRange}
                   onChange={handleInputChange}
                   required
                   placeholder="e.g., ₹15,000/month, ₹500/day, ₹200/hour"
@@ -336,257 +414,107 @@ const PostJobPage = () => {
                 />
               </div>
             </div>
-          </div>
 
-          {/* Job Details */}
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-600" />
-              Job Details
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Job Type *
+                  Work Type *
                 </label>
                 <select
-                  name="type"
-                  value={formData.type}
+                  name="workType"
+                  value={formData.workType}
                   onChange={handleInputChange}
+                  required
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 >
-                  {jobTypes.map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
+                  <option value="Part-time">Part-time</option>
+                  <option value="Full-time">Full-time</option>
+                  <option value="Remote">Remote</option>
+                  <option value="On-site">On-site</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Experience Level
-                </label>
-                <select
-                  name="experience"
-                  value={formData.experience}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                >
-                  {experienceLevels.map(level => (
-                    <option key={level} value={level}>{level}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Education Required
-                </label>
-                <select
-                  name="education"
-                  value={formData.education}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                >
-                  {educationLevels.map(edu => (
-                    <option key={edu} value={edu}>{edu}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
 
-            {/* Work Schedule */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Work Hours
+                  Application Deadline *
                 </label>
-                <select
-                  name="workHours"
-                  value={formData.workHours}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                >
-                  <option value="">Select work hours</option>
-                  {workHourOptions.map(hours => (
-                    <option key={hours} value={hours}>{hours}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Shift Type
-                </label>
-                <select
-                  name="shiftType"
-                  value={formData.shiftType}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                >
-                  {shiftTypes.map(shift => (
-                    <option key={shift} value={shift}>{shift}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-center">
                 <input
-                  type="checkbox"
-                  name="immediateStart"
-                  checked={formData.immediateStart}
-                  onChange={handleCheckboxChange}
-                  className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+                  type="date"
+                  name="applicationDeadline"
+                  value={formData.applicationDeadline}
+                  onChange={handleInputChange}
+                  required
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 />
-                <label className="ml-2 text-sm text-gray-700">
-                  Immediate start available
-                </label>
               </div>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Job Description *
+                Skills Required
               </label>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                required
-                rows={4}
-                placeholder="Describe the role, responsibilities, work environment, and what makes this position suitable for students..."
+              <input
+                type="text"
+                value={formData.skillsRequired.join(', ')}
+                onChange={handleSkillsChange}
+                placeholder="e.g., Team work, Communication, Physical fitness (comma-separated)"
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
               />
+              
+              {/* Quick Add Skills */}
+              <div className="mt-3">
+                <p className="text-sm text-gray-600 mb-2">Quick add common skills:</p>
+                <div className="flex flex-wrap gap-2">
+                  {commonSkills.map((skill) => (
+                    <button
+                      key={skill}
+                      type="button"
+                      onClick={() => addSkillTag(skill)}
+                      className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm hover:bg-blue-200 transition-colors"
+                    >
+                      + {skill}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Selected Skills Display */}
+              {formData.skillsRequired.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-sm text-gray-600 mb-2">Selected skills:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {formData.skillsRequired.map((skill, index) => (
+                      <span
+                        key={index}
+                        className="flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm"
+                      >
+                        {skill}
+                        <button
+                          type="button"
+                          onClick={() => removeSkillTag(skill)}
+                          className="hover:text-orange-600"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Requirements & Skills */}
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Users className="w-5 h-5 text-green-600" />
-              Requirements & Skills
-            </h3>
-            
-            {/* Quick Add Requirements */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Quick Add Common Requirements
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {commonRequirements.map((req) => (
-                  <button
-                    key={req}
-                    type="button"
-                    onClick={() => addRequirement(req)}
-                    className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm hover:bg-orange-100 hover:text-orange-700 transition-colors"
-                  >
-                    + {req}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Requirements *
-                </label>
-                <textarea
-                  name="requirements"
-                  value={formData.requirements}
-                  onChange={handleInputChange}
-                  required
-                  rows={3}
-                  placeholder="e.g., Manual Labor, Team Work, Physical Stamina (comma-separated)"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                />
-                <p className="text-xs text-gray-500 mt-1">Separate requirements with commas</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Skills (Optional)
-                </label>
-                <textarea
-                  name="skills"
-                  value={formData.skills}
-                  onChange={handleInputChange}
-                  rows={3}
-                  placeholder="e.g., Team collaboration, Problem solving, Communication (comma-separated)"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                />
-                <p className="text-xs text-gray-500 mt-1">Separate skills with commas</p>
-              </div>
-            </div>
-
-            {/* Quick Add Skills */}
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Quick Add Common Skills
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {commonSkills.map((skill) => (
-                  <button
-                    key={skill}
-                    type="button"
-                    onClick={() => addSkill(skill)}
-                    className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm hover:bg-blue-200 transition-colors"
-                  >
-                    + {skill}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Benefits */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Benefits & Perks (Optional)
-            </label>
-            <textarea
-              name="benefits"
-              value={formData.benefits}
-              onChange={handleInputChange}
-              rows={3}
-              placeholder="e.g., Flexible hours, Transportation allowance, Meal provided, Overtime pay, Health benefits..."
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-            />
-          </div>
-
-          {/* Contact Information */}
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-purple-600" />
-              Contact Information
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Contact Email *
-                </label>
-                <input
-                  type="email"
-                  name="contactEmail"
-                  value={formData.contactEmail}
-                  onChange={handleInputChange}
-                  required
-                  placeholder="hr@company.com"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Contact Phone (Optional)
-                </label>
-                <input
-                  type="tel"
-                  name="contactPhone"
-                  value={formData.contactPhone}
-                  onChange={handleInputChange}
-                  placeholder="+91 98765 43210"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Submit Buttons */}
+          {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={() => setShowPreview(true)}
+              className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              <Eye className="w-5 h-5" />
+              Preview Job
+            </button>
             <button
               type="submit"
               disabled={loading}
@@ -610,6 +538,9 @@ const PostJobPage = () => {
           </div>
         </form>
       </motion.div>
+
+      {/* Preview Modal */}
+      {showPreview && <JobPreview />}
     </div>
   );
 };

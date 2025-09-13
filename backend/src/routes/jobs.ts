@@ -76,7 +76,7 @@ router.get('/:id', async (req, res, next) => {
     }
 
     // Increment view count
-    job.views += 1;
+    // Note: Job views tracking removed as it's not in the simplified schema
     await job.save();
 
     res.json(job);
@@ -224,7 +224,7 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res, next) => {
     }
 
     // Check if user can edit this job
-    if (req.user!.userType !== 'admin' && job.employer.toString() !== req.user!._id) {
+    if (req.user!.userType !== 'admin' && job.employerId.toString() !== req.user!._id) {
       throw new CustomError('Not authorized to edit this job', 403);
     }
 
@@ -250,7 +250,7 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res, next) => 
     }
 
     // Check if user can delete this job
-    if (req.user!.userType !== 'admin' && job.employer.toString() !== req.user!._id) {
+    if (req.user!.userType !== 'admin' && job.employerId.toString() !== req.user!._id) {
       throw new CustomError('Not authorized to delete this job', 403);
     }
 

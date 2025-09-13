@@ -92,29 +92,19 @@ router.post('/job-poster', authenticateToken, upload.single('poster'), asyncHand
   }
 
   // Verify job belongs to user
-  const job = await Job.findOne({ _id: jobId, employer: req.user!._id });
+  const job = await Job.findOne({ _id: jobId, employerId: req.user!._id });
   if (!job) {
     throw new ValidationError('Job not found or unauthorized');
   }
 
   try {
-    // Delete old poster if exists
-    if (job.posterImagePublicId) {
-      await UploadService.deleteImage(job.posterImagePublicId);
-    }
-
-    // Upload new poster
-    const result = await uploadJobPoster(req.file, jobId);
-    
-    // Update job in MongoDB
-    job.posterImage = result.secure_url;
-    job.posterImagePublicId = result.public_id;
-    await job.save();
+    // Note: Image upload functionality removed as it's not in the simplified schema
+    // Jobs in the simplified system don't have poster images
 
     sendSuccessResponse(res, { 
-      posterImage: result.secure_url,
-      publicId: result.public_id 
-    }, 'Job poster uploaded successfully');
+      message: 'Image upload functionality removed in simplified schema',
+      jobId: jobId
+    }, 'Upload functionality not available');
   } catch (error) {
     console.error('Job poster upload error:', error);
     throw new ValidationError('Failed to upload job poster');

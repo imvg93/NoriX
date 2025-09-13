@@ -29,8 +29,8 @@ router.post('/', authenticateToken, requireStudent, asyncHandler(async (req: Aut
 
   // Check if already applied
   const existingApplication = await Application.findOne({
-    job: jobId,
-    student: req.user!._id
+    jobId: jobId,
+    studentId: req.user!._id
   });
 
   if (existingApplication) {
@@ -39,16 +39,15 @@ router.post('/', authenticateToken, requireStudent, asyncHandler(async (req: Aut
 
   // Create application
   const application = await Application.create({
-    job: jobId,
-    student: req.user!._id,
-    employer: job.employer,
+    jobId: jobId,
+    studentId: req.user!._id,
+    employer: job.employerId,
     coverLetter,
     expectedPay: expectedPay ? Number(expectedPay) : undefined,
     availability: availability || req.user!.availability
   });
 
-  // Increment job applications count
-  await job.incrementApplications();
+  // Note: Job application count increment removed as it's not in the simplified schema
 
   // Populate job and employer info
   await application.populate([
@@ -65,18 +64,18 @@ router.post('/', authenticateToken, requireStudent, asyncHandler(async (req: Aut
 router.get('/my-applications', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { page = 1, limit = 10, status } = req.query;
 
-  const query: any = { student: req.user!._id };
+  const query: any = { studentId: req.user!._id };
 
   if (status) {
     query.status = status;
   }
 
   const applications = await Application.find(query)
-    .populate('job', 'title company location pay payType status')
+    .populate('jobId', 'title company location pay payType status')
     .populate('employer', 'name companyName')
     .limit(Number(limit) * 1)
     .skip((Number(page) - 1) * Number(limit))
-    .sort({ appliedDate: -1 });
+    .sort({ appliedAt: -1 });
 
   const total = await Application.countDocuments(query);
 
@@ -97,21 +96,21 @@ router.get('/employer/all', authenticateToken, requireEmployer, asyncHandler(asy
   const { page = 1, limit = 10, status } = req.query;
 
   // Get all jobs by this employer
-  const employerJobs = await Job.find({ employer: req.user!._id }).select('_id');
+  const employerJobs = await Job.find({ employerId: req.user!._id }).select('_id');
   const jobIds = employerJobs.map(job => job._id);
 
-  const query: any = { job: { $in: jobIds } };
+  const query: any = { jobId: { $in: jobIds } };
 
   if (status) {
     query.status = status;
   }
 
   const applications = await Application.find(query)
-    .populate('job', 'title company location pay payType status')
-    .populate('student', 'name email phone college skills')
+    .populate('jobId', 'title company location pay payType status')
+    .populate('studentId', 'name email phone college skills')
     .limit(Number(limit) * 1)
     .skip((Number(page) - 1) * Number(limit))
-    .sort({ appliedDate: -1 });
+    .sort({ appliedAt: -1 });
 
   const total = await Application.countDocuments(query);
 
@@ -137,21 +136,21 @@ router.get('/job/:jobId', authenticateToken, requireEmployer, asyncHandler(async
     throw new ValidationError('Job not found');
   }
 
-  if (job.employer.toString() !== req.user!._id.toString()) {
+  if (job.employerId.toString() !== req.user!._id.toString()) {
     throw new ValidationError('You can only view applications for your own jobs');
   }
 
-  const query: any = { job: req.params.jobId };
+  const query: any = { jobId: req.params.jobId };
 
   if (status) {
     query.status = status;
   }
 
   const applications = await Application.find(query)
-    .populate('student', 'name college skills availability rating completedJobs')
+    .populate('studentId', 'name college skills availability rating completedJobs')
     .limit(Number(limit) * 1)
     .skip((Number(page) - 1) * Number(limit))
-    .sort({ appliedDate: -1 });
+    .sort({ appliedAt: -1 });
 
   const total = await Application.countDocuments(query);
 
@@ -170,8 +169,8 @@ router.get('/job/:jobId', authenticateToken, requireEmployer, asyncHandler(async
 // @access  Private (Application owner or job owner)
 router.get('/:id', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const application = await Application.findById(req.params.id)
-    .populate('job', 'title company location pay payType status')
-    .populate('student', 'name college skills availability rating')
+    .populate('jobId', 'title company location pay payType status')
+    .populate('studentId', 'name college skills availability rating')
     .populate('employer', 'name companyName');
 
   if (!application) {
@@ -179,8 +178,8 @@ router.get('/:id', authenticateToken, asyncHandler(async (req: AuthRequest, res:
   }
 
   // Check if user has access to this application
-  if (application.student.toString() !== req.user!._id.toString() && 
-      application.employer.toString() !== req.user!._id.toString()) {
+  if (application.studentId.toString() !== req.user!._id.toString() && 
+      application.employer?.toString() !== req.user!._id.toString()) {
     throw new ValidationError('Access denied');
   }
 
@@ -203,8 +202,8 @@ router.put('/:id/status', authenticateToken, requireEmployer, asyncHandler(async
   }
 
   // Check if user owns the job
-  const job = await Job.findById(application.job);
-  if (!job || job.employer.toString() !== req.user!._id.toString()) {
+  const job = await Job.findById(application.jobId);
+  if (!job || job.employerId.toString() !== req.user!._id.toString()) {
     throw new ValidationError('Access denied');
   }
 
@@ -213,8 +212,8 @@ router.put('/:id/status', authenticateToken, requireEmployer, asyncHandler(async
 
   // Populate for response
   await application.populate([
-    { path: 'job', select: 'title company location' },
-    { path: 'student', select: 'name college skills' }
+    { path: 'jobId', select: 'title company location' },
+    { path: 'studentId', select: 'name college skills' }
   ]);
 
   sendSuccessResponse(res, { application }, 'Application status updated successfully');
@@ -230,7 +229,7 @@ router.post('/:id/withdraw', authenticateToken, requireStudent, asyncHandler(asy
   }
 
   // Check if user owns the application
-  if (application.student.toString() !== req.user!._id.toString()) {
+  if (application.studentId.toString() !== req.user!._id.toString()) {
     throw new ValidationError('Access denied');
   }
 
@@ -261,13 +260,13 @@ router.post('/:id/rate', authenticateToken, asyncHandler(async (req: AuthRequest
   }
 
   // Check if user has access to this application
-  if (application.student.toString() !== req.user!._id.toString() && 
-      application.employer.toString() !== req.user!._id.toString()) {
+  if (application.studentId?.toString() !== req.user!._id.toString() && 
+      application.employer?.toString() !== req.user!._id.toString()) {
     throw new ValidationError('Access denied');
   }
 
   // Determine who is rating
-  const rater = application.student.toString() === req.user!._id.toString() ? 'student' : 'employer';
+  const rater = application.studentId?.toString() === req.user!._id.toString() ? 'student' : 'employer';
 
   // Add rating
   await application.addRating(rater, rating, feedback);

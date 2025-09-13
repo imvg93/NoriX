@@ -31,11 +31,13 @@ export interface IUser extends Document {
   emailVerified: boolean;
   phoneVerified: boolean;
   
-  // Admin approval fields
-  approvalStatus: 'pending' | 'approved' | 'rejected';
-  approvedAt?: Date;
-  approvedBy?: mongoose.Types.ObjectId;
-  rejectionReason?: string;
+  // KYC Status fields
+  kycStatus?: 'not-submitted' | 'pending' | 'approved' | 'rejected';
+  kycVerifiedAt?: Date;
+  kycRejectedAt?: Date;
+  kycPendingAt?: Date;
+  
+  // Signup tracking
   submittedAt: Date;
   
   createdAt: Date;
@@ -183,24 +185,17 @@ const userSchema = new Schema<IUser>({
     default: false
   },
   
-  // Admin approval fields
-  approvalStatus: {
+  // KYC Status fields
+  kycStatus: {
     type: String,
-    enum: ['pending', 'approved', 'rejected'],
-    default: 'pending'
+    enum: ['not-submitted', 'pending', 'approved', 'rejected'],
+    default: 'not-submitted'
   },
-  approvedAt: {
-    type: Date
-  },
-  approvedBy: {
-    type: Schema.Types.ObjectId,
-    ref: 'User'
-  },
-  rejectionReason: {
-    type: String,
-    trim: true,
-    maxlength: [500, 'Rejection reason cannot exceed 500 characters']
-  },
+  kycVerifiedAt: Date,
+  kycRejectedAt: Date,
+  kycPendingAt: Date,
+  
+  // Signup tracking
   submittedAt: {
     type: Date,
     default: Date.now

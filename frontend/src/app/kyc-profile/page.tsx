@@ -44,7 +44,7 @@ const KYCProfilePage: React.FC = () => {
         
         // Determine if form should be shown
         // Show form only if: not-submitted or rejected
-        setShowForm(status.status === 'not-submitted' || status.status === 'rejected');
+        setShowForm(status.status === 'not_submitted' || status.status === 'rejected');
         
       } catch (error) {
         console.error('Error checking KYC status:', error);
