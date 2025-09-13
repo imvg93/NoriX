@@ -13,8 +13,13 @@ class SocketManager {
   private connectedUsers: Map<string, string> = new Map(); // userId -> socketId
 
   constructor(server: HTTPServer) {
+    const allowAll = process.env.ALLOW_ALL_CORS === 'true' || process.env.ALLOW_ALL_CORS === '1';
     this.io = new SocketIOServer(server, {
-      cors: {
+      cors: allowAll ? {
+        origin: (origin, callback) => callback(null, true),
+        methods: ["GET", "POST"],
+        credentials: true
+      } : {
         origin: process.env.FRONTEND_URL || "http://localhost:3000",
         methods: ["GET", "POST"],
         credentials: true

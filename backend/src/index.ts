@@ -30,6 +30,7 @@ dotenv.config();
 const app = express();
 const server = createServer(app);
 const PORT = process.env.PORT || 5001;
+const ALLOW_ALL_CORS = process.env.ALLOW_ALL_CORS === 'true' || process.env.ALLOW_ALL_CORS === '1';
 
 // Initialize Socket.IO
 const socketManager = new SocketManager(server);
@@ -37,81 +38,12 @@ const socketManager = new SocketManager(server);
 // Make socketManager available globally for use in routes
 (global as any).socketManager = socketManager;
 
-// CORS configuration
+// CORS configuration (allow only Vercel frontend; keep ALLOW_ALL_CORS for debugging)
 const corsOptions = {
-  origin: function (origin: string | undefined, callback: Function) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'http://localhost:3002',
-      'http://localhost:3003',
-      'https://me-work.vercel.app', // Vercel deployment
-      'https://studenting.vercel.app', // Alternative Vercel URL
-      'https://studentjobs-frontend.onrender.com', // Render frontend
-      'https://yourdomain.com', // Add your production domain
-      'https://www.yourdomain.com', // Add www version
-      ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : []), // Environment variable origins
-    ];
-    
-    // Allow all Vercel subdomains
-    if (origin.includes('.vercel.app')) {
-      console.log('✅ CORS: Allowing Vercel origin:', origin);
-      return callback(null, true);
-    }
-    
-    // Allow all Render subdomains
-    if (origin.includes('.onrender.com')) {
-      console.log('✅ CORS: Allowing Render origin:', origin);
-      return callback(null, true);
-    }
-    
-    // Allow all Railway subdomains
-    if (origin.includes('.railway.app')) {
-      console.log('✅ CORS: Allowing Railway origin:', origin);
-      return callback(null, true);
-    }
-    
-    // Allow Railway preview deployments
-    if (origin.includes('.up.railway.app')) {
-      console.log('✅ CORS: Allowing Railway preview origin:', origin);
-      return callback(null, true);
-    }
-    
-    if (allowedOrigins.includes(origin)) {
-      console.log('✅ CORS: Allowing configured origin:', origin);
-      return callback(null, true);
-    }
-    
-    console.log('🚫 CORS blocked origin:', origin);
-    callback(new Error('Not allowed by CORS'));
-  },
+  origin: ALLOW_ALL_CORS ? true : 'https://me-work.vercel.app',
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
-    'X-Requested-With', 
-    'Accept', 
-    'Origin', 
-    'X-CSRF-Token', 
-    'X-API-Key',
-    'X-OTP-Token',
-    'X-User-Type',
-    'X-Email-Verification'
-  ],
-  exposedHeaders: [
-    'Content-Length', 
-    'X-Foo', 
-    'X-Bar', 
-    'X-Total-Count', 
-    'X-Page-Count',
-    'X-OTP-Status',
-    'X-Verification-Status'
-  ],
-  optionsSuccessStatus: 200, // Some legacy browsers (IE11, various SmartTVs) choke on 204
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+did   optionsSuccessStatus: 200
 };
 
 app.use(cors(corsOptions));
@@ -133,7 +65,7 @@ app.get('/health', (req, res) => {
     message: 'StudentJobs API is running',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
-    cors: 'enabled',
+    cors: ALLOW_ALL_CORS ? 'allow-all' : 'enabled',
     allowedOrigins: [
       'http://localhost:3000',
       'https://me-work.vercel.app',
@@ -187,7 +119,11 @@ const startServer = async (): Promise<void> => {
       console.log(`🔗 Health check: http://localhost:${PORT}/health`);
       console.log(`📚 API Documentation: http://localhost:${PORT}/api`);
       console.log(`🔌 Socket.IO enabled for real-time updates`);
-      console.log(`🔒 CORS: ENABLED - Supports Vercel, Railway, Render`);
+      if (ALLOW_ALL_CORS) {
+        console.log(`🔒 CORS: ALLOW_ALL_CORS=true -> Permissive mode (TEMPORARY)`);
+      } else {
+        console.log(`🔒 CORS: ENABLED - Supports Vercel, Railway, Render`);
+      }
     });
 
     // Verify email configuration
