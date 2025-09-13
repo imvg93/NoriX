@@ -51,6 +51,9 @@ const corsOptions = {
       'https://me-work.vercel.app', // Vercel deployment
       'https://studenting.vercel.app', // Alternative Vercel URL
       'https://studentjobs-frontend.onrender.com', // Render frontend
+      'https://yourdomain.com', // Add your production domain
+      'https://www.yourdomain.com', // Add www version
+      ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : []), // Environment variable origins
     ];
     
     // Allow all Vercel subdomains
@@ -87,8 +90,27 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With', 
+    'Accept', 
+    'Origin', 
+    'X-CSRF-Token', 
+    'X-API-Key',
+    'X-OTP-Token',
+    'X-User-Type',
+    'X-Email-Verification'
+  ],
+  exposedHeaders: [
+    'Content-Length', 
+    'X-Foo', 
+    'X-Bar', 
+    'X-Total-Count', 
+    'X-Page-Count',
+    'X-OTP-Status',
+    'X-Verification-Status'
+  ],
   optionsSuccessStatus: 200, // Some legacy browsers (IE11, various SmartTVs) choke on 204
 };
 

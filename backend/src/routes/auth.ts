@@ -1,6 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
+import cors from 'cors';
 import User from '../models/User';
 import OTP from '../models/OTP';
 import { AdminLogin } from '../models/AdminLogin';
@@ -9,6 +10,68 @@ import { asyncHandler, sendSuccessResponse, sendErrorResponse, ValidationError }
 import { generateOTP, sendOTPEmail, verifyOTP, getEmailConfigStatus } from '../services/emailService';
 
 const router = express.Router();
+
+// Enhanced CORS configuration for OTP endpoints
+const otpCorsOptions = {
+  origin: function (origin: string | undefined, callback: Function) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+      'http://localhost:3003',
+      'https://me-work.vercel.app',
+      'https://studenting.vercel.app',
+      'https://studentjobs-frontend.onrender.com',
+      ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : []),
+    ];
+    
+    // Allow all Vercel, Railway, and Render subdomains
+    if (origin.includes('.vercel.app') || origin.includes('.railway.app') || origin.includes('.onrender.com')) {
+      console.log('✅ OTP CORS: Allowing deployment origin:', origin);
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.includes(origin)) {
+      console.log('✅ OTP CORS: Allowing configured origin:', origin);
+      return callback(null, true);
+    }
+    
+    console.log('🚫 OTP CORS blocked origin:', origin);
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With', 
+    'Accept', 
+    'Origin', 
+    'X-CSRF-Token', 
+    'X-API-Key',
+    'X-OTP-Token',
+    'X-User-Type',
+    'X-Email-Verification'
+  ],
+  exposedHeaders: [
+    'Content-Length', 
+    'X-OTP-Status',
+    'X-Verification-Status',
+    'X-User-Type'
+  ],
+  optionsSuccessStatus: 200,
+};
+
+// Apply enhanced CORS to all OTP-related routes
+router.use('/login-request-otp', cors(otpCorsOptions));
+router.use('/login-verify-otp', cors(otpCorsOptions));
+router.use('/send-otp', cors(otpCorsOptions));
+router.use('/verify-otp', cors(otpCorsOptions));
+router.use('/forgot-password', cors(otpCorsOptions));
+router.use('/reset-password', cors(otpCorsOptions));
 
 // Generate JWT token
 const generateToken = (userId: string): string => {
@@ -359,6 +422,11 @@ router.post('/login-request-otp', asyncHandler(async (req: express.Request, res:
     email: email,
     userType: userType
   }, 'OTP sent successfully');
+  
+  // Add CORS headers for OTP response
+  res.setHeader('X-OTP-Status', 'sent');
+  res.setHeader('X-User-Type', userType);
+  res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status, X-User-Type');
 }));
 
 // @route   POST /api/auth/login-verify-otp
@@ -437,6 +505,12 @@ router.post('/login-verify-otp', asyncHandler(async (req: express.Request, res: 
     },
     token
   }, 'Login successful');
+  
+  // Add CORS headers for OTP verification response
+  res.setHeader('X-OTP-Status', 'verified');
+  res.setHeader('X-Verification-Status', 'success');
+  res.setHeader('X-User-Type', user.userType);
+  res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status, X-Verification-Status, X-User-Type');
 }));
 
 // @route   POST /api/auth/forgot-password
@@ -477,6 +551,10 @@ router.post('/forgot-password', asyncHandler(async (req: express.Request, res: e
   }
 
   sendSuccessResponse(res, {}, 'If an account with that email exists, an OTP has been sent');
+  
+  // Add CORS headers for password reset OTP
+  res.setHeader('X-OTP-Status', 'sent');
+  res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status');
 }));
 
 // @route   POST /api/auth/reset-password
@@ -505,6 +583,11 @@ router.post('/reset-password', asyncHandler(async (req: express.Request, res: ex
   await user.save();
 
   sendSuccessResponse(res, {}, 'Password reset successfully');
+  
+  // Add CORS headers for password reset success
+  res.setHeader('X-OTP-Status', 'verified');
+  res.setHeader('X-Verification-Status', 'password-reset-success');
+  res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status, X-Verification-Status');
 }));
 
 // @route   POST /api/auth/change-password
@@ -580,6 +663,10 @@ router.post('/send-otp', asyncHandler(async (req: express.Request, res: express.
   }
 
   sendSuccessResponse(res, {}, 'OTP sent successfully');
+  
+  // Add CORS headers for OTP sending
+  res.setHeader('X-OTP-Status', 'sent');
+  res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status');
 }));
 
 // @route   POST /api/auth/verify-otp
@@ -612,6 +699,11 @@ router.post('/verify-otp', asyncHandler(async (req: express.Request, res: expres
   }
 
   sendSuccessResponse(res, {}, 'OTP verified successfully');
+  
+  // Add CORS headers for OTP verification
+  res.setHeader('X-OTP-Status', 'verified');
+  res.setHeader('X-Verification-Status', 'email-verified');
+  res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status, X-Verification-Status');
 }));
 
 // @route   POST /api/auth/verify-phone
@@ -623,5 +715,36 @@ router.post('/verify-phone', authenticateToken, asyncHandler(async (req: AuthReq
   
   sendSuccessResponse(res, {}, 'Phone verification code sent');
 }));
+
+// @route   GET /api/auth/test-cors
+// @desc    Test CORS configuration for OTP endpoints
+// @access  Public
+router.get('/test-cors', cors(otpCorsOptions), (req: express.Request, res: express.Response) => {
+  console.log('🧪 CORS Test Request:', {
+    origin: req.headers.origin,
+    method: req.method,
+    headers: req.headers
+  });
+  
+  res.status(200).json({
+    message: 'CORS test successful for OTP endpoints',
+    timestamp: new Date().toISOString(),
+    origin: req.headers.origin || 'no-origin',
+    cors: 'enabled',
+    otpEndpoints: [
+      'POST /api/auth/login-request-otp',
+      'POST /api/auth/login-verify-otp',
+      'POST /api/auth/send-otp',
+      'POST /api/auth/verify-otp',
+      'POST /api/auth/forgot-password',
+      'POST /api/auth/reset-password'
+    ]
+  });
+  
+  // Add CORS headers for test response
+  res.setHeader('X-OTP-Status', 'test-success');
+  res.setHeader('X-Verification-Status', 'cors-enabled');
+  res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status, X-Verification-Status');
+});
 
 export default router;
