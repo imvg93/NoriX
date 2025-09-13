@@ -1,8 +1,46 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+// Determine API base URL based on environment
+const getApiBaseUrl = () => {
+  // Check if we're running in browser (client-side)
+  if (typeof window !== 'undefined') {
+    // If NEXT_PUBLIC_API_URL is set, use it (highest priority)
+    if (process.env.NEXT_PUBLIC_API_URL) {
+      console.log('🔧 Using NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
+      return process.env.NEXT_PUBLIC_API_URL;
+    }
+    
+    // Check if we're on Vercel (production deployment)
+    if (window.location.hostname.includes('vercel.app')) {
+      // For Vercel deployment, use Railway backend
+      const railwayUrl = 'https://studentjobs-backend.up.railway.app/api';
+      console.log('🔧 Vercel deployment detected, using Railway backend:', railwayUrl);
+      return railwayUrl;
+    }
+    
+    // For development, check if we're on localhost
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      const localUrl = 'http://localhost:5000/api';
+      console.log('🔧 Local development detected, using local backend:', localUrl);
+      return localUrl;
+    }
+    
+    // Default fallback for other environments
+    const fallbackUrl = 'http://localhost:5000/api';
+    console.log('🔧 Using fallback URL:', fallbackUrl);
+    return fallbackUrl;
+  }
+  
+  // Server-side rendering fallback
+  const ssrUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+  console.log('🔧 Server-side rendering, using:', ssrUrl);
+  return ssrUrl;
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Debug: Log the API base URL
 console.log('🔧 API_BASE_URL:', API_BASE_URL);
 console.log('🔧 NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
+console.log('🔧 NODE_ENV:', process.env.NODE_ENV);
 
 // API Response Types
 interface Job {

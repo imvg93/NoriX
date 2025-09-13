@@ -39,19 +39,63 @@ const socketManager = new SocketManager(server);
 
 // CORS configuration
 const corsOptions = {
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002',
-    'http://localhost:3003',
-    'https://your-frontend-domain.com', // Add your frontend domain when deployed
-  ],
+  origin: function (origin: string | undefined, callback: Function) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+      'http://localhost:3003',
+      'https://me-work.vercel.app', // Vercel deployment
+      'https://studenting.vercel.app', // Alternative Vercel URL
+      'https://studentjobs-frontend.onrender.com', // Render frontend
+    ];
+    
+    // Allow all Vercel subdomains
+    if (origin.includes('.vercel.app')) {
+      console.log('✅ CORS: Allowing Vercel origin:', origin);
+      return callback(null, true);
+    }
+    
+    // Allow all Render subdomains
+    if (origin.includes('.onrender.com')) {
+      console.log('✅ CORS: Allowing Render origin:', origin);
+      return callback(null, true);
+    }
+    
+    // Allow all Railway subdomains
+    if (origin.includes('.railway.app')) {
+      console.log('✅ CORS: Allowing Railway origin:', origin);
+      return callback(null, true);
+    }
+    
+    // Allow Railway preview deployments
+    if (origin.includes('.up.railway.app')) {
+      console.log('✅ CORS: Allowing Railway preview origin:', origin);
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.includes(origin)) {
+      console.log('✅ CORS: Allowing configured origin:', origin);
+      return callback(null, true);
+    }
+    
+    console.log('🚫 CORS blocked origin:', origin);
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+  optionsSuccessStatus: 200, // Some legacy browsers (IE11, various SmartTVs) choke on 204
 };
 
 app.use(cors(corsOptions));
+
+// Handle preflight requests explicitly
+app.options('*', cors(corsOptions));
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -67,7 +111,15 @@ app.get('/health', (req, res) => {
     message: 'StudentJobs API is running',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
-    cors: 'completely removed'
+    cors: 'enabled',
+    allowedOrigins: [
+      'http://localhost:3000',
+      'https://me-work.vercel.app',
+      '*.vercel.app',
+      '*.railway.app',
+      '*.onrender.com'
+    ],
+    origin: req.headers.origin || 'no-origin'
   });
 });
 
@@ -76,8 +128,12 @@ app.get('/api/test', (req, res) => {
   res.status(200).json({
     message: 'API is working!',
     timestamp: new Date().toISOString(),
-    cors: 'completely removed',
-    origin: req.headers.origin
+    cors: 'enabled',
+    origin: req.headers.origin || 'no-origin',
+    headers: {
+      'Access-Control-Allow-Origin': req.headers.origin || '*',
+      'Access-Control-Allow-Credentials': 'true'
+    }
   });
 });
 

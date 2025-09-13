@@ -5,6 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "start": "node start.js",
+    "start:railway": "node railway-start.js",
     "dev": "nodemon src/index.ts",
     "build": "tsc",
     "seed": "ts-node src/scripts/seed.ts",

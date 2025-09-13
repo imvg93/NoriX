@@ -1,8 +1,17 @@
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
 // Load environment variables from .env file
 require('dotenv').config();
+
+// Check if dist/index.js exists
+const distPath = path.join(__dirname, 'dist', 'index.js');
+if (!fs.existsSync(distPath)) {
+  console.error('❌ Compiled application not found at:', distPath);
+  console.error('💡 Please run "npm run build" first to compile TypeScript');
+  process.exit(1);
+}
 
 // Check if required environment variables are set
 const requiredEnvVars = [
