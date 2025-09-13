@@ -5,13 +5,13 @@ const getApiBaseUrl = () => {
     // If NEXT_PUBLIC_API_URL is set, use it (highest priority)
     if (process.env.NEXT_PUBLIC_API_URL) {
       console.log('🔧 Using NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
-      return process.env.NEXT_PUBLIC_API_URL;
+      return process.env.NEXT_PUBLIC_API_URL as string;
     }
     
     // Check if we're on Vercel (production deployment)
     if (window.location.hostname.includes('vercel.app')) {
       // For Vercel deployment, use Railway backend
-      const railwayUrl = 'https://studentjobs-backend.up.railway.app/api';
+      const railwayUrl = 'https://studentjobs-backend-production.up.railway.app/api';
       console.log('🔧 Vercel deployment detected, using Railway backend:', railwayUrl);
       return railwayUrl;
     }
