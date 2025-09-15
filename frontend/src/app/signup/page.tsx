@@ -92,7 +92,7 @@ export default function Signup() {
 
     try {
       // Send OTP to email address
-      await apiService.sendOTP(formData.email, 'verification');
+      await apiService.sendOTP(formData.email.trim(), 'signup');
       setOtpData(prev => ({ ...prev, email: formData.email }));
       setStep('otp');
       setSuccess('OTP sent to your email address!');
@@ -122,7 +122,7 @@ export default function Signup() {
     }
 
     try {
-      // Directly register; backend verifies OTP as part of registration
+      // Option A: Directly register; backend will verify OTP
       await handleRegister();
       setSuccess('OTP verified and account created!');
     } catch (error: any) {

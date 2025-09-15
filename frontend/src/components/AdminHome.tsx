@@ -110,10 +110,10 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
   const { logout } = useAuth();
   const [data, setData] = useState({
     stats: {
-      totalStudents: 0,
-      totalEmployers: 0,
-      totalJobs: 0,
-      pendingApprovals: 0
+      totalUsers: 0,
+      activeUsers: 0,
+      kycApproved: 0,
+      kycPending: 0
     },
     recentActivity: [] as Activity[],
     systemAlerts: [] as SystemAlert[]
@@ -137,6 +137,7 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
   const [approvalAction, setApprovalAction] = useState<'approve' | 'reject'>('approve');
   const [approvalReason, setApprovalReason] = useState('');
   const [approvalItemId, setApprovalItemId] = useState('');
+  const [systemPerformance, setSystemPerformance] = useState<{ cpuUsage: number | null; memoryUsage: number | null }>({ cpuUsage: null, memoryUsage: null });
 
   // Fetch KYC data
   const fetchKYCData = async () => {
@@ -231,28 +232,38 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
         const statsResponse = await apiService.getAdminStats() as any;
         const stats = statsResponse.data || statsResponse;
         
+        const usersTotal = (stats.users?.total ?? ((stats.users?.students || 0) + (stats.users?.employers || 0) + (stats.users?.admins || 0))) || 0;
+        const usersActive = (stats.users?.active ?? stats.users?.activeUsers) || 0;
+        const kycApproved = (stats.kyc?.approved) || 0;
+        const kycPending = (stats.kyc?.pending) || 0;
+
+        const cpuUsage: number | null = (stats.performance?.cpuUsage ?? stats.performance?.cpu?.usage ?? stats.system?.cpuUsage) ?? null;
+        const memoryUsage: number | null = (stats.performance?.memoryUsage ?? stats.performance?.memory?.usage ?? stats.system?.memoryUsage) ?? null;
+
+        setSystemPerformance({ cpuUsage, memoryUsage });
+
         setData({
           stats: {
-            totalStudents: stats.users?.students || 0,
-            totalEmployers: stats.users?.employers || 0,
-            totalJobs: stats.jobs?.total || 0,
-            pendingApprovals: stats.users?.pendingApprovals || 0
+            totalUsers: usersTotal,
+            activeUsers: usersActive,
+            kycApproved: kycApproved,
+            kycPending: kycPending
           },
           recentActivity: [], // TODO: Implement recent activity API
           systemAlerts: [
             {
               id: 1,
-              title: 'Pending User Approvals',
-              message: `${stats.users?.pendingApprovals || 0} users waiting for approval`,
-              type: stats.users?.pendingApprovals > 0 ? 'warning' : 'success',
+              title: 'KYC Pending',
+              message: `${kycPending} submissions waiting for review`,
+              type: kycPending > 0 ? 'warning' : 'success',
               timestamp: 'Just now',
               isRead: false
             },
             {
               id: 2,
-              title: 'Pending Job Approvals',
-              message: `${stats.jobs?.pendingApprovals || 0} jobs waiting for approval`,
-              type: stats.jobs?.pendingApprovals > 0 ? 'warning' : 'success',
+              title: 'KYC Approved',
+              message: `${kycApproved} submissions approved`,
+              type: 'success',
               timestamp: 'Just now',
               isRead: false
             }
@@ -262,12 +273,13 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
       } catch (error) {
         console.error('Error fetching admin data:', error);
         // Keep default data on error
+        setSystemPerformance({ cpuUsage: null, memoryUsage: null });
         setData({
           stats: {
-            totalStudents: 0,
-            totalEmployers: 0,
-            totalJobs: 0,
-            pendingApprovals: 0
+            totalUsers: 0,
+            activeUsers: 0,
+            kycApproved: 0,
+            kycPending: 0
           },
           recentActivity: [],
           systemAlerts: []
@@ -310,40 +322,40 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+    <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-8 space-y-4 sm:space-y-6">
       {/* Navigation Header */}
-      <div className="flex items-center justify-between bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 gap-3 sticky top-0 z-20">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Link 
             href="/home" 
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+            className="flex items-center gap-2 px-3 py-2 sm:px-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs sm:text-sm font-medium"
           >
             <Shield className="w-4 h-4" />
             Home
           </Link>
           <Link 
             href="/admin-dashboard" 
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+            className="flex items-center gap-2 px-3 py-2 sm:px-4 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-xs sm:text-sm font-medium"
           >
             <FileText className="w-4 h-4" />
             KYC Dashboard
           </Link>
           <button 
             onClick={() => window.history.back()} 
-            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+            className="flex items-center gap-2 px-3 py-2 sm:px-4 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-xs sm:text-sm font-medium"
           >
             <ArrowLeft className="w-4 h-4" />
             Back
           </button>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <h2 className="text-lg font-semibold text-gray-900">{user?.name || user?.email || 'Admin'} Dashboard</h2>
-            <p className="text-sm text-gray-600">System Management & Analytics</p>
+        <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4">
+          <div className="text-left sm:text-right">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900">{user?.name || user?.email || 'Admin'} Dashboard</h2>
+            <p className="text-xs sm:text-sm text-gray-600">System Management & Analytics</p>
           </div>
           <button 
             onClick={handleLogout}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+            className="flex items-center gap-2 px-3 py-2 sm:px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs sm:text-sm font-medium"
           >
             <LogOut className="w-4 h-4" />
             Logout
@@ -356,62 +368,62 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="bg-gradient-to-r from-green-600 to-green-700 rounded-2xl p-6 text-white"
+        className="bg-gradient-to-r from-green-600 to-green-700 rounded-2xl p-4 sm:p-6 text-white"
       >
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-white/20 rounded-full">
-            <Shield className="w-8 h-8" />
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="p-2 sm:p-3 bg-white/20 rounded-full">
+            <Shield className="w-6 h-6 sm:w-8 sm:h-8" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">Welcome back, {user?.name || user?.email || 'Admin'}!</h1>
-            <p className="text-green-100">Here's your system overview and recent activities</p>
+            <h1 className="text-lg sm:text-2xl font-bold">Welcome back, {user?.name || user?.email || 'Admin'}!</h1>
+            <p className="text-green-100 text-xs sm:text-sm">Here's your system overview and recent activities</p>
           </div>
         </div>
       </motion.div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - wired to real admin stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard
-          title="Total Students"
-          value={data.stats.totalStudents.toLocaleString()}
+          title="Total Users"
+          value={(data.stats.totalUsers || 0).toLocaleString()}
           icon={Users}
           color="blue"
-          change="+12 this week"
+          change="Platform total"
           changeType="positive"
         />
         <StatsCard
-          title="Total Employers"
-          value={data.stats.totalEmployers}
-          icon={Building}
+          title="Active Users"
+          value={(data.stats.activeUsers || 0).toLocaleString()}
+          icon={Activity}
           color="green"
-          change="+3 this week"
+          change="Currently active"
           changeType="positive"
         />
         <StatsCard
-          title="Total Jobs"
-          value={data.stats.totalJobs}
-          icon={BookOpen}
+          title="KYC Approved"
+          value={(data.stats.kycApproved || 0).toLocaleString()}
+          icon={CheckCircle}
           color="purple"
-          change="+5 this month"
+          change="Verified"
           changeType="positive"
         />
         <StatsCard
-          title="Pending Approvals"
-          value={data.stats.pendingApprovals}
-          icon={AlertTriangle}
+          title="KYC Pending"
+          value={(data.stats.kycPending || 0).toLocaleString()}
+          icon={Clock}
           color="orange"
-          change="Requires attention"
+          change="Needs review"
           changeType="negative"
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Recent Activity */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6"
+          className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6"
         >
           <div className="flex items-center gap-2 mb-4">
             <Activity className="w-5 h-5 text-green-600" />
@@ -438,7 +450,7 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6"
+          className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6"
         >
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle className="w-5 h-5 text-orange-600" />
@@ -464,10 +476,10 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.3 }}
-        className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6"
+        className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6"
       >
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           {quickActions.map((action) => (
             <a
               key={action.name}
@@ -485,28 +497,28 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
         </div>
       </motion.div>
 
-      {/* Performance Overview */}
+      {/* Performance Overview - uses CPU/Memory from /api/admin/stats */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.4 }}
-        className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6"
+        className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6"
       >
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp className="w-5 h-5 text-blue-600" />
           <h2 className="text-lg font-semibold text-gray-900">System Performance</h2>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
           <div className="text-center p-4 bg-blue-50 rounded-lg">
-            <div className="text-2xl font-bold text-blue-600">98.5%</div>
-            <div className="text-sm text-blue-600">Uptime</div>
+            <div className="text-2xl font-bold text-blue-600">{systemPerformance.cpuUsage ?? '—'}%</div>
+            <div className="text-sm text-blue-600">CPU Usage</div>
           </div>
           <div className="text-center p-4 bg-green-50 rounded-lg">
-            <div className="text-2xl font-bold text-green-600">2.3s</div>
-            <div className="text-sm text-green-600">Avg Response</div>
+            <div className="text-2xl font-bold text-green-600">{systemPerformance.memoryUsage ?? '—'}%</div>
+            <div className="text-sm text-green-600">Memory Usage</div>
           </div>
           <div className="text-center p-4 bg-purple-50 rounded-lg">
-            <div className="text-2xl font-bold text-purple-600">1,247</div>
+            <div className="text-2xl font-bold text-purple-600">{(data.stats.activeUsers || 0).toLocaleString()}</div>
             <div className="text-sm text-purple-600">Active Users</div>
           </div>
         </div>
@@ -517,9 +529,9 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.5 }}
-        className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6"
+        className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6"
       >
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-6">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-orange-100 rounded-lg">
               <FileText className="w-6 h-6 text-orange-600" />
@@ -531,7 +543,7 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
           </div>
           <button 
             onClick={fetchKYCData}
-            className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
+            className="flex items-center gap-2 px-3 py-2 sm:px-4 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-xs sm:text-sm font-medium"
           >
             <RefreshCw className="w-4 h-4" />
             Refresh
@@ -539,39 +551,39 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
         </div>
 
         {/* KYC Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-blue-50 p-4 rounded-lg">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
+          <div className="bg-blue-50 p-3 sm:p-4 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-600">Total KYC</p>
-                <p className="text-2xl font-bold text-blue-700">{kycStats.total}</p>
+                <p className="text-xs sm:text-sm font-medium text-blue-600">Total KYC</p>
+                <p className="text-xl sm:text-2xl font-bold text-blue-700">{kycStats.total}</p>
               </div>
               <FileText className="w-8 h-8 text-blue-600" />
             </div>
           </div>
-          <div className="bg-yellow-50 p-4 rounded-lg">
+          <div className="bg-yellow-50 p-3 sm:p-4 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-yellow-600">Pending Review</p>
-                <p className="text-2xl font-bold text-yellow-700">{kycStats.pending}</p>
+                <p className="text-xs sm:text-sm font-medium text-yellow-600">Pending Review</p>
+                <p className="text-xl sm:text-2xl font-bold text-yellow-700">{kycStats.pending}</p>
               </div>
               <Clock className="w-8 h-8 text-yellow-600" />
             </div>
           </div>
-          <div className="bg-green-50 p-4 rounded-lg">
+          <div className="bg-green-50 p-3 sm:p-4 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-green-600">Approved</p>
-                <p className="text-2xl font-bold text-green-700">{kycStats.approved}</p>
+                <p className="text-xs sm:text-sm font-medium text-green-600">Approved</p>
+                <p className="text-xl sm:text-2xl font-bold text-green-700">{kycStats.approved}</p>
               </div>
               <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
           </div>
-          <div className="bg-red-50 p-4 rounded-lg">
+          <div className="bg-red-50 p-3 sm:p-4 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-red-600">Rejected</p>
-                <p className="text-2xl font-bold text-red-700">{kycStats.rejected}</p>
+                <p className="text-xs sm:text-sm font-medium text-red-600">Rejected</p>
+                <p className="text-xl sm:text-2xl font-bold text-red-700">{kycStats.rejected}</p>
               </div>
               <XCircle className="w-8 h-8 text-red-600" />
             </div>
@@ -579,7 +591,7 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
         </div>
 
         {/* Search and Filter */}
-        <div className="flex flex-col md:flex-row gap-4 mb-6">
+        <div className="flex flex-col md:flex-row gap-3 sm:gap-4 mb-4 sm:mb-6">
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -588,7 +600,7 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
                 placeholder="Search KYC submissions..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
               />
             </div>
           </div>
@@ -596,7 +608,7 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
             >
               <option value="all">All Status</option>
               <option value="pending">Pending</option>
@@ -607,22 +619,63 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
           </div>
         </div>
 
-        {/* KYC Submissions Table */}
+        {/* KYC Submissions */}
         {kycLoading ? (
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
+          <>
+            {/* Mobile: Card list */}
+            <div className="sm:hidden space-y-3">
+              {filteredKYCSubmissions.map((kyc) => (
+                <div key={kyc._id} className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-gray-900">{kyc.fullName}</div>
+                      <div className="text-xs text-gray-500">{kyc.email}</div>
+                    </div>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(kyc.verificationStatus)}`}>
+                      {getStatusIcon(kyc.verificationStatus)}
+                      <span className="ml-1 capitalize">{kyc.verificationStatus}</span>
+                    </span>
+                  </div>
+                  <div className="mt-2 text-xs text-gray-700">{kyc.college}</div>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {kyc.aadharCard && (
+                      <span className="px-2 py-0.5 bg-green-100 text-green-800 text-[11px] rounded-full">Aadhaar</span>
+                    )}
+                    {kyc.collegeIdCard && (
+                      <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[11px] rounded-full">College ID</span>
+                    )}
+                  </div>
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="text-xs text-gray-500">{new Date(kyc.submittedAt).toLocaleDateString()}</span>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => openKYCModal(kyc._id)} className="px-2 py-1 text-xs text-blue-600 bg-blue-50 rounded hover:bg-blue-100">View</button>
+                      {(kyc.verificationStatus === 'pending' || kyc.verificationStatus === 'in-review') && (
+                        <>
+                          <button onClick={() => openApprovalModal(kyc._id, 'approve')} className="px-2 py-1 text-xs text-white bg-green-600 rounded hover:bg-green-700">Approve</button>
+                          <button onClick={() => openApprovalModal(kyc._id, 'reject')} className="px-2 py-1 text-xs text-red-700 bg-red-100 rounded hover:bg-red-200">Reject</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tablet/Desktop: Table */}
+            <div className="hidden sm:block overflow-x-auto -mx-3 sm:mx-0">
+              <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-xs">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">College</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Documents</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  <th className="px-4 sm:px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                  <th className="px-4 sm:px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">College</th>
+                  <th className="px-4 sm:px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Documents</th>
+                  <th className="px-4 sm:px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-4 sm:px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Submitted</th>
+                  <th className="px-4 sm:px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -632,33 +685,33 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
                     className="hover:bg-gray-50"
                     whileHover={{ backgroundColor: '#f9fafb' }}
                   >
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 sm:px-6 py-3 whitespace-nowrap">
                       <div>
                         <div className="text-sm font-medium text-gray-900">{kyc.fullName}</div>
-                        <div className="text-sm text-gray-500">{kyc.email}</div>
+                        <div className="text-xs text-gray-500">{kyc.email}</div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{kyc.college}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex gap-1">
+                    <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-sm text-gray-900">{kyc.college}</td>
+                    <td className="px-4 sm:px-6 py-3 whitespace-nowrap">
+                      <div className="flex flex-wrap gap-1">
                         {kyc.aadharCard && (
-                          <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Aadhaar</span>
+                          <span className="px-2 py-0.5 bg-green-100 text-green-800 text-[11px] rounded-full">Aadhaar</span>
                         )}
                         {kyc.collegeIdCard && (
-                          <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">College ID</span>
+                          <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[11px] rounded-full">College ID</span>
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(kyc.verificationStatus)}`}>
+                    <td className="px-4 sm:px-6 py-3 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(kyc.verificationStatus)}`}>
                         {getStatusIcon(kyc.verificationStatus)}
-                        <span className="ml-1">{kyc.verificationStatus}</span>
+                        <span className="ml-1 capitalize">{kyc.verificationStatus}</span>
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-sm text-gray-500">
                       {new Date(kyc.submittedAt).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-sm font-medium">
                       <div className="flex gap-2">
                         <button
                           onClick={() => openKYCModal(kyc._id)}
@@ -692,6 +745,7 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
               </tbody>
             </table>
           </div>
+          </>
         )}
 
         {filteredKYCSubmissions.length === 0 && !kycLoading && (

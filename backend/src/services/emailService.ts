@@ -35,6 +35,9 @@ export const createTransporter = (config: {
       user: config.user || process.env.EMAIL_USER,
       pass: config.pass || process.env.EMAIL_PASS
     },
+    pool: true,
+    maxConnections: 3,
+    maxMessages: 50,
     // Gmail specific settings
     service: 'gmail',
     tls: {
@@ -121,9 +124,6 @@ export const sendOTPEmail = async (email: string, otp: string, purpose: 'verific
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS
     });
-
-    await transporter1.verify();
-    console.log('✅ Transporter verified successfully');
     
     const result = await transporter1.sendMail(mailOptions);
     console.log('✅ Email sent successfully:', {
@@ -151,9 +151,6 @@ export const sendOTPEmail = async (email: string, otp: string, purpose: 'verific
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS
     });
-
-    await transporter2.verify();
-    console.log('✅ Transporter verified successfully');
     
     const result = await transporter2.sendMail(mailOptions);
     console.log('✅ Email sent successfully:', {
@@ -181,9 +178,6 @@ export const sendOTPEmail = async (email: string, otp: string, purpose: 'verific
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS
     });
-
-    await transporter3.verify();
-    console.log('✅ Transporter verified successfully');
     
     const result = await transporter3.sendMail(mailOptions);
     console.log('✅ Email sent successfully:', {

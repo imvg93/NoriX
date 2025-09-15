@@ -231,14 +231,24 @@ class ApiService {
     });
   }
 
-  async sendOTP(email: string, purpose: 'verification' | 'password-reset' | 'login') {
+  async sendOTP(
+    email: string,
+    purpose: 'verification' | 'password-reset' | 'login' | 'signup',
+    userType?: 'student' | 'employer' | 'admin'
+  ) {
+    const body: any = { email, purpose };
+    if (userType) body.userType = userType;
     return this.request('/auth/send-otp', {
       method: 'POST',
-      body: JSON.stringify({ email, purpose }),
+      body: JSON.stringify(body),
     });
   }
 
-  async verifyOTP(email: string, otp: string, purpose: 'verification' | 'password-reset' | 'login') {
+  async verifyOTP(
+    email: string,
+    otp: string,
+    purpose: 'verification' | 'password-reset' | 'login' | 'signup'
+  ) {
     return this.request('/auth/verify-otp', {
       method: 'POST',
       body: JSON.stringify({ email, otp, purpose }),

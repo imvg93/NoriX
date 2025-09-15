@@ -177,6 +177,11 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
   // Generate token
   const token = generateToken((user._id as any).toString());
 
+  // Set headers BEFORE sending body
+  res.setHeader('X-OTP-Status', 'verified');
+  res.setHeader('X-Verification-Status', 'success');
+  res.setHeader('X-User-Type', user.userType);
+
   // Send response
   sendSuccessResponse(res, {
     user: {
@@ -362,32 +367,47 @@ router.post('/login', asyncHandler(async (req: express.Request, res: express.Res
 // @access  Public
 router.post('/login-request-otp', asyncHandler(async (req: express.Request, res: express.Response) => {
   const { email, userType } = req.body;
+  const normalizedEmail = String(email || '').toLowerCase().trim();
+  const normalizedUserType = String(userType || '').toLowerCase().trim();
+
+  console.log('🔐 OTP Login Request:', {
+    email: normalizedEmail,
+    requestedUserType: normalizedUserType,
+    allowedUserTypes: ['student', 'employer', 'admin'],
+    db: (mongoose.connection as any)?.db?.databaseName,
+    host: (mongoose.connection as any)?.host
+  });
 
   // Validate input
-  if (!email || !userType) {
+  if (!normalizedEmail || !normalizedUserType) {
     throw new ValidationError('Email and user type are required');
   }
 
   // Validate user type
-  if (!['student', 'employer', 'admin'].includes(userType)) {
+  if (!['student', 'employer', 'admin'].includes(normalizedUserType)) {
     throw new ValidationError('Invalid user type');
   }
 
   // Admin email restriction - only allow specific admin emails
   const allowedAdminEmails = ['mework2003@gmail.com', 'admin@studentjobs.com'];
-  if (userType === 'admin' && !allowedAdminEmails.includes(email)) {
+  if (normalizedUserType === 'admin' && !allowedAdminEmails.includes(normalizedEmail)) {
     throw new ValidationError('Access denied. Only authorized admin can log in.');
   }
 
   // Find user by email
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email: normalizedEmail });
   if (!user) {
     throw new ValidationError('No account found with this email address');
   }
 
   // Check if user type matches
-  if (user.userType !== userType) {
-    throw new ValidationError('Invalid user type for this account');
+  if ((user.userType || '').toLowerCase().trim() !== normalizedUserType) {
+    console.log('❌ User type mismatch during OTP request:', {
+      email: normalizedEmail,
+      requestedUserType: normalizedUserType,
+      dbUserType: user.userType
+    });
+    throw new ValidationError(`userType mismatch: expected ${user.userType}, got ${normalizedUserType}`);
   }
 
   // Check if user is active
@@ -398,35 +418,39 @@ router.post('/login-request-otp', asyncHandler(async (req: express.Request, res:
   // Send OTP for login
   const otp = generateOTP();
   // Remove any previous login OTPs for this email to prevent conflicts
-  await OTP.deleteMany({ email: email.toLowerCase(), purpose: 'login' });
+  await OTP.deleteMany({ email: normalizedEmail, purpose: 'login' });
 
   // Save OTP to database for login purpose
   await OTP.create({
-    email,
+    email: normalizedEmail,
     otp,
     purpose: 'login'
   });
 
-  console.log('📧 OTP saved to database:', { email, otp, purpose: 'login' });
+  console.log('📧 OTP saved to database:', { email: normalizedEmail, otp, purpose: 'login' });
 
-  const emailSent = await sendOTPEmail(email, otp, 'login');
-  if (!emailSent) {
-    const configStatus = getEmailConfigStatus();
-    console.error('❌ Failed to send login OTP:', configStatus);
-    console.log('🧪 For testing, use OTP: 123456');
-    // Don't throw error, just log the test OTP
-  }
+  // Send email in background to reduce API latency
+  Promise.resolve().then(async () => {
+    const emailSent = await sendOTPEmail(normalizedEmail, otp, 'login');
+    if (!emailSent) {
+      const configStatus = getEmailConfigStatus();
+      console.error('❌ Failed to send login OTP:', configStatus);
+      console.log('🧪 For testing, use OTP: 123456');
+    }
+  }).catch((err) => {
+    console.error('❌ Background OTP email send error:', err);
+  });
+
+  // Add CORS headers for OTP response BEFORE sending body
+  res.setHeader('X-OTP-Status', 'sent');
+  res.setHeader('X-User-Type', normalizedUserType);
+  res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status, X-User-Type');
 
   sendSuccessResponse(res, {
     message: 'OTP sent to your email address',
-    email: email,
-    userType: userType
+    email: normalizedEmail,
+    userType: normalizedUserType
   }, 'OTP sent successfully');
-  
-  // Add CORS headers for OTP response
-  res.setHeader('X-OTP-Status', 'sent');
-  res.setHeader('X-User-Type', userType);
-  res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status, X-User-Type');
 }));
 
 // @route   POST /api/auth/login-verify-otp
@@ -434,32 +458,39 @@ router.post('/login-request-otp', asyncHandler(async (req: express.Request, res:
 // @access  Public
 router.post('/login-verify-otp', asyncHandler(async (req: express.Request, res: express.Response) => {
   const { email, userType, otp } = req.body;
+  const normalizedEmail = String(email || '').toLowerCase().trim();
+  const normalizedUserType = String(userType || '').toLowerCase().trim();
 
   // Validate input
-  if (!email || !userType || !otp) {
+  if (!normalizedEmail || !normalizedUserType || !otp) {
     throw new ValidationError('Email, user type, and OTP are required');
   }
 
   // Validate user type
-  if (!['student', 'employer', 'admin'].includes(userType)) {
+  if (!['student', 'employer', 'admin'].includes(normalizedUserType)) {
     throw new ValidationError('Invalid user type');
   }
 
   // Admin email restriction - only allow specific admin emails
   const allowedAdminEmails = ['mework2003@gmail.com', 'admin@studentjobs.com'];
-  if (userType === 'admin' && !allowedAdminEmails.includes(email)) {
+  if (normalizedUserType === 'admin' && !allowedAdminEmails.includes(normalizedEmail)) {
     throw new ValidationError('Access denied. Only authorized admin can log in.');
   }
 
   // Find user by email
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email: normalizedEmail });
   if (!user) {
     throw new ValidationError('No account found with this email address');
   }
 
   // Check if user type matches
-  if (user.userType !== userType) {
-    throw new ValidationError('Invalid user type for this account');
+  if ((user.userType || '').toLowerCase().trim() !== normalizedUserType) {
+    console.log('❌ User type mismatch during OTP verification:', {
+      email: normalizedEmail,
+      requestedUserType: normalizedUserType,
+      dbUserType: user.userType
+    });
+    throw new ValidationError(`userType mismatch: expected ${user.userType}, got ${normalizedUserType}`);
   }
 
   // Check if user is active
@@ -468,10 +499,12 @@ router.post('/login-verify-otp', asyncHandler(async (req: express.Request, res: 
   }
 
   // Verify OTP
-  const otpValid = await verifyOTP(email, otp, 'login');
+  const otpValid = await verifyOTP(normalizedEmail, otp, 'login');
   
   // For testing: accept "123456" as a valid OTP regardless of database
-  const isTestOTP = otp === '123456';
+  const allowTestOTP = process.env.ALLOW_TEST_OTP === 'true';
+  const testOTPCode = process.env.TEST_OTP_CODE || '123456';
+  const isTestOTP = allowTestOTP && otp === testOTPCode;
   
   if (!otpValid && !isTestOTP) {
     throw new ValidationError('Invalid or expired OTP. Please request a new one.');
@@ -479,7 +512,7 @@ router.post('/login-verify-otp', asyncHandler(async (req: express.Request, res: 
   
   // If using test OTP, log it for debugging
   if (isTestOTP) {
-    console.log('🧪 Test OTP used for login:', email);
+    console.log('🧪 Test OTP used for login:', normalizedEmail);
   }
 
   // Generate token
@@ -506,10 +539,7 @@ router.post('/login-verify-otp', asyncHandler(async (req: express.Request, res: 
     token
   }, 'Login successful');
   
-  // Add CORS headers for OTP verification response
-  res.setHeader('X-OTP-Status', 'verified');
-  res.setHeader('X-Verification-Status', 'success');
-  res.setHeader('X-User-Type', user.userType);
+  // Expose headers
   res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status, X-Verification-Status, X-User-Type');
 }));
 
@@ -622,20 +652,37 @@ router.post('/change-password', authenticateToken, asyncHandler(async (req: Auth
 // @desc    Send OTP for email verification
 // @access  Public
 router.post('/send-otp', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { email, purpose = 'verification' } = req.body;
+  const { email, purpose = 'verification', userType } = req.body as { email: string; purpose?: string; userType?: string };
+  const normalizedEmail = String(email || '').toLowerCase().trim();
+  let normalizedPurpose = String(purpose || 'verification').toLowerCase().trim();
+  const normalizedUserType = typeof userType === 'string' ? String(userType).toLowerCase().trim() : undefined;
 
-  if (!email) {
+  console.log('📨 Send OTP request:', {
+    email: normalizedEmail,
+    purpose: normalizedPurpose,
+    userType: normalizedUserType,
+    allowedPurposes: ['verification', 'password-reset', 'signup', 'login'],
+    db: (mongoose.connection as any)?.db?.databaseName,
+    host: (mongoose.connection as any)?.host
+  });
+
+  if (!normalizedEmail) {
     throw new ValidationError('Email is required');
   }
 
-  if (!['verification', 'password-reset'].includes(purpose)) {
-    throw new ValidationError('Invalid purpose');
+  // Support alias 'signup' -> 'verification'
+  if (normalizedPurpose === 'signup') normalizedPurpose = 'verification';
+
+  // Accept 'login' here as well (when userType is provided), otherwise keep existing valid purposes
+  const allowedPurposes = ['verification', 'password-reset', 'login'];
+  if (!allowedPurposes.includes(normalizedPurpose)) {
+    throw new ValidationError(`Invalid purpose. Allowed: ${allowedPurposes.join(', ')}, also supports alias 'signup' for 'verification'`);
   }
 
   // For verification during signup, we don't need to check if user exists
   // For password reset, we check if user exists but don't reveal it
-  if (purpose === 'password-reset') {
-    const user = await User.findOne({ email });
+  if (normalizedPurpose === 'password-reset') {
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
       // Don't reveal if user exists or not for security
       sendSuccessResponse(res, {}, 'If an account with that email exists, an OTP has been sent');
@@ -643,67 +690,113 @@ router.post('/send-otp', asyncHandler(async (req: express.Request, res: express.
     }
   }
 
+  // If purpose is 'login' via this endpoint, enforce minimal login validations to ensure consistency
+  if (normalizedPurpose === 'login') {
+    if (!normalizedUserType) {
+      throw new ValidationError('userType is required when purpose is login');
+    }
+    if (!['student', 'employer', 'admin'].includes(normalizedUserType)) {
+      throw new ValidationError('Invalid user type');
+    }
+    const allowedAdminEmails = ['mework2003@gmail.com', 'admin@studentjobs.com'];
+    if (normalizedUserType === 'admin' && !allowedAdminEmails.includes(normalizedEmail)) {
+      throw new ValidationError('Access denied. Only authorized admin can log in.');
+    }
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      throw new ValidationError('No account found with this email address');
+    }
+    if ((user.userType || '').toLowerCase().trim() !== normalizedUserType) {
+      console.log('❌ User type mismatch during send-otp (login purpose):', {
+        email: normalizedEmail,
+        requestedUserType: normalizedUserType,
+        dbUserType: user.userType
+      });
+      throw new ValidationError(`userType mismatch: expected ${user.userType}, got ${normalizedUserType}`);
+    }
+    if (!user.isActive) {
+      throw new ValidationError('Account is deactivated');
+    }
+    // Clean prior login OTPs
+    await OTP.deleteMany({ email: normalizedEmail, purpose: 'login' });
+  }
+
   // Generate OTP
   const otp = generateOTP();
 
   // Save OTP to database
   await OTP.create({
-    email,
+    email: normalizedEmail,
     otp,
-    purpose
+    purpose: normalizedPurpose as any
   });
 
-  // Send OTP email
-  const emailSent = await sendOTPEmail(email, otp, purpose);
+  // Send OTP email in background
+  Promise.resolve().then(async () => {
+    const emailSent = await sendOTPEmail(normalizedEmail, otp, normalizedPurpose as any);
+    if (!emailSent) {
+      const configStatus = getEmailConfigStatus();
+      console.error('❌ Failed to send OTP:', configStatus);
+      console.log('🧪 For testing, you may use the configured test OTP if enabled');
+    }
+  }).catch((err) => {
+    console.error('❌ Background OTP email send error:', err);
+  });
 
-  if (!emailSent) {
-    const configStatus = getEmailConfigStatus();
-    console.error('❌ Failed to send OTP:', configStatus);
-    throw new ValidationError('Failed to send OTP email. Please check your email configuration.');
-  }
-
-  sendSuccessResponse(res, {}, 'OTP sent successfully');
-  
-  // Add CORS headers for OTP sending
+  // Add CORS headers BEFORE sending body
   res.setHeader('X-OTP-Status', 'sent');
   res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status');
+  
+  sendSuccessResponse(res, {}, 'OTP sent successfully');
 }));
 
 // @route   POST /api/auth/verify-otp
 // @desc    Verify OTP for email verification
 // @access  Public
 router.post('/verify-otp', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { email, otp, purpose = 'verification' } = req.body;
+  const { email, otp, purpose = 'verification' } = req.body as { email: string; otp: string; purpose?: string };
+  const normalizedEmail = String(email || '').toLowerCase().trim();
+  let normalizedPurpose = String(purpose || 'verification').toLowerCase().trim();
 
-  if (!email || !otp) {
+  if (!normalizedEmail || !otp) {
     throw new ValidationError('Email and OTP are required');
   }
 
-  if (!['verification', 'password-reset'].includes(purpose)) {
+  if (normalizedPurpose === 'signup') normalizedPurpose = 'verification';
+  if (!['verification', 'password-reset'].includes(normalizedPurpose)) {
     throw new ValidationError('Invalid purpose');
   }
 
   // Verify OTP
-  const isValid = await verifyOTP(email, otp, purpose);
+  const isValid = await verifyOTP(normalizedEmail, otp, normalizedPurpose as any);
 
-  if (!isValid) {
+  // Optional test OTP support for verification flows
+  const allowTestOTP = process.env.ALLOW_TEST_OTP === 'true';
+  const testOTPCode = process.env.TEST_OTP_CODE || '123456';
+  const isTestOTP = allowTestOTP && otp === testOTPCode;
+
+  if (!isValid && !isTestOTP) {
     throw new ValidationError('Invalid or expired OTP');
   }
 
-  if (purpose === 'verification') {
+  if (isTestOTP) {
+    console.log('🧪 Test OTP used for purpose:', normalizedPurpose, ' email:', normalizedEmail);
+  }
+
+  if (normalizedPurpose === 'verification') {
     // Mark user as verified
     await User.findOneAndUpdate(
-      { email },
+      { email: normalizedEmail },
       { emailVerified: true }
     );
   }
 
-  sendSuccessResponse(res, {}, 'OTP verified successfully');
-  
-  // Add CORS headers for OTP verification
+  // Add headers BEFORE sending body
   res.setHeader('X-OTP-Status', 'verified');
   res.setHeader('X-Verification-Status', 'email-verified');
   res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status, X-Verification-Status');
+  
+  sendSuccessResponse(res, {}, 'OTP verified successfully');
 }));
 
 // @route   POST /api/auth/verify-phone
