@@ -23,9 +23,34 @@ Set these in your Railway project dashboard:
 
 1. Connect your GitHub repository to Railway
 2. Set the root directory to the project root
-3. Railway will automatically detect the Node.js project
-4. Set the environment variables in Railway dashboard
-5. Deploy!
+3. Railway will detect the Dockerfile at repo root and build using Docker
+4. Ensure the following build settings (if customizing):
+   - Dockerfile: `Dockerfile`
+   - Build context: repo root
+5. Set the environment variables in Railway dashboard
+6. Deploy!
+
+## Docker Build
+
+This repository includes a production-ready Dockerfile optimized for Railway:
+
+- npm registry is explicitly set to `https://registry.npmjs.org/` to avoid intermittent ECONNRESET during dependency install.
+- Uses `npm install --omit=dev` instead of `npm ci` to prevent strict lockfile failures.
+- Caches npm downloads via `--mount=type=cache,target=/root/.npm` for faster builds.
+- Multi-stage: installs deps, builds backend and frontend, and ships only the build output.
+
+## Runtime
+
+The container starts the backend with `node backend/dist/index.js`.
+
+Expose and map port(s) as needed (Dockerfile exposes 3000 and 8080).
+
+Required environment variables:
+- `MONGODB_URI`
+- `JWT_SECRET`
+
+Optional environment variables:
+- `EMAIL_USER`, `EMAIL_PASS`
 
 ## CORS Configuration
 
