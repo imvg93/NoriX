@@ -13,7 +13,7 @@ FROM base AS deps
 
 # Leverage build cache for npm modules
 # npm cache directory on alpine is under /root/.npm
-RUN --mount=type=cache,target=/root/.npm echo "Using cached npm directory"
+RUN --mount=type=cache,id=npm-cache,target=/root/.npm echo "Using cached npm directory"
 
 # Copy only manifests for deterministic install layer
 COPY package.json package-lock.json ./
@@ -22,7 +22,7 @@ COPY frontend/package.json ./frontend/package.json
 
 # Install all dependencies (including dev) for building
 # Avoid `npm ci`; use `npm install` for tolerance to lockfile drift
-RUN --mount=type=cache,target=/root/.npm npm install
+RUN --mount=type=cache,id=npm-cache,target=/root/.npm npm install
 
 FROM base AS build
 
@@ -48,7 +48,7 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 COPY backend/package.json ./backend/package.json
 COPY frontend/package.json ./frontend/package.json
-RUN --mount=type=cache,target=/root/.npm npm install --omit=dev
+RUN --mount=type=cache,id=npm-cache-prod,target=/root/.npm npm install --omit=dev
 
 # Copy built artifacts and only necessary runtime files
 COPY --from=build /app/backend/dist ./backend/dist
