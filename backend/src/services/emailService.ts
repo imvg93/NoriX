@@ -3,6 +3,14 @@ import { OTP } from '../models/OTP';
 
 // Enhanced logging for debugging
 const logEmailError = (attempt: number, error: any, config: any) => {
+  const cfgHost = config.host;
+  const cfgPort = config.port;
+  const cfgSecure = config.secure;
+  const userFromAuth = config.auth?.user;
+  const passFromAuth = config.auth?.pass;
+  const userFromRoot = config.user;
+  const passFromRoot = config.pass;
+
   console.error(`📧 Email Error (Attempt ${attempt}):`, {
     error: error.message || error,
     code: error.code,
@@ -10,11 +18,11 @@ const logEmailError = (attempt: number, error: any, config: any) => {
     responseCode: error.responseCode,
     response: error.response,
     config: {
-      host: config.host,
-      port: config.port,
-      secure: config.secure,
-      user: config.auth?.user ? '***' : 'NOT_SET',
-      pass: config.auth?.pass ? '***' : 'NOT_SET'
+      host: cfgHost,
+      port: cfgPort,
+      secure: cfgSecure,
+      user: (userFromAuth || userFromRoot) ? '***' : 'NOT_SET',
+      pass: (passFromAuth || passFromRoot) ? '***' : 'NOT_SET'
     }
   });
 };

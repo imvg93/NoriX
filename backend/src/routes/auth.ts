@@ -400,6 +400,13 @@ router.post('/login-request-otp', asyncHandler(async (req: express.Request, res:
     throw new ValidationError('No account found with this email address');
   }
 
+  console.log('✅ User located for OTP login:', {
+    id: (user._id as any)?.toString?.() || 'unknown',
+    email: user.email,
+    userType: user.userType,
+    isActive: user.isActive
+  });
+
   // Check if user type matches
   if ((user.userType || '').toLowerCase().trim() !== normalizedUserType) {
     console.log('❌ User type mismatch during OTP request:', {
@@ -417,17 +424,32 @@ router.post('/login-request-otp', asyncHandler(async (req: express.Request, res:
 
   // Send OTP for login
   const otp = generateOTP();
-  // Remove any previous login OTPs for this email to prevent conflicts
-  await OTP.deleteMany({ email: normalizedEmail, purpose: 'login' });
+  try {
+    // Remove any previous login OTPs for this email to prevent conflicts
+    const delResult = await OTP.deleteMany({ email: normalizedEmail, purpose: 'login' });
+    console.log('🧹 Cleaned previous login OTPs:', { email: normalizedEmail, deletedCount: delResult.deletedCount });
 
-  // Save OTP to database for login purpose
-  await OTP.create({
-    email: normalizedEmail,
-    otp,
-    purpose: 'login'
-  });
+    // Save OTP to database for login purpose
+    const otpDoc = await OTP.create({
+      email: normalizedEmail,
+      otp,
+      purpose: 'login'
+    });
 
-  console.log('📧 OTP saved to database:', { email: normalizedEmail, otp, purpose: 'login' });
+    console.log('📧 OTP saved to database:', {
+      email: normalizedEmail,
+      purpose: 'login',
+      otp,
+      otpId: (otpDoc as any)?._id?.toString?.(),
+      expiresAt: (otpDoc as any)?.expiresAt
+    });
+  } catch (dbErr: any) {
+    console.error('❌ Failed to persist OTP for login:', {
+      email: normalizedEmail,
+      error: dbErr?.message || dbErr
+    });
+    throw new ValidationError('Unable to generate OTP at the moment. Please try again.');
+  }
 
   // Send email in background to reduce API latency
   Promise.resolve().then(async () => {
@@ -437,6 +459,10 @@ router.post('/login-request-otp', asyncHandler(async (req: express.Request, res:
       console.error('❌ Failed to send login OTP:', configStatus);
       console.log('🧪 For testing, use OTP: 123456');
     }
+    console.log('📨 Login OTP dispatch attempted (see prior logs for provider response).', {
+      email: normalizedEmail,
+      purpose: 'login'
+    });
   }).catch((err) => {
     console.error('❌ Background OTP email send error:', err);
   });
@@ -725,11 +751,27 @@ router.post('/send-otp', asyncHandler(async (req: express.Request, res: express.
   const otp = generateOTP();
 
   // Save OTP to database
-  await OTP.create({
-    email: normalizedEmail,
-    otp,
-    purpose: normalizedPurpose as any
-  });
+  try {
+    const otpDoc = await OTP.create({
+      email: normalizedEmail,
+      otp,
+      purpose: normalizedPurpose as any
+    });
+    console.log('📧 OTP saved to database:', {
+      email: normalizedEmail,
+      purpose: normalizedPurpose,
+      otp,
+      otpId: (otpDoc as any)?._id?.toString?.(),
+      expiresAt: (otpDoc as any)?.expiresAt
+    });
+  } catch (dbErr: any) {
+    console.error('❌ Failed to persist OTP:', {
+      email: normalizedEmail,
+      purpose: normalizedPurpose,
+      error: dbErr?.message || dbErr
+    });
+    throw new ValidationError('Unable to generate OTP at the moment. Please try again.');
+  }
 
   // Send OTP email in background
   Promise.resolve().then(async () => {
@@ -739,6 +781,10 @@ router.post('/send-otp', asyncHandler(async (req: express.Request, res: express.
       console.error('❌ Failed to send OTP:', configStatus);
       console.log('🧪 For testing, you may use the configured test OTP if enabled');
     }
+    console.log('📨 OTP dispatch attempted (see prior logs for provider response).', {
+      email: normalizedEmail,
+      purpose: normalizedPurpose
+    });
   }).catch((err) => {
     console.error('❌ Background OTP email send error:', err);
   });
@@ -769,6 +815,11 @@ router.post('/verify-otp', asyncHandler(async (req: express.Request, res: expres
 
   // Verify OTP
   const isValid = await verifyOTP(normalizedEmail, otp, normalizedPurpose as any);
+  console.log('🔎 OTP verification result:', {
+    email: normalizedEmail,
+    purpose: normalizedPurpose,
+    isValid
+  });
 
   // Optional test OTP support for verification flows
   const allowTestOTP = process.env.ALLOW_TEST_OTP === 'true';
@@ -839,5 +890,38 @@ router.get('/test-cors', cors(otpCorsOptions), (req: express.Request, res: expre
   res.setHeader('X-Verification-Status', 'cors-enabled');
   res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status, X-Verification-Status');
 });
+
+// Simple SMTP debug endpoint for production checks
+router.get('/debug-email', asyncHandler(async (req: express.Request, res: express.Response) => {
+  try {
+    const { createTransporter } = await import('../services/emailService');
+    const { getEmailConfigStatus } = await import('../services/emailService');
+
+    const status = getEmailConfigStatus();
+    const transporter = createTransporter({
+      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+      port: Number(process.env.EMAIL_PORT) || 587,
+      secure: process.env.EMAIL_SECURE === 'true',
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    });
+
+    const verifyResult = await transporter.verify().then(() => ({ ok: true })).catch((e: any) => ({ ok: false, error: e?.message || String(e) }));
+
+    sendSuccessResponse(res, {
+      env: {
+        EMAIL_HOST: process.env.EMAIL_HOST || 'smtp.gmail.com',
+        EMAIL_PORT: process.env.EMAIL_PORT || '587',
+        EMAIL_SECURE: process.env.EMAIL_SECURE || 'false',
+        EMAIL_USER_SET: !!process.env.EMAIL_USER,
+        EMAIL_PASS_SET: !!process.env.EMAIL_PASS
+      },
+      status,
+      verify: verifyResult
+    }, 'SMTP debug');
+  } catch (e: any) {
+    throw new ValidationError(e?.message || 'SMTP verify failed');
+  }
+}));
 
 export default router;
