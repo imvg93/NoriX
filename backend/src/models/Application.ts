@@ -1,18 +1,22 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IApplication extends Document {
-  job: mongoose.Types.ObjectId;
-  student: mongoose.Types.ObjectId;
-  employer: mongoose.Types.ObjectId;
+  applicationId: mongoose.Types.ObjectId; // Auto-generated ID
+  jobId: mongoose.Types.ObjectId; // Reference to job
+  studentId: mongoose.Types.ObjectId; // Reference to student
+  status: 'applied' | 'accepted' | 'rejected'; // Simplified status as per requirements
+  appliedAt: Date; // When student applied
+  
+  // Additional fields for enhanced functionality
+  job?: mongoose.Types.ObjectId;
+  student?: mongoose.Types.ObjectId;
+  employer?: mongoose.Types.ObjectId;
   
   // Application details
   coverLetter?: string;
   resume?: string;
   expectedPay?: number;
   availability?: string;
-  
-  // Status tracking
-  status: 'applied' | 'shortlisted' | 'interviewed' | 'hired' | 'rejected' | 'withdrawn';
   
   // Communication
   studentNotes?: string;
@@ -46,20 +50,43 @@ export interface IApplicationModel extends mongoose.Model<IApplication> {
 }
 
 const applicationSchema = new Schema<IApplication>({
-  job: {
+  applicationId: {
+    type: Schema.Types.ObjectId,
+    default: () => new mongoose.Types.ObjectId(),
+    unique: true
+  },
+  jobId: {
     type: Schema.Types.ObjectId,
     ref: 'Job',
-    required: [true, 'Job is required']
+    required: [true, 'Job ID is required']
+  },
+  studentId: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: [true, 'Student ID is required']
+  },
+  status: {
+    type: String,
+    enum: ['applied', 'accepted', 'rejected'],
+    default: 'applied'
+  },
+  appliedAt: {
+    type: Date,
+    default: Date.now
+  },
+  
+  // Additional fields for enhanced functionality
+  job: {
+    type: Schema.Types.ObjectId,
+    ref: 'Job'
   },
   student: {
     type: Schema.Types.ObjectId,
-    ref: 'User',
-    required: [true, 'Student is required']
+    ref: 'User'
   },
   employer: {
     type: Schema.Types.ObjectId,
-    ref: 'User',
-    required: [true, 'Employer is required']
+    ref: 'User'
   },
   
   // Application details
@@ -80,13 +107,6 @@ const applicationSchema = new Schema<IApplication>({
     type: String,
     enum: ['weekdays', 'weekends', 'both', 'flexible'],
     default: 'flexible'
-  },
-  
-  // Status tracking
-  status: {
-    type: String,
-    enum: ['applied', 'shortlisted', 'interviewed', 'hired', 'rejected', 'withdrawn'],
-    default: 'applied'
   },
   
   // Communication
@@ -138,16 +158,16 @@ const applicationSchema = new Schema<IApplication>({
 });
 
 // Indexes for better query performance
-applicationSchema.index({ job: 1, student: 1 }, { unique: true });
-applicationSchema.index({ student: 1, status: 1 });
+applicationSchema.index({ jobId: 1, studentId: 1 }, { unique: true });
+applicationSchema.index({ studentId: 1, status: 1 });
 applicationSchema.index({ employer: 1, status: 1 });
 applicationSchema.index({ status: 1 });
-applicationSchema.index({ appliedDate: -1 });
+applicationSchema.index({ appliedAt: -1 });
 
 // Virtual for application duration
 applicationSchema.virtual('duration').get(function() {
   const now = new Date();
-  const applied = this.appliedDate;
+  const applied = this.appliedAt;
   const diffInMs = now.getTime() - applied.getTime();
   const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
   
@@ -162,11 +182,8 @@ applicationSchema.virtual('duration').get(function() {
 applicationSchema.virtual('statusColor').get(function() {
   const statusColors = {
     applied: 'blue',
-    shortlisted: 'yellow',
-    interviewed: 'purple',
-    hired: 'green',
-    rejected: 'red',
-    withdrawn: 'gray'
+    accepted: 'green',
+    rejected: 'red'
   };
   return statusColors[this.status] || 'gray';
 });
@@ -177,25 +194,16 @@ applicationSchema.methods.updateStatus = function(newStatus: string, notes?: str
   
   // Set timestamp based on status
   switch (newStatus) {
-    case 'shortlisted':
+    case 'accepted':
       this.shortlistedDate = new Date();
-      break;
-    case 'interviewed':
-      this.interviewedDate = new Date();
-      break;
-    case 'hired':
-      this.hiredDate = new Date();
       break;
     case 'rejected':
       this.rejectedDate = new Date();
       break;
-    case 'withdrawn':
-      this.withdrawnDate = new Date();
-      break;
   }
   
   if (notes) {
-    if (newStatus === 'hired' || newStatus === 'rejected') {
+    if (newStatus === 'accepted' || newStatus === 'rejected') {
       this.employerNotes = notes;
     } else {
       this.studentNotes = notes;
@@ -231,12 +239,9 @@ applicationSchema.pre('save', function(next) {
   
   // Validate status transitions
   const validTransitions = {
-    applied: ['shortlisted', 'rejected', 'withdrawn'],
-    shortlisted: ['interviewed', 'rejected', 'withdrawn'],
-    interviewed: ['hired', 'rejected', 'withdrawn'],
-    hired: ['withdrawn'],
-    rejected: ['withdrawn'],
-    withdrawn: []
+    applied: ['accepted', 'rejected'],
+    accepted: [],
+    rejected: []
   };
   
   if (this.isModified('status') && this.status !== 'applied') {
@@ -249,7 +254,7 @@ applicationSchema.pre('save', function(next) {
 
 // Static method to get application statistics
 applicationSchema.statics.getStats = async function(userId: mongoose.Types.ObjectId, userType: 'student' | 'employer') {
-  const matchField = userType === 'student' ? 'student' : 'employer';
+  const matchField = userType === 'student' ? 'studentId' : 'employer';
   
   const stats = await this.aggregate([
     { $match: { [matchField]: userId } },

@@ -2,10 +2,21 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { apiService } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
+
+// Helper function to safely access localStorage
+const setLocalStorage = (key: string, value: string): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(key, value);
+  }
+};
 
 export default function Signup() {
-  const [userType, setUserType] = useState<'student' | 'employer'>('student');
+  const router = useRouter();
+  const { login } = useAuth();
+  const [userType, setUserType] = useState<'student' | 'employer' | 'admin'>('student');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -81,7 +92,7 @@ export default function Signup() {
 
     try {
       // Send OTP to email address
-      await apiService.sendOTP(formData.email, 'verification');
+      await apiService.sendOTP(formData.email.trim(), 'signup');
       setOtpData(prev => ({ ...prev, email: formData.email }));
       setStep('otp');
       setSuccess('OTP sent to your email address!');
@@ -111,7 +122,7 @@ export default function Signup() {
     }
 
     try {
-      // Directly register; backend verifies OTP as part of registration
+      // Option A: Directly register; backend will verify OTP
       await handleRegister();
       setSuccess('OTP verified and account created!');
     } catch (error: any) {
@@ -150,22 +161,37 @@ export default function Signup() {
       // Register the user
       const response = await apiService.register(userData) as any;
       
-      if (response.token) {
-        // Store the token
-        localStorage.setItem('token', response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
+      console.log('🔐 Registration response:', response); // Debug log
+      
+      // The response structure is { success: true, message: "...", data: { user: {...}, token: "..." } }
+      const { user, token } = response.data || response;
+      
+      console.log('👤 User data:', user); // Debug log
+      console.log('🔑 Token:', token ? 'Present' : 'Missing'); // Debug log
+      
+      if (token && user) {
+        // Store the token and user data
+        setLocalStorage('token', token);
+        setLocalStorage('user', JSON.stringify(user));
+        
+        // Login the user using AuthContext
+        login(user, token);
         
         setStep('success');
-        setSuccess('Account created successfully!');
+        setSuccess('Account created successfully! Redirecting to your dashboard...');
         
-        // Redirect to appropriate dashboard based on user type
-        setTimeout(() => {
-          if (userType === 'student') {
-            window.location.href = '/student-home';
-          } else if (userType === 'employer') {
-            window.location.href = '/employer-home';
-          }
-        }, 2000);
+        // Redirect immediately to appropriate dashboard based on user type
+        const redirectPath = userType === 'student' ? '/student-home' 
+                           : userType === 'employer' ? '/employer-home'
+                           : '/';
+        
+        console.log('🚀 Redirecting to:', redirectPath); // Debug log
+        
+        // Use router.push immediately instead of setTimeout
+        router.push(redirectPath);
+      } else {
+        console.error('❌ Missing user or token in response:', { user, token }); // Debug log
+        setError('Registration failed. Please try again.');
       }
     } catch (error: any) {
       setError(apiService.handleError(error));
@@ -177,15 +203,17 @@ export default function Signup() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          Create your account
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Or{' '}
-          <Link href="/login" className="font-medium text-indigo-600 hover:text-indigo-500">
-            sign in to your existing account
+        <div className="mb-4">
+          <Link 
+            href="/" 
+            className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Home
           </Link>
-        </p>
+        </div>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
@@ -197,7 +225,7 @@ export default function Signup() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   I am a:
                 </label>
-                <div className="flex space-x-4">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setUserType('student')}
@@ -219,6 +247,17 @@ export default function Signup() {
                     }`}
                   >
                     💼 Employer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUserType('admin')}
+                    className={`flex-1 py-2 px-4 border rounded-md text-sm font-medium ${
+                      userType === 'admin'
+                        ? 'border-red-500 bg-red-50 text-red-700'
+                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    👑 Admin
                   </button>
                 </div>
               </div>
@@ -506,19 +545,16 @@ export default function Signup() {
           {step === 'success' && (
             <>
               <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                Account Created!
+                Welcome, {formData.name}!
               </h2>
               <p className="mt-2 text-center text-sm text-gray-600">
-                Your account has been created successfully. You can now sign in to your account.
+                Your account has been created successfully. You're being redirected to your dashboard...
               </p>
 
               <div className="mt-6">
-                <Link
-                  href="/login"
-                  className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  Sign in
-                </Link>
+                <div className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white">
+                  Redirecting...
+                </div>
               </div>
             </>
           )}

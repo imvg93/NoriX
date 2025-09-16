@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "StudentJobs - Find Your Perfect Part-Time Job",
-  description: "Connect with local businesses in Hyderabad. Find flexible part-time opportunities that fit your schedule and skills.",
+  title: "Student Job Portal",
+  description: "Find the perfect job opportunities for students",
 };
 
 export default function RootLayout({
@@ -25,7 +25,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
         <AuthProvider>
           {children}
         </AuthProvider>

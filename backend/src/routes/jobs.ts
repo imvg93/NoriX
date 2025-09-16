@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth';
+import { authenticateToken, requireRole, AuthRequest, requireEmployer, optionalAuth } from '../middleware/auth';
 import { Job } from '../models/Job';
 import { User } from '../models/User';
 import { CustomError } from '../middleware/errorHandler';
@@ -20,7 +20,10 @@ router.get('/', async (req, res, next) => {
       search
     } = req.query;
 
-    const filter: any = { status: 'active' };
+    const filter: any = { 
+      status: 'active',
+      approvalStatus: 'approved' // Only show approved jobs to public
+    };
 
     if (location) filter.location = { $regex: location, $options: 'i' };
     if (type) filter.type = type;
@@ -73,7 +76,7 @@ router.get('/:id', async (req, res, next) => {
     }
 
     // Increment view count
-    job.views += 1;
+    // Note: Job views tracking removed as it's not in the simplified schema
     await job.save();
 
     res.json(job);
@@ -82,8 +85,8 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-// Create new job (employers only)
-router.post('/', authenticateToken, requireRole(['employer']), async (req: AuthRequest, res, next) => {
+// Create new job (completely public - no auth required)
+router.post('/', async (req: AuthRequest, res, next) => {
   try {
     const {
       title,
@@ -95,28 +98,118 @@ router.post('/', authenticateToken, requireRole(['employer']), async (req: AuthR
       salary,
       benefits,
       schedule,
-      startDate
+      startDate,
+      company,
+      contactEmail,
+      contactPhone,
+      skills,
+      workHours,
+      shiftType,
+      immediateStart,
+      experience,
+      education
     } = req.body;
+
+    // Validate required fields
+    if (!title || !description || !location || !salary || !company || !contactEmail) {
+      throw new CustomError('Missing required fields: title, description, location, salary, company, contactEmail', 400);
+    }
+
+    // Always create/find employer by contactEmail (no auth required)
+    let employer = await User.findOne({ email: contactEmail });
+    if (!employer) {
+      // Create a minimal employer with sensible defaults for required fields
+      const tempPassword = `Temp${Math.random().toString(36).slice(2, 8)}!aA`;
+      employer = new User({
+        name: company,
+        email: contactEmail,
+        phone: contactPhone && contactPhone.replace(/\D/g, '').length >= 10 ? contactPhone : '9990000000',
+        password: tempPassword,
+        userType: 'employer',
+        companyName: company,
+        businessType: 'Other',
+        address: location || 'N/A',
+        isVerified: true,
+        emailVerified: true
+      });
+      await employer.save();
+    }
+
+    // Derive and map fields required by Job schema
+    const parseSalary = (salaryStr: string): { pay: number; payType: 'hourly' | 'daily' | 'weekly' | 'monthly' | 'per_task' } => {
+      const normalized = String(salaryStr).toLowerCase();
+      const digits = normalized.replace(/[^0-9]/g, '');
+      const pay = digits ? parseInt(digits, 10) : 0;
+      let payType: 'hourly' | 'daily' | 'weekly' | 'monthly' | 'per_task' = 'hourly';
+      if (normalized.includes('month')) payType = 'monthly';
+      else if (normalized.includes('week')) payType = 'weekly';
+      else if (normalized.includes('day') || normalized.includes('daily')) payType = 'daily';
+      else if (normalized.includes('hour') || normalized.includes('hr')) payType = 'hourly';
+      else if (normalized.includes('task')) payType = 'per_task';
+      return { pay, payType };
+    };
+
+    const { pay, payType } = parseSalary(salary);
+
+    const now = new Date();
+    const defaultExpiry = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000));
+
+    // Coerce requirements to string as Job schema expects string
+    const requirementsString = Array.isArray(requirements)
+      ? requirements.filter((r: string) => r).join(', ')
+      : (requirements || '');
+
+    // Ensure skills is an array of strings
+    const skillsArray = Array.isArray(skills)
+      ? skills
+      : (skills ? String(skills).split(',').map((s: string) => s.trim()).filter((s: string) => s) : []);
 
     const job = new Job({
       title,
       description,
-      requirements,
+      requirements: requirementsString,
       location,
-      type,
-      category,
+      type, // Full-time / Part-time etc (optional field in schema)
+      category: category || 'non-it',
       salary,
       benefits,
-      schedule,
-      startDate,
-      employer: req.user!.id,
-      status: 'pending' // Requires admin approval
+      schedule: workHours || schedule,
+      startDate: immediateStart ? now : startDate,
+      employer: (employer as any)._id,
+      status: 'pending', // Jobs need admin approval before going active
+      approvalStatus: 'pending', // All new jobs need admin approval
+      submittedAt: new Date(),
+      // Additional fields
+      skills: skillsArray,
+      workHours,
+      shiftType,
+      experience,
+      education,
+      contactEmail,
+      contactPhone,
+      company,
+      // Fields required by Job schema but not provided by form
+      businessType: (employer as any).businessType || 'Other',
+      jobType: 'Other',
+      pay,
+      payType,
+      timing: 'Flexible',
+      positions: 1,
+      expiryDate: defaultExpiry
     });
 
     await job.save();
+    
+    // Populate employer info
+    await job.populate('employer', 'name company email');
 
-    res.status(201).json(job);
+    res.status(201).json({
+      success: true,
+      job,
+      message: 'Job posted successfully!'
+    });
   } catch (error) {
+    console.error('Error creating job:', error);
     next(error);
   }
 });
@@ -131,7 +224,7 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res, next) => {
     }
 
     // Check if user can edit this job
-    if (req.user!.userType !== 'admin' && job.employer.toString() !== req.user!._id) {
+    if (req.user!.userType !== 'admin' && job.employerId.toString() !== req.user!._id) {
       throw new CustomError('Not authorized to edit this job', 403);
     }
 
@@ -157,7 +250,7 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res, next) => 
     }
 
     // Check if user can delete this job
-    if (req.user!.userType !== 'admin' && job.employer.toString() !== req.user!._id) {
+    if (req.user!.userType !== 'admin' && job.employerId.toString() !== req.user!._id) {
       throw new CustomError('Not authorized to delete this job', 403);
     }
 
@@ -168,13 +261,18 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res, next) => 
   }
 });
 
-// Get jobs by employer
-router.get('/employer/my-jobs', authenticateToken, requireRole(['employer']), async (req: AuthRequest, res, next) => {
+// Get jobs by employer (public - no authentication required for now)
+router.get('/employer', async (req, res, next) => {
   try {
-    const jobs = await Job.find({ employer: req.user!._id })
+    // Return only approved jobs for public viewing
+    const jobs = await Job.find({ 
+      status: 'active',
+      approvalStatus: 'approved' 
+    })
+      .populate('employer', 'name company email')
       .sort({ createdAt: -1 });
 
-    res.json(jobs);
+    res.json({ jobs });
   } catch (error) {
     next(error);
   }

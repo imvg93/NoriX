@@ -1,9 +1,11 @@
 import express from 'express';
-import cors from 'cors';
+import { createServer } from 'http';
 import dotenv from 'dotenv';
+import cors from 'cors';
 import { connectDB } from './config/database';
 import nodemailer from 'nodemailer';
 import path from 'path';
+import SocketManager from './utils/socketManager';
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -11,6 +13,12 @@ import userRoutes from './routes/users';
 import jobRoutes from './routes/jobs';
 import applicationRoutes from './routes/applications';
 import adminRoutes from './routes/admin';
+import kycRoutes from './routes/kyc';
+import uploadRoutes from './routes/upload';
+import testUploadRoutes from './routes/test-upload';
+import debugUploadRoutes from './routes/debug-upload';
+import enhancedJobRoutes from './routes/enhanced-jobs';
+import notificationRoutes from './routes/notifications';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -20,18 +28,30 @@ import { notFound } from './middleware/notFound';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const server = createServer(app);
+const PORT = process.env.PORT || 5001;
+const ALLOW_ALL_CORS = process.env.ALLOW_ALL_CORS === 'true' || process.env.ALLOW_ALL_CORS === '1';
 
-// Middleware
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://yourdomain.com'] 
-    : ['http://localhost:3000', 'http://127.0.0.1:3000'],
+// Initialize Socket.IO
+const socketManager = new SocketManager(server);
+
+// Make socketManager available globally for use in routes
+(global as any).socketManager = socketManager;
+
+// CORS configuration (allow only Vercel frontend; keep ALLOW_ALL_CORS for debugging)
+const corsOptions = {
+  origin: ALLOW_ALL_CORS ? true : 'https://me-work.vercel.app',
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  optionsSuccessStatus: 200
+};
 
+app.use(cors(corsOptions));
+
+// Handle preflight requests explicitly
+app.options('*', cors(corsOptions));
+
+// Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -44,7 +64,30 @@ app.get('/health', (req, res) => {
     status: 'OK',
     message: 'StudentJobs API is running',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
+    environment: process.env.NODE_ENV,
+    cors: ALLOW_ALL_CORS ? 'allow-all' : 'enabled',
+    allowedOrigins: [
+      'http://localhost:3000',
+      'https://me-work.vercel.app',
+      '*.vercel.app',
+      '*.railway.app',
+      '*.onrender.com'
+    ],
+    origin: req.headers.origin || 'no-origin'
+  });
+});
+
+// Test endpoint for debugging
+app.get('/api/test', (req, res) => {
+  res.status(200).json({
+    message: 'API is working!',
+    timestamp: new Date().toISOString(),
+    cors: 'enabled',
+    origin: req.headers.origin || 'no-origin',
+    headers: {
+      'Access-Control-Allow-Origin': req.headers.origin || '*',
+      'Access-Control-Allow-Credentials': 'true'
+    }
   });
 });
 
@@ -54,23 +97,33 @@ app.use('/api/users', userRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/kyc', kycRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/test-upload', testUploadRoutes);
+app.use('/api/debug-upload', debugUploadRoutes);
+app.use('/api/enhanced-jobs', enhancedJobRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Error handling middleware
 app.use(notFound);
 app.use(errorHandler);
-
-// MongoDB connection is now handled in config/database.ts
 
 // Start server
 const startServer = async (): Promise<void> => {
   try {
     await connectDB();
     
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📱 Environment: ${process.env.NODE_ENV}`);
       console.log(`🔗 Health check: http://localhost:${PORT}/health`);
       console.log(`📚 API Documentation: http://localhost:${PORT}/api`);
+      console.log(`🔌 Socket.IO enabled for real-time updates`);
+      if (ALLOW_ALL_CORS) {
+        console.log(`🔒 CORS: ALLOW_ALL_CORS=true -> Permissive mode (TEMPORARY)`);
+      } else {
+        console.log(`🔒 CORS: ENABLED - Supports Vercel, Railway, Render`);
+      }
     });
 
     // Verify email configuration

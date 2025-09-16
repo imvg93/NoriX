@@ -1,0 +1,348 @@
+{
+  "database": "studentjobs",
+  "timestamp": "2025-09-11T09:47:28.960Z",
+  "collections": {
+    "users": [
+      {
+        "_id": "68c15d25dd7c4b2d005c38fb",
+        "name": "John Student",
+        "email": "john.student@university.edu",
+        "phone": "+919876543210",
+        "userType": "student",
+        "isActive": true,
+        "emailVerified": true,
+        "phoneVerified": false,
+        "approvalStatus": "approved",
+        "createdAt": "2025-09-10T11:12:37.114Z",
+        "updatedAt": "2025-09-10T13:08:26.612Z"
+      },
+      {
+        "_id": "68c15d25dd7c4b2d005c38fc",
+        "name": "Sarah Employer",
+        "email": "sarah@techcorp.com",
+        "phone": "+1987654321",
+        "userType": "employer",
+        "isActive": true,
+        "emailVerified": true,
+        "phoneVerified": true,
+        "approvalStatus": "approved",
+        "createdAt": "2025-09-10T11:12:37.114Z",
+        "updatedAt": "2025-09-10T11:12:37.114Z"
+      },
+      {
+        "_id": "68c2728f56223fc04628f195",
+        "name": "Test Student",
+        "email": "student@test.com",
+        "phone": "+91 98765 43211",
+        "userType": "student",
+        "isActive": true,
+        "emailVerified": true,
+        "phoneVerified": true,
+        "approvalStatus": "approved",
+        "createdAt": "2025-09-11T06:56:15.573Z",
+        "updatedAt": "2025-09-11T06:56:15.573Z"
+      },
+      {
+        "_id": "68c27b19eef5c00644a721b1",
+        "name": "Admin User",
+        "email": "admin@studentjobs.com",
+        "phone": "1234567890",
+        "userType": "admin",
+        "isActive": true,
+        "emailVerified": true,
+        "phoneVerified": true,
+        "approvalStatus": "approved",
+        "createdAt": "2025-09-11T07:32:41.857Z",
+        "updatedAt": "2025-09-11T07:32:41.857Z"
+      },
+      {
+        "_id": "68c2983d525b46eadffecc69",
+        "name": "Test Admin User",
+        "email": "test-admin@studentjobs.com",
+        "phone": "+91 98765 43210",
+        "userType": "admin",
+        "isActive": true,
+        "emailVerified": true,
+        "phoneVerified": true,
+        "approvalStatus": "approved",
+        "createdAt": "2025-09-11T09:37:01.772Z",
+        "updatedAt": "2025-09-11T09:37:01.772Z"
+      }
+    ],
+    "adminlogins": [
+      {
+        "_id": "68c299e488fc82b2b3ceb037",
+        "adminId": "68c2983d525b46eadffecc69",
+        "adminEmail": "test-admin@studentjobs.com",
+        "adminName": "Test Admin User",
+        "loginTime": "2025-09-11T09:44:04.333Z",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Admin Setup Script",
+        "loginStatus": "success",
+        "createdAt": "2025-09-11T09:44:04.334Z",
+        "updatedAt": "2025-09-11T09:44:04.334Z"
+      },
+      {
+        "_id": "68c299e488fc82b2b3ceb035",
+        "adminId": "68c27b19eef5c00644a721b1",
+        "adminEmail": "admin@studentjobs.com",
+        "adminName": "Admin User",
+        "loginTime": "2025-09-11T09:44:04.068Z",
+        "ipAddress": "127.0.0.1",
+        "userAgent": "Admin Setup Script",
+        "loginStatus": "success",
+        "createdAt": "2025-09-11T09:44:04.076Z",
+        "updatedAt": "2025-09-11T09:44:04.076Z"
+      },
+      {
+        "_id": "68c2983d525b46eadffecc6e",
+        "adminId": "68c2983d525b46eadffecc69",
+        "adminEmail": "test-admin@studentjobs.com",
+        "adminName": "Test Admin User",
+        "loginTime": "2025-09-11T07:37:01.780Z",
+        "ipAddress": "192.168.1.103",
+        "userAgent": "Mozilla/5.0 (Android 11; Mobile; rv:68.0) Gecko/68.0",
+        "loginStatus": "success",
+        "createdAt": "2025-09-11T09:37:01.787Z",
+        "updatedAt": "2025-09-11T09:37:01.787Z"
+      },
+      {
+        "_id": "68c299d161ea0a52bf99c512",
+        "adminId": "68c27b19eef5c00644a721b1",
+        "adminEmail": "admin@studentjobs.com",
+        "adminName": "Admin User",
+        "loginTime": "2025-09-11T03:43:45.374Z",
+        "ipAddress": "192.168.1.55",
+        "userAgent": "Mozilla/5.0 (Android 13; Mobile; rv:109.0) Gecko/109.0 Firefox/120.0",
+        "loginStatus": "success",
+        "createdAt": "2025-09-11T09:43:45.391Z",
+        "updatedAt": "2025-09-11T09:43:45.391Z"
+      },
+      {
+        "_id": "68c2983d525b46eadffecc6d",
+        "adminId": "68c2983d525b46eadffecc69",
+        "adminEmail": "test-admin@studentjobs.com",
+        "adminName": "Test Admin User",
+        "loginTime": "2025-09-11T03:37:01.780Z",
+        "ipAddress": "192.168.1.102",
+        "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_7_1 like Mac OS X)",
+        "loginStatus": "failed",
+        "failureReason": "Incorrect password",
+        "createdAt": "2025-09-11T09:37:01.787Z",
+        "updatedAt": "2025-09-11T09:37:01.787Z"
+      },
+      {
+        "_id": "68c2983d525b46eadffecc6c",
+        "adminId": "68c2983d525b46eadffecc69",
+        "adminEmail": "test-admin@studentjobs.com",
+        "adminName": "Test Admin User",
+        "loginTime": "2025-09-10T21:37:01.780Z",
+        "ipAddress": "192.168.1.101",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        "loginStatus": "success",
+        "createdAt": "2025-09-11T09:37:01.787Z",
+        "updatedAt": "2025-09-11T09:37:01.787Z"
+      },
+      {
+        "_id": "68c299d161ea0a52bf99c511",
+        "adminId": "68c27b19eef5c00644a721b1",
+        "adminEmail": "admin@studentjobs.com",
+        "adminName": "Admin User",
+        "loginTime": "2025-09-10T09:43:45.374Z",
+        "ipAddress": "192.168.1.54",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "loginStatus": "success",
+        "createdAt": "2025-09-11T09:43:45.391Z",
+        "updatedAt": "2025-09-11T09:43:45.391Z"
+      },
+      {
+        "_id": "68c2983d525b46eadffecc6b",
+        "adminId": "68c2983d525b46eadffecc69",
+        "adminEmail": "test-admin@studentjobs.com",
+        "adminName": "Test Admin User",
+        "loginTime": "2025-09-10T09:37:01.780Z",
+        "ipAddress": "192.168.1.100",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "loginStatus": "success",
+        "createdAt": "2025-09-11T09:37:01.786Z",
+        "updatedAt": "2025-09-11T09:37:01.786Z"
+      },
+      {
+        "_id": "68c299d161ea0a52bf99c510",
+        "adminId": "68c27b19eef5c00644a721b1",
+        "adminEmail": "admin@studentjobs.com",
+        "adminName": "Admin User",
+        "loginTime": "2025-09-09T09:43:45.374Z",
+        "ipAddress": "192.168.1.53",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "loginStatus": "failed",
+        "failureReason": "Incorrect password",
+        "createdAt": "2025-09-11T09:43:45.391Z",
+        "updatedAt": "2025-09-11T09:43:45.391Z"
+      },
+      {
+        "_id": "68c299d161ea0a52bf99c50f",
+        "adminId": "68c27b19eef5c00644a721b1",
+        "adminEmail": "admin@studentjobs.com",
+        "adminName": "Admin User",
+        "loginTime": "2025-09-08T09:43:45.374Z",
+        "ipAddress": "192.168.1.52",
+        "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_1_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1.2 Mobile/15E148 Safari/604.1",
+        "loginStatus": "success",
+        "createdAt": "2025-09-11T09:43:45.390Z",
+        "updatedAt": "2025-09-11T09:43:45.390Z"
+      },
+      {
+        "_id": "68c299d161ea0a52bf99c50e",
+        "adminId": "68c27b19eef5c00644a721b1",
+        "adminEmail": "admin@studentjobs.com",
+        "adminName": "Admin User",
+        "loginTime": "2025-09-06T09:43:45.374Z",
+        "ipAddress": "192.168.1.51",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "loginStatus": "success",
+        "createdAt": "2025-09-11T09:43:45.390Z",
+        "updatedAt": "2025-09-11T09:43:45.390Z"
+      },
+      {
+        "_id": "68c299d161ea0a52bf99c50d",
+        "adminId": "68c27b19eef5c00644a721b1",
+        "adminEmail": "admin@studentjobs.com",
+        "adminName": "Admin User",
+        "loginTime": "2025-09-04T09:43:45.374Z",
+        "ipAddress": "192.168.1.50",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "loginStatus": "success",
+        "createdAt": "2025-09-11T09:43:45.388Z",
+        "updatedAt": "2025-09-11T09:43:45.388Z"
+      }
+    ],
+    "kycs": [
+      {
+        "_id": "68c1704014bc1b39fade3b0c",
+        "createdAt": "2025-09-10T12:34:09.003Z",
+        "updatedAt": "2025-09-10T13:08:26.601Z"
+      },
+      {
+        "_id": "68c2728f56223fc04628f199",
+        "createdAt": "2025-09-11T06:56:15.655Z",
+        "updatedAt": "2025-09-11T06:56:15.655Z"
+      }
+    ],
+    "jobs": [
+      {
+        "_id": "68c15d25dd7c4b2d005c38fe",
+        "title": "Web Developer Intern",
+        "status": "active",
+        "createdAt": "2025-09-10T11:12:37.137Z",
+        "updatedAt": "2025-09-10T11:12:37.137Z"
+      },
+      {
+        "_id": "68c15d25dd7c4b2d005c38ff",
+        "title": "Data Entry Specialist",
+        "status": "active",
+        "createdAt": "2025-09-10T11:12:37.137Z",
+        "updatedAt": "2025-09-10T11:12:37.137Z"
+      },
+      {
+        "_id": "68c15d25dd7c4b2d005c3900",
+        "title": "Customer Service Representative",
+        "status": "active",
+        "createdAt": "2025-09-10T11:12:37.137Z",
+        "updatedAt": "2025-09-10T11:12:37.137Z"
+      }
+    ],
+    "otps": [
+      {
+        "_id": "68b2a41bf0aae43edb2836d8",
+        "email": "test@example.com",
+        "otp": "404369",
+        "purpose": "verification",
+        "expiresAt": "2025-08-30T07:21:23.359Z",
+        "createdAt": "2025-08-30T07:11:23.360Z",
+        "updatedAt": "2025-08-30T07:11:23.360Z"
+      },
+      {
+        "_id": "68b2a418f0aae43edb2836d6",
+        "email": "test@example.com",
+        "otp": "169296",
+        "purpose": "verification",
+        "expiresAt": "2025-08-30T07:21:20.151Z",
+        "createdAt": "2025-08-30T07:11:20.153Z",
+        "updatedAt": "2025-08-30T07:11:20.153Z"
+      },
+      {
+        "_id": "68b2a3c8f0aae43edb2836d4",
+        "email": "test@example.com",
+        "otp": "572810",
+        "purpose": "verification",
+        "expiresAt": "2025-08-30T07:20:00.482Z",
+        "createdAt": "2025-08-30T07:10:00.482Z",
+        "updatedAt": "2025-08-30T07:10:00.482Z"
+      },
+      {
+        "_id": "68b2a1a3f0aae43edb2836d2",
+        "email": "gireeshv03@gmail.com",
+        "otp": "619425",
+        "purpose": "verification",
+        "expiresAt": "2025-08-30T07:10:51.904Z",
+        "createdAt": "2025-08-30T07:00:51.910Z",
+        "updatedAt": "2025-08-30T07:00:51.910Z"
+      },
+      {
+        "_id": "68b2a1331446455a0401237a",
+        "email": "gireeshv03@gmail.com",
+        "otp": "116908",
+        "purpose": "verification",
+        "expiresAt": "2025-08-30T07:08:59.741Z",
+        "createdAt": "2025-08-30T06:58:59.759Z",
+        "updatedAt": "2025-08-30T06:58:59.759Z"
+      },
+      {
+        "_id": "68b2a12877540b6cd4812030",
+        "email": "gireeshv03@gmail.com",
+        "otp": "858266",
+        "purpose": "verification",
+        "expiresAt": "2025-08-30T07:08:48.480Z",
+        "createdAt": "2025-08-30T06:58:48.481Z",
+        "updatedAt": "2025-08-30T06:58:48.481Z"
+      },
+      {
+        "_id": "68b2a10577540b6cd481202e",
+        "email": "webresfolio@gmail.com",
+        "otp": "845211",
+        "purpose": "verification",
+        "expiresAt": "2025-08-30T07:08:13.332Z",
+        "createdAt": "2025-08-30T06:58:13.341Z",
+        "updatedAt": "2025-08-30T06:58:13.341Z"
+      },
+      {
+        "_id": "68b29fe193993714bab4b445",
+        "email": "gireeshv03@gmail.com",
+        "otp": "280683",
+        "purpose": "verification",
+        "expiresAt": "2025-08-30T07:03:21.356Z",
+        "createdAt": "2025-08-30T06:53:21.361Z",
+        "updatedAt": "2025-08-30T06:53:21.361Z"
+      },
+      {
+        "_id": "68b29f4ae2e87b75be5f62f4",
+        "email": "gireeshv03@gmail.com",
+        "otp": "422644",
+        "purpose": "verification",
+        "expiresAt": "2025-08-30T07:00:50.007Z",
+        "createdAt": "2025-08-30T06:50:50.013Z",
+        "updatedAt": "2025-08-30T06:50:50.013Z"
+      },
+      {
+        "_id": "68b29e408320584472dffe9c",
+        "email": "gireeshv03@gmail.com",
+        "otp": "230075",
+        "purpose": "verification",
+        "expiresAt": "2025-08-30T06:56:24.479Z",
+        "createdAt": "2025-08-30T06:46:24.484Z",
+        "updatedAt": "2025-08-30T06:46:24.484Z"
+      }
+    ]
+  }
+}

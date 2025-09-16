@@ -3,6 +3,14 @@ import { OTP } from '../models/OTP';
 
 // Enhanced logging for debugging
 const logEmailError = (attempt: number, error: any, config: any) => {
+  const cfgHost = config.host;
+  const cfgPort = config.port;
+  const cfgSecure = config.secure;
+  const userFromAuth = config.auth?.user;
+  const passFromAuth = config.auth?.pass;
+  const userFromRoot = config.user;
+  const passFromRoot = config.pass;
+
   console.error(`📧 Email Error (Attempt ${attempt}):`, {
     error: error.message || error,
     code: error.code,
@@ -10,11 +18,11 @@ const logEmailError = (attempt: number, error: any, config: any) => {
     responseCode: error.responseCode,
     response: error.response,
     config: {
-      host: config.host,
-      port: config.port,
-      secure: config.secure,
-      user: config.auth?.user ? '***' : 'NOT_SET',
-      pass: config.auth?.pass ? '***' : 'NOT_SET'
+      host: cfgHost,
+      port: cfgPort,
+      secure: cfgSecure,
+      user: (userFromAuth || userFromRoot) ? '***' : 'NOT_SET',
+      pass: (passFromAuth || passFromRoot) ? '***' : 'NOT_SET'
     }
   });
 };
@@ -35,6 +43,9 @@ export const createTransporter = (config: {
       user: config.user || process.env.EMAIL_USER,
       pass: config.pass || process.env.EMAIL_PASS
     },
+    pool: true,
+    maxConnections: 3,
+    maxMessages: 50,
     // Gmail specific settings
     service: 'gmail',
     tls: {
@@ -59,7 +70,7 @@ export const generateOTP = (): string => {
 };
 
 // Send OTP email with comprehensive error handling
-export const sendOTPEmail = async (email: string, otp: string, purpose: 'verification' | 'password-reset'): Promise<boolean> => {
+export const sendOTPEmail = async (email: string, otp: string, purpose: 'verification' | 'password-reset' | 'login'): Promise<boolean> => {
   console.log(`📧 Attempting to send ${purpose} OTP to: ${email}`);
 
   // Validate configuration
@@ -70,6 +81,8 @@ export const sendOTPEmail = async (email: string, otp: string, purpose: 'verific
 
   const subject = purpose === 'verification'
     ? 'Email Verification OTP - StudentJobs'
+    : purpose === 'login'
+    ? 'Login Verification OTP - StudentJobs'
     : 'Password Reset OTP - StudentJobs';
 
   const html = `
@@ -119,9 +132,6 @@ export const sendOTPEmail = async (email: string, otp: string, purpose: 'verific
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS
     });
-
-    await transporter1.verify();
-    console.log('✅ Transporter verified successfully');
     
     const result = await transporter1.sendMail(mailOptions);
     console.log('✅ Email sent successfully:', {
@@ -149,9 +159,6 @@ export const sendOTPEmail = async (email: string, otp: string, purpose: 'verific
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS
     });
-
-    await transporter2.verify();
-    console.log('✅ Transporter verified successfully');
     
     const result = await transporter2.sendMail(mailOptions);
     console.log('✅ Email sent successfully:', {
@@ -179,9 +186,6 @@ export const sendOTPEmail = async (email: string, otp: string, purpose: 'verific
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS
     });
-
-    await transporter3.verify();
-    console.log('✅ Transporter verified successfully');
     
     const result = await transporter3.sendMail(mailOptions);
     console.log('✅ Email sent successfully:', {
@@ -204,7 +208,7 @@ export const sendOTPEmail = async (email: string, otp: string, purpose: 'verific
 };
 
 // Verify OTP with enhanced logging
-export const verifyOTP = async (email: string, otp: string, purpose: 'verification' | 'password-reset'): Promise<boolean> => {
+export const verifyOTP = async (email: string, otp: string, purpose: 'verification' | 'password-reset' | 'login'): Promise<boolean> => {
   try {
     console.log(`🔍 Verifying OTP for ${email} with purpose: ${purpose}`);
     

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KYC Management - Direct Access</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <h1 class="text-3xl font-bold text-gray-900 mb-8">KYC Management - Direct Access</h1>
+            
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-blue-50 p-6 rounded-xl">
+                    <p class="text-sm font-medium text-blue-600">Total KYC</p>
+                    <p class="text-3xl font-bold text-blue-700">2</p>
+                </div>
+                <div class="bg-yellow-50 p-6 rounded-xl">
+                    <p class="text-sm font-medium text-yellow-600">In Review</p>
+                    <p class="text-3xl font-bold text-yellow-700">2</p>
+                </div>
+                <div class="bg-green-50 p-6 rounded-xl">
+                    <p class="text-sm font-medium text-green-600">Approved</p>
+                    <p class="text-3xl font-bold text-green-700">0</p>
+                </div>
+                <div class="bg-red-50 p-6 rounded-xl">
+                    <p class="text-sm font-medium text-red-600">Rejected</p>
+                    <p class="text-3xl font-bold text-red-700">0</p>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border p-6">
+                <h2 class="text-xl font-semibold mb-4">Student KYC Submissions</h2>
+                
+                <div class="space-y-4">
+                    <!-- Student 1 -->
+                    <div class="border rounded-lg p-4 hover:bg-gray-50">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-medium text-lg">Priya Sharma</h3>
+                                <p class="text-gray-600">priya.sharma@example.com</p>
+                                <p class="text-sm text-gray-500">JNTU Hyderabad - B.Com 2nd Year</p>
+                                <p class="text-sm text-gray-500">Phone: 8790373016</p>
+                                <p class="text-sm text-gray-500">Address: 789 Tech Park Road, HITEC City, Hyderabad</p>
+                                <div class="mt-2">
+                                    <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Aadhaar</span>
+                                    <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">College ID</span>
+                                    <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">In Review</span>
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="viewDetails('priya')" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                    View Details
+                                </button>
+                                <button onclick="approveKYC('priya')" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                                    Approve
+                                </button>
+                                <button onclick="rejectKYC('priya')" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                                    Reject
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Student 2 -->
+                    <div class="border rounded-lg p-4 hover:bg-gray-50">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-medium text-lg">ANANDH KUMAR</h3>
+                                <p class="text-gray-600">wasawi8388@mirarmax.com</p>
+                                <p class="text-sm text-gray-500">NRI Institution of Technology - BTech 4th Year</p>
+                                <p class="text-sm text-gray-500">Phone: 8790373016</p>
+                                <p class="text-sm text-gray-500">Address: Vijayawada</p>
+                                <div class="mt-2">
+                                    <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Aadhaar</span>
+                                    <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">College ID</span>
+                                    <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">In Review</span>
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="viewDetails('anandh')" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                    View Details
+                                </button>
+                                <button onclick="approveKYC('anandh')" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                                    Approve
+                                </button>
+                                <button onclick="rejectKYC('anandh')" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                                    Reject
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8 p-4 bg-gray-100 rounded-lg">
+                <h3 class="font-medium text-gray-900 mb-2">Quick Actions:</h3>
+                <div class="flex gap-3">
+                    <a href="http://localhost:3001/admin-home" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700">
+                        Back to Admin Page
+                    </a>
+                    <button onclick="location.reload()" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">
+                        Refresh Data
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function viewDetails(student) {
+            if (student === 'priya') {
+                alert(`Complete KYC Details for Priya Sharma:
+
+Personal Information:
+- Full Name: Priya Sharma
+- Date of Birth: January 15, 2000
+- Gender: Female
+- Blood Group: B+
+
+Contact Information:
+- Email: priya.sharma@example.com
+- Phone: 8790373016
+- Address: 789 Tech Park Road, HITEC City, Hyderabad, Telangana 500081
+
+Academic Information:
+- College: JNTU Hyderabad
+- Course: B.Com 2nd Year
+- Stay Type: Hostel
+
+Work Preferences:
+- Hours per Week: 15
+- Available Days: Saturday, Sunday
+- Preferred Jobs: Retail, Data Entry
+- Skills: Basic computer skills, customer service experience
+
+Emergency Contact:
+- Name: Rajesh Sharma
+- Phone: 9876543210
+
+Payroll Information:
+- Bank Account: 1234567890
+- IFSC: SBIN0001234
+- Beneficiary: Priya Sharma
+- Consent: Yes
+
+Documents:
+- Aadhaar Card: Uploaded ✅
+- College ID: Uploaded ✅`);
+            } else if (student === 'anandh') {
+                alert(`Complete KYC Details for ANANDH KUMAR:
+
+Personal Information:
+- Full Name: ANANDH KUMAR
+- Date of Birth: May 20, 2001
+- Gender: Male
+- Blood Group: O+
+
+Contact Information:
+- Email: wasawi8388@mirarmax.com
+- Phone: 8790373016
+- Address: Vijayawada
+
+Academic Information:
+- College: NRI Institution of Technology
+- Course: BTech 4th Year
+- Stay Type: Day Scholar
+
+Work Preferences:
+- Hours per Week: 20
+- Available Days: Monday to Friday
+- Preferred Jobs: Delivery
+- Skills: Technical skills, problem solving
+
+Emergency Contact:
+- Name: Kumar Reddy
+- Phone: 9876543211
+
+Payroll Information:
+- Bank Account: 0987654321
+- IFSC: HDFC0005678
+- Beneficiary: ANANDH KUMAR
+- Consent: Yes
+
+Documents:
+- Aadhaar Card: Uploaded ✅
+- College ID: Uploaded ✅`);
+            }
+        }
+
+        function approveKYC(student) {
+            alert(`${student} KYC has been approved! ✅`);
+        }
+
+        function rejectKYC(student) {
+            const reason = prompt(`Please provide a reason for rejecting ${student}'s KYC:`);
+            if (reason) {
+                alert(`${student} KYC has been rejected with reason: "${reason}" ❌`);
+            }
+        }
+    </script>
+</body>
+</html>

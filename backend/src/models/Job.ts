@@ -1,132 +1,52 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
+// Job Interface - Essential fields only
 export interface IJob extends Document {
-  title: string;
-  company: string;
-  employer: mongoose.Types.ObjectId;
-  businessType: string;
-  location: string;
-  jobType: string;
-  pay: number;
-  payType: 'hourly' | 'daily' | 'weekly' | 'monthly' | 'per_task';
-  timing: string;
-  positions: number;
+  jobId: mongoose.Types.ObjectId;
+  employerId: mongoose.Types.ObjectId;
+  jobTitle: string;
   description: string;
-  requirements?: string;
-  benefits?: string;
-  contactEmail: string;
-  contactPhone?: string;
+  location: string;
+  salaryRange: string;
+  workType: 'Part-time' | 'Full-time' | 'Remote' | 'On-site';
+  skillsRequired: string[];
+  applicationDeadline: Date;
   
-  // Status and verification
+  // Auto-filled employer info
+  companyName: string;
+  email: string;
+  phone: string;
+  
+  // System fields
   status: 'active' | 'paused' | 'closed' | 'expired';
-  isVerified: boolean;
-  isPremium: boolean;
-  
-  // Analytics
-  views: number;
-  applications: number;
-  shortlisted: number;
-  hired: number;
-  
-  // Timestamps
-  postedDate: Date;
-  expiryDate: Date;
+  highlighted: boolean;
   createdAt: Date;
-  updatedAt: Date;
+  
+  // Virtual fields
+  duration: string;
+  isExpired: boolean;
   
   // Methods
-  isExpired(): boolean;
-  incrementViews(): Promise<void>;
-  incrementApplications(): Promise<void>;
+  updateStatus(newStatus: string): Promise<void>;
 }
 
+// Job Schema - Essential fields only
 const jobSchema = new Schema<IJob>({
-  title: {
+  jobId: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: () => new mongoose.Types.ObjectId(),
+    unique: true
+  },
+  employerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: [true, 'Employer ID is required']
+  },
+  jobTitle: {
     type: String,
     required: [true, 'Job title is required'],
     trim: true,
     maxlength: [200, 'Job title cannot exceed 200 characters']
-  },
-  company: {
-    type: String,
-    required: [true, 'Company name is required'],
-    trim: true,
-    maxlength: [200, 'Company name cannot exceed 200 characters']
-  },
-  employer: {
-    type: Schema.Types.ObjectId,
-    ref: 'User',
-    required: [true, 'Employer is required']
-  },
-  businessType: {
-    type: String,
-    required: [true, 'Business type is required'],
-    enum: [
-      'Cafe & Restaurant',
-      'Retail Store',
-      'Tuition Center',
-      'Events & Entertainment',
-      'Delivery Service',
-      'Office & Corporate',
-      'Tech Company',
-      'Creative Agency',
-      'Healthcare',
-      'Other'
-    ]
-  },
-  location: {
-    type: String,
-    required: [true, 'Location is required'],
-    trim: true,
-    maxlength: [300, 'Location cannot exceed 300 characters']
-  },
-  jobType: {
-    type: String,
-    required: [true, 'Job type is required'],
-    enum: [
-      'Cafe & Restaurant',
-      'Tuition & Teaching',
-      'Events & Entertainment',
-      'Retail',
-      'Delivery',
-      'Office Work',
-      'Tech Support',
-      'Creative',
-      'Customer Service',
-      'Administrative',
-      'Other'
-    ]
-  },
-  pay: {
-    type: Number,
-    required: [true, 'Pay rate is required'],
-    min: [0, 'Pay rate cannot be negative']
-  },
-  payType: {
-    type: String,
-    required: [true, 'Pay type is required'],
-    enum: ['hourly', 'daily', 'weekly', 'monthly', 'per_task'],
-    default: 'hourly'
-  },
-  timing: {
-    type: String,
-    required: [true, 'Timing is required'],
-    enum: [
-      'Weekdays',
-      'Weekends',
-      'Both',
-      'Flexible',
-      'Morning (6 AM - 12 PM)',
-      'Afternoon (12 PM - 6 PM)',
-      'Evening (6 PM - 12 AM)',
-      'Night (12 AM - 6 AM)'
-    ]
-  },
-  positions: {
-    type: Number,
-    required: [true, 'Number of positions is required'],
-    min: [1, 'At least 1 position is required'],
-    max: [100, 'Cannot exceed 100 positions']
   },
   description: {
     type: String,
@@ -134,156 +54,140 @@ const jobSchema = new Schema<IJob>({
     trim: true,
     maxlength: [2000, 'Job description cannot exceed 2000 characters']
   },
-  requirements: {
+  location: {
+    type: String,
+    required: [true, 'Location is required'],
+    trim: true,
+    maxlength: [200, 'Location cannot exceed 200 characters']
+  },
+  salaryRange: {
+    type: String,
+    required: [true, 'Salary range is required'],
+    trim: true,
+    maxlength: [100, 'Salary range cannot exceed 100 characters']
+  },
+  workType: {
+    type: String,
+    required: [true, 'Work type is required'],
+    enum: ['Part-time', 'Full-time', 'Remote', 'On-site'],
+    default: 'Full-time'
+  },
+  skillsRequired: [{
     type: String,
     trim: true,
-    maxlength: [1000, 'Requirements cannot exceed 1000 characters']
+    maxlength: [100, 'Skill cannot exceed 100 characters']
+  }],
+  applicationDeadline: {
+    type: Date,
+    required: [true, 'Application deadline is required'],
+    validate: {
+      validator: function(this: IJob, value: Date) {
+        return value >= new Date();
+      },
+      message: 'Application deadline must be in the future'
+    }
   },
-  benefits: {
+  
+  // Auto-filled employer info
+  companyName: {
     type: String,
+    required: [true, 'Company name is required'],
     trim: true,
-    maxlength: [1000, 'Benefits cannot exceed 1000 characters']
+    maxlength: [200, 'Company name cannot exceed 200 characters']
   },
-  contactEmail: {
+  email: {
     type: String,
-    required: [true, 'Contact email is required'],
+    required: [true, 'Email is required'],
     lowercase: true,
     trim: true,
     match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
   },
-  contactPhone: {
+  phone: {
     type: String,
     trim: true,
     match: [/^(\+91|0)?[789]\d{9}$/, 'Please enter a valid Indian phone number']
   },
   
-  // Status and verification
+  // System fields
   status: {
     type: String,
     enum: ['active', 'paused', 'closed', 'expired'],
     default: 'active'
   },
-  isVerified: {
+  highlighted: {
     type: Boolean,
-    default: false
+    default: true // New jobs are highlighted by default
   },
-  isPremium: {
-    type: Boolean,
-    default: false
-  },
-  
-  // Analytics
-  views: {
-    type: Number,
-    default: 0,
-    min: [0, 'Views cannot be negative']
-  },
-  applications: {
-    type: Number,
-    default: 0,
-    min: [0, 'Applications cannot be negative']
-  },
-  shortlisted: {
-    type: Number,
-    default: 0,
-    min: [0, 'Shortlisted count cannot be negative']
-  },
-  hired: {
-    type: Number,
-    default: 0,
-    min: [0, 'Hired count cannot be negative']
-  },
-  
-  // Timestamps
-  postedDate: {
+  createdAt: {
     type: Date,
     default: Date.now
-  },
-  expiryDate: {
-    type: Date,
-    required: [true, 'Expiry date is required'],
-    validate: {
-      validator: function(this: IJob, value: Date) {
-        return value > new Date();
-      },
-      message: 'Expiry date must be in the future'
-    }
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
-// Indexes for better query performance
-jobSchema.index({ status: 1, isVerified: 1 });
+// Indexes for performance
+jobSchema.index({ employerId: 1, status: 1 });
+jobSchema.index({ status: 1, highlighted: 1 });
+jobSchema.index({ createdAt: -1 });
+jobSchema.index({ applicationDeadline: 1 });
+jobSchema.index({ workType: 1 });
 jobSchema.index({ location: 1 });
-jobSchema.index({ jobType: 1 });
-jobSchema.index({ timing: 1 });
-jobSchema.index({ pay: 1 });
-jobSchema.index({ employer: 1 });
-jobSchema.index({ postedDate: -1 });
-jobSchema.index({ expiryDate: 1 });
-jobSchema.index({ isPremium: 1 });
 
-// Virtual for formatted pay display
-jobSchema.virtual('payDisplay').get(function() {
-  const payTypeLabels = {
-    hourly: '/hour',
-    daily: '/day',
-    weekly: '/week',
-    monthly: '/month',
-    per_task: '/task'
-  };
-  
-  return `₹${this.pay}${payTypeLabels[this.payType]}`;
-});
-
-// Virtual for time since posted
-jobSchema.virtual('timeSincePosted').get(function() {
+// Virtual for job duration
+jobSchema.virtual('duration').get(function(this: IJob) {
   const now = new Date();
-  const posted = this.postedDate;
-  const diffInMs = now.getTime() - posted.getTime();
-  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+  const created = this.createdAt;
+  const diffTime = Math.abs(now.getTime() - created.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   
-  if (diffInDays === 0) return 'Today';
-  if (diffInDays === 1) return 'Yesterday';
-  if (diffInDays < 7) return `${diffInDays} days ago`;
-  if (diffInDays < 30) return `${Math.floor(diffInDays / 7)} weeks ago`;
-  if (diffInDays < 365) return `${Math.floor(diffInDays / 30)} months ago`;
-  return `${Math.floor(diffInDays / 365)} years ago`;
+  if (diffDays === 1) return '1 day ago';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 30) return `${Math.ceil(diffDays / 7)} weeks ago`;
+  return `${Math.ceil(diffDays / 30)} months ago`;
 });
 
-// Virtual for application rate
-jobSchema.virtual('applicationRate').get(function() {
-  if (this.views === 0) return 0;
-  return ((this.applications / this.views) * 100).toFixed(1);
+// Virtual to check if job is expired
+jobSchema.virtual('isExpired').get(function(this: IJob) {
+  return new Date() > this.applicationDeadline;
 });
 
-// Method to check if job is expired
-jobSchema.methods.isExpired = function(): boolean {
-  return new Date() > this.expiryDate;
+// Method to update job status
+jobSchema.methods.updateStatus = async function(this: IJob, newStatus: 'active' | 'paused' | 'closed' | 'expired') {
+  this.status = newStatus;
+  await this.save();
 };
 
-// Method to increment views
-jobSchema.methods.incrementViews = function(): Promise<void> {
-  this.views += 1;
-  return this.save();
-};
-
-// Method to increment applications
-jobSchema.methods.incrementApplications = function(): Promise<void> {
-  this.applications += 1;
-  return this.save();
-};
-
-// Pre-save middleware to set expiry date if not provided
-jobSchema.pre('save', function(next) {
-  if (!this.expiryDate) {
-    // Default expiry: 30 days from posted date
-    this.expiryDate = new Date(this.postedDate.getTime() + (30 * 24 * 60 * 60 * 1000));
+// Pre-save middleware to handle status updates
+jobSchema.pre('save', function(this: IJob) {
+  // Auto-expire jobs past their deadline
+  if (this.isExpired && this.status === 'active') {
+    this.status = 'expired';
   }
-  next();
 });
 
-const Job = mongoose.model<IJob>('Job', jobSchema);
-export { Job };
+// Static method to get job statistics
+jobSchema.statics.getStats = async function(employerId?: string) {
+  const matchField = employerId ? { employerId: new mongoose.Types.ObjectId(employerId) } : {};
+  
+  const stats = await this.aggregate([
+    { $match: matchField },
+    {
+      $group: {
+        _id: '$status',
+        count: { $sum: 1 }
+      }
+    }
+  ]);
+  
+  return stats.reduce((acc: any, stat: any) => {
+    acc[stat._id] = stat.count;
+    return acc;
+  }, {});
+};
+
+// Export the model
+export const Job = mongoose.model<IJob>('Job', jobSchema);
 export default Job;

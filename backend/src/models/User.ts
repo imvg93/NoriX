@@ -24,9 +24,22 @@ export interface IUser extends Document {
   
   // Common fields
   profilePicture?: string;
+  cloudinaryPublicId?: string; // Store Cloudinary public ID for easy deletion
+  companyLogo?: string; // For employers
+  companyLogoPublicId?: string; // For employers
   isActive: boolean;
   emailVerified: boolean;
   phoneVerified: boolean;
+  
+  // KYC Status fields
+  kycStatus?: 'not-submitted' | 'pending' | 'approved' | 'rejected';
+  kycVerifiedAt?: Date;
+  kycRejectedAt?: Date;
+  kycPendingAt?: Date;
+  
+  // Signup tracking
+  submittedAt: Date;
+  
   createdAt: Date;
   updatedAt: Date;
   
@@ -147,6 +160,18 @@ const userSchema = new Schema<IUser>({
     type: String,
     default: ''
   },
+  cloudinaryPublicId: {
+    type: String,
+    default: ''
+  },
+  companyLogo: {
+    type: String,
+    default: ''
+  },
+  companyLogoPublicId: {
+    type: String,
+    default: ''
+  },
   isActive: {
     type: Boolean,
     default: true
@@ -158,6 +183,22 @@ const userSchema = new Schema<IUser>({
   phoneVerified: {
     type: Boolean,
     default: false
+  },
+  
+  // KYC Status fields
+  kycStatus: {
+    type: String,
+    enum: ['not-submitted', 'pending', 'approved', 'rejected'],
+    default: 'not-submitted'
+  },
+  kycVerifiedAt: Date,
+  kycRejectedAt: Date,
+  kycPendingAt: Date,
+  
+  // Signup tracking
+  submittedAt: {
+    type: Date,
+    default: Date.now
   }
 }, {
   timestamps: true,
