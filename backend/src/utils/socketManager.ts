@@ -64,7 +64,7 @@ class SocketManager {
         console.log('🔐 Token decoded successfully:', { userId: decoded.userId });
         
         // Find user in database
-        const user = await User.findById(decoded.userId).select('_id email userType name');
+        const user = await User.findById(decoded.userId).select('_id email userType name') as any;
         
         if (!user) {
           console.log('❌ User not found for socket connection:', decoded.userId);
