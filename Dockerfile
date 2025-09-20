@@ -26,7 +26,7 @@ ENV NODE_ENV=production
 # Expose port
 EXPOSE 3000
 
-# Start the application using Railway start script
-CMD ["node", "backend/railway-start.js"]
+# Start the application directly
+CMD ["node", "backend/dist/index.js"]
 
 
