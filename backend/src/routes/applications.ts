@@ -2,10 +2,22 @@ import express from 'express';
 import mongoose from 'mongoose';
 import Application from '../models/Application';
 import Job from '../models/Job';
+import User from '../models/User';
 import { authenticateToken, requireStudent, requireEmployer, AuthRequest } from '../middleware/auth';
 import { asyncHandler, sendSuccessResponse, ValidationError } from '../middleware/errorHandler';
+import SocketManager from '../utils/socketManager';
+import EmailNotificationService from '../services/emailNotificationService';
 
 const router = express.Router();
+
+// Services will be injected from the main server
+let socketManager: SocketManager;
+let emailService: EmailNotificationService;
+
+export const setApplicationServices = (socket: SocketManager, email: EmailNotificationService) => {
+  socketManager = socket;
+  emailService = email;
+};
 
 // @route   POST /api/applications
 // @desc    Apply for a job
@@ -40,20 +52,70 @@ router.post('/', authenticateToken, requireStudent, asyncHandler(async (req: Aut
   // Create application
   const application = await Application.create({
     jobId: jobId,
+    job: jobId, // Ensure job field is also set for proper linkage
     studentId: req.user!._id,
+    student: req.user!._id, // Ensure student field is also set
     employer: job.employerId,
     coverLetter,
     expectedPay: expectedPay ? Number(expectedPay) : undefined,
     availability: availability || req.user!.availability
   });
 
-  // Note: Job application count increment removed as it's not in the simplified schema
-
   // Populate job and employer info
   await application.populate([
     { path: 'job', select: 'title company location pay payType' },
     { path: 'employer', select: 'name companyName' }
   ]);
+
+  // Get student info for notifications
+  const student = await User.findById(req.user!._id).select('name email phone');
+
+  // Real-time notification to employer
+  if (socketManager) {
+    socketManager.notifyNewApplication({
+      id: application._id,
+      jobId: jobId,
+      jobTitle: job.jobTitle,
+      companyName: job.companyName,
+      studentId: req.user!._id,
+      studentName: student?.name || student?.email,
+      studentEmail: student?.email,
+      studentPhone: student?.phone,
+      coverLetter: coverLetter,
+      expectedPay: expectedPay,
+      status: 'pending',
+      appliedAt: application.createdAt
+    }, job.employerId.toString());
+  }
+
+  // Email notification to employer
+  if (emailService && student) {
+    await emailService.sendNewApplicationNotification(
+      job.employerId.toString(),
+      {
+        id: application._id,
+        jobId: jobId,
+        jobTitle: job.jobTitle,
+        companyName: job.companyName,
+        status: 'pending',
+        appliedAt: application.createdAt
+      },
+      {
+        name: student.name || student.email,
+        email: student.email,
+        phone: student.phone
+      },
+      {
+        id: job._id,
+        jobTitle: job.jobTitle,
+        companyName: job.companyName,
+        location: job.location,
+        jobType: job.workType
+      }
+    );
+  }
+
+  console.log(`📝 New application submitted: ${student?.name || student?.email} for ${job.jobTitle} - Notifications sent`);
 
   sendSuccessResponse(res, { application }, 'Application submitted successfully', 201);
 }));
@@ -215,6 +277,46 @@ router.put('/:id/status', authenticateToken, requireEmployer, asyncHandler(async
     { path: 'jobId', select: 'title company location' },
     { path: 'studentId', select: 'name college skills' }
   ]);
+
+  // Get job details for notifications
+  const jobDetails = await Job.findById(application.jobId).select('jobTitle companyName location workType');
+
+  // Real-time notification to student
+  if (socketManager) {
+    socketManager.notifyApplicationStatusUpdate({
+      id: application._id,
+      jobId: application.jobId,
+      jobTitle: jobDetails?.jobTitle || 'Unknown Job',
+      companyName: jobDetails?.companyName || 'Unknown Company',
+      studentId: application.studentId,
+      status: status,
+      notes: notes,
+      updatedAt: new Date()
+    }, application.studentId.toString());
+  }
+
+  // Email notification to student
+  if (emailService && jobDetails) {
+    await emailService.sendApplicationStatusNotification(
+      application.studentId.toString(),
+      {
+        id: application._id,
+        jobId: application.jobId,
+        status: status,
+        notes: notes,
+        updatedAt: new Date()
+      },
+      {
+        id: jobDetails._id,
+        jobTitle: jobDetails.jobTitle,
+        companyName: jobDetails.companyName,
+        location: jobDetails.location,
+        jobType: jobDetails.workType
+      }
+    );
+  }
+
+  console.log(`📋 Application status updated: ${status} for job ${jobDetails?.jobTitle} - Notifications sent to student`);
 
   sendSuccessResponse(res, { application }, 'Application status updated successfully');
 }));

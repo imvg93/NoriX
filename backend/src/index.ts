@@ -6,13 +6,15 @@ import { connectDB } from './config/database';
 import nodemailer from 'nodemailer';
 import path from 'path';
 import SocketManager from './utils/socketManager';
+import EmailNotificationService from './services/emailNotificationService';
 
 // Import routes
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
-import jobRoutes from './routes/jobs';
-import applicationRoutes from './routes/applications';
+import jobRoutes, { setJobServices } from './routes/jobs';
+import applicationRoutes, { setApplicationServices } from './routes/applications';
 import adminRoutes from './routes/admin';
+import adminReportsRoutes from './routes/admin-reports';
 import kycRoutes from './routes/kyc';
 import uploadRoutes from './routes/upload';
 import testUploadRoutes from './routes/test-upload';
@@ -38,11 +40,19 @@ const socketManager = new SocketManager(server);
 // Make socketManager available globally for use in routes
 (global as any).socketManager = socketManager;
 
+// Initialize services
+const emailService = new EmailNotificationService();
+
+// Inject services into routes
+setJobServices(socketManager, emailService);
+setApplicationServices(socketManager, emailService);
+
 // CORS configuration (allow only Vercel frontend; keep ALLOW_ALL_CORS for debugging)
 const corsOptions = {
-  origin: ALLOW_ALL_CORS ? true : 'https://me-work.vercel.app',
+  origin: ALLOW_ALL_CORS ? true : ['http://localhost:3000', 'https://me-work.vercel.app'],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   optionsSuccessStatus: 200
 };
 
@@ -97,12 +107,27 @@ app.use('/api/users', userRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/reports', adminReportsRoutes);
 app.use('/api/kyc', kycRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/test-upload', testUploadRoutes);
 app.use('/api/debug-upload', debugUploadRoutes);
 app.use('/api/enhanced-jobs', enhancedJobRoutes);
 app.use('/api/notifications', notificationRoutes);
+
+// Debug: Print all registered routes
+console.log('🔍 Registered Routes:');
+app._router.stack.forEach((middleware: any) => {
+  if (middleware.route) {
+    console.log(`  ${Object.keys(middleware.route.methods).join(',').toUpperCase()} ${middleware.route.path}`);
+  } else if (middleware.name === 'router') {
+    middleware.handle.stack.forEach((handler: any) => {
+      if (handler.route) {
+        console.log(`  ${Object.keys(handler.route.methods).join(',').toUpperCase()} ${middleware.regexp.source.replace(/\\/g, '').replace(/\^|\$/, '')}${handler.route.path}`);
+      }
+    });
+  }
+});
 
 // Error handling middleware
 app.use(notFound);

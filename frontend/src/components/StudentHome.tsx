@@ -35,6 +35,8 @@ import TaskCard from './TaskCard';
 import NotificationCard from './NotificationCard';
 import { apiService, type JobsResponse, type ApplicationsResponse, type Job, type Application } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
+import NotificationDropdown from './NotificationDropdown';
 import { kycStatusService } from '../services/kycStatusService';
 
 interface AppliedJob {
@@ -237,13 +239,16 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
         <div className="flex flex-col space-y-3 sm:hidden">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Student Dashboard</h2>
-            <button 
-              onClick={handleLogout}
-              className="flex items-center gap-1 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden xs:inline">Logout</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <NotificationDropdown />
+              <button 
+                onClick={handleLogout}
+                className="flex items-center gap-1 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden xs:inline">Logout</span>
+              </button>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link 
@@ -316,6 +321,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
               <h2 className="text-lg font-semibold text-gray-900">Student Dashboard</h2>
               <p className="text-sm text-gray-600">Job Search & Applications</p>
             </div>
+            <NotificationDropdown />
             <button 
               onClick={handleLogout}
               className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"

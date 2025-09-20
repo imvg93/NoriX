@@ -16,9 +16,18 @@ export interface IJob extends Document {
   companyName: string;
   email: string;
   phone: string;
+  companyLogo?: string;
+  businessType?: string;
+  employerName?: string;
   
   // System fields
   status: 'active' | 'paused' | 'closed' | 'expired';
+  approvalStatus: 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string;
+  approvedBy?: mongoose.Types.ObjectId;
+  approvedAt?: Date;
+  rejectedBy?: mongoose.Types.ObjectId;
+  rejectedAt?: Date;
   highlighted: boolean;
   createdAt: Date;
   
@@ -107,12 +116,50 @@ const jobSchema = new Schema<IJob>({
     trim: true,
     match: [/^(\+91|0)?[789]\d{9}$/, 'Please enter a valid Indian phone number']
   },
+  companyLogo: {
+    type: String,
+    trim: true
+  },
+  businessType: {
+    type: String,
+    trim: true,
+    maxlength: [100, 'Business type cannot exceed 100 characters']
+  },
+  employerName: {
+    type: String,
+    trim: true,
+    maxlength: [100, 'Employer name cannot exceed 100 characters']
+  },
   
   // System fields
   status: {
     type: String,
     enum: ['active', 'paused', 'closed', 'expired'],
     default: 'active'
+  },
+  approvalStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'approved' // Auto-approve jobs for now
+  },
+  rejectionReason: {
+    type: String,
+    trim: true,
+    maxlength: 500
+  },
+  approvedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  approvedAt: {
+    type: Date
+  },
+  rejectedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  rejectedAt: {
+    type: Date
   },
   highlighted: {
     type: Boolean,

@@ -11,6 +11,92 @@ import { generateOTP, sendOTPEmail, verifyOTP, getEmailConfigStatus } from '../s
 
 const router = express.Router();
 
+// @route   GET /api/auth/verify-token
+// @desc    Verify JWT token and return user data
+// @access  Private
+router.get('/verify-token', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  try {
+    const user = req.user;
+    
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Return user data without sensitive information
+    const userData = {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      userType: user.userType,
+      companyName: user.companyName,
+      company: user.company,
+      isActive: user.isActive,
+      emailVerified: user.emailVerified,
+      createdAt: user.createdAt
+    };
+
+    return res.json({
+      success: true,
+      message: 'Token is valid',
+      user: userData
+    });
+  } catch (error) {
+    console.error('Token verification error:', error);
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid token'
+    });
+  }
+}));
+
+// @route   POST /api/auth/refresh-token
+// @desc    Refresh JWT token
+// @access  Private
+router.post('/refresh-token', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  try {
+    const user = req.user;
+    
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Generate new token
+    const token = jwt.sign(
+      { userId: user._id, userType: user.userType },
+      process.env.JWT_SECRET!,
+      { expiresIn: '7d' }
+    );
+
+    return res.json({
+      success: true,
+      message: 'Token refreshed successfully',
+      token,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        userType: user.userType,
+        companyName: user.companyName,
+        company: user.company,
+        isActive: user.isActive,
+        emailVerified: user.emailVerified
+      }
+    });
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Token refresh failed'
+    });
+  }
+}));
+
 // Enhanced CORS configuration for OTP endpoints
 const otpCorsOptions = {
   origin: function (origin: string | undefined, callback: Function) {

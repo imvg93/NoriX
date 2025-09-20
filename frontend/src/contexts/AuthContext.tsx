@@ -1,6 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import socketService from '../services/socketService';
+import { requestNotificationPermission } from './NotificationContext';
 
 interface User {
   _id: string;
@@ -9,6 +11,9 @@ interface User {
   userType: 'student' | 'employer' | 'admin';
   companyName?: string;
   company?: string;
+  isActive?: boolean;
+  emailVerified?: boolean;
+  kycStatus?: 'not-submitted' | 'pending' | 'approved' | 'rejected' | null;
 }
 
 interface AuthContextType {
@@ -17,6 +22,8 @@ interface AuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
   token: string | null;
+  loading: boolean;
+  refreshToken: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -24,36 +31,154 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    // Load user data from localStorage on component mount
-    const savedUser = localStorage.getItem('user');
-    const savedToken = localStorage.getItem('token');
-    
-    if (savedUser && savedToken) {
-      try {
-        setUser(JSON.parse(savedUser));
-        setToken(savedToken);
-      } catch (error) {
-        console.error('Error parsing saved user data:', error);
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
+  // Token validation function
+  const validateToken = async (authToken: string): Promise<boolean> => {
+    try {
+      console.log('🔍 Validating token...');
+      
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${API_URL}/auth/verify-token`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+      
+      console.log('🔍 Token validation response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('🔍 Token validation response:', data);
+        
+        if (data.success && data.user) {
+          console.log('✅ Token is valid for user:', data.user.name);
+          return true;
+        }
       }
+      
+      console.log('❌ Token validation failed');
+      return false;
+    } catch (error) {
+      console.error('❌ Token validation error:', error);
+      return false;
     }
+  };
+
+  // Initialize authentication on app start
+  useEffect(() => {
+    const initializeAuth = async () => {
+      try {
+        setLoading(true);
+        console.log('🔍 Initializing authentication...');
+        
+        // Check if we're in browser environment
+        if (typeof window === 'undefined') {
+          setLoading(false);
+          return;
+        }
+        
+        // Load saved authentication data
+        const savedUser = localStorage.getItem('user');
+        const savedToken = localStorage.getItem('token');
+        
+        if (savedUser && savedToken) {
+          try {
+            const parsedUser = JSON.parse(savedUser);
+            console.log('🔍 Found saved user:', parsedUser.name);
+            
+            // Validate the token
+            const isValid = await validateToken(savedToken);
+            
+            if (isValid) {
+              setUser(parsedUser);
+              setToken(savedToken);
+              console.log('✅ Authentication restored successfully');
+            } else {
+              console.log('❌ Invalid token, clearing storage');
+              localStorage.removeItem('user');
+              localStorage.removeItem('token');
+            }
+          } catch (error) {
+            console.error('❌ Error parsing saved user data:', error);
+            localStorage.removeItem('user');
+            localStorage.removeItem('token');
+          }
+        } else {
+          console.log('ℹ️ No saved authentication found');
+        }
+      } catch (error) {
+        console.error('❌ Auth initialization error:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
   }, []);
 
-  const login = (userData: User, authToken: string) => {
+  const login = async (userData: User, authToken: string) => {
+    console.log('✅ User logged in:', userData.name);
     setUser(userData);
     setToken(authToken);
-    localStorage.setItem('user', JSON.stringify(userData));
-    localStorage.setItem('token', authToken);
+    
+    // Save to localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('user', JSON.stringify(userData));
+      localStorage.setItem('token', authToken);
+    }
+
+    // Connect to socket with new token
+    socketService.reconnectWithToken(authToken);
+
+    // Request notification permission
+    await requestNotificationPermission();
   };
 
   const logout = () => {
+    console.log('👋 User logged out');
     setUser(null);
     setToken(null);
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
+    
+    // Clear localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+    }
+
+    // Disconnect socket
+    socketService.disconnect();
+  };
+
+  const refreshToken = async (): Promise<boolean> => {
+    try {
+      console.log('🔄 Refreshing token...');
+      
+      if (typeof window === 'undefined') return false;
+      
+      const currentToken = localStorage.getItem('token');
+      if (!currentToken) {
+        console.log('❌ No token to refresh');
+        return false;
+      }
+      
+      const isValid = await validateToken(currentToken);
+      if (isValid) {
+        console.log('✅ Token refreshed successfully');
+        return true;
+      } else {
+        console.log('❌ Token refresh failed, logging out');
+        logout();
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Token refresh error:', error);
+      logout();
+      return false;
+    }
   };
 
   const value: AuthContextType = {
@@ -61,7 +186,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     login,
     logout,
     isAuthenticated: !!user && !!token,
-    token
+    token,
+    loading,
+    refreshToken
   };
 
   return (

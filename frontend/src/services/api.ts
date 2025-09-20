@@ -1,4 +1,6 @@
 // Determine API base URL based on environment
+import { ApiErrorHandler, withErrorHandling } from '../utils/errorHandler';
+
 const getApiBaseUrl = () => {
   // Check if we're running in browser (client-side)
   if (typeof window !== 'undefined') {
@@ -174,17 +176,36 @@ class ApiService {
           // ignore JSON parse failure
         }
         
-        console.error('🌐 Error response:', {
-          status: response.status,
-          statusText: response.statusText,
-          errorData
-        });
+        // Only log error details if there's actual error data
+        if (errorData && Object.keys(errorData).length > 0) {
+          console.error('🌐 Error response:', {
+            status: response.status,
+            statusText: response.statusText,
+            errorData
+          });
+        } else {
+          console.log(`🌐 HTTP ${response.status} ${response.statusText} - no error details`);
+        }
+        
+        // Handle authentication errors
+        if (response.status === 401) {
+          // Clear invalid token
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          
+          // Redirect to login if not already there
+          if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          }
+          
+          throw new Error('Authentication failed. Please login again.');
+        }
         
         const message =
           errorData?.message ||
           errorData?.error?.message ||
           (Array.isArray(errorData?.errors) && errorData.errors[0]?.message) ||
-          (typeof errorData === 'string' ? errorData : `HTTP error! status: ${response.status}`);
+          (typeof errorData === 'string' ? errorData : `HTTP ${response.status} ${response.statusText}`);
 
         const err: any = new Error(message);
         err.status = response.status;
@@ -262,7 +283,75 @@ class ApiService {
   }
 
   async getProfile(): Promise<User> {
-    return this.request<User>('/users/profile');
+    const response = await this.request<{ user: User }>('/users/profile');
+    return response.user;
+  }
+
+  // Employer KYC APIs
+  async getEmployerKYCStatus(employerId: string): Promise<{ status: string; kyc?: any; user?: any }> {
+    try {
+      console.log('🔍 Fetching KYC status for employer:', employerId);
+      const res = await this.request<any>(`/kyc/employer/${employerId}/status`);
+      const data = res?.data || res;
+      console.log('📊 KYC Status Response:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error fetching KYC status:', error);
+      throw error;
+    }
+  }
+
+  async submitEmployerKYC(payload: { 
+    companyName: string; 
+    companyEmail?: string;
+    companyPhone?: string;
+    authorizedName?: string;
+    designation?: string;
+    address?: string;
+    city?: string;
+    latitude?: string;
+    longitude?: string;
+    GSTNumber?: string; 
+    PAN?: string; 
+    documents?: any 
+  }) {
+    try {
+      console.log('📝 Submitting Employer KYC:', payload);
+      const res = await this.request<any>(`/kyc/employer`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      const data = res?.data || res;
+      console.log('✅ KYC Submission Response:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error submitting KYC:', error);
+      throw error;
+    }
+  }
+
+  // Refresh KYC status (useful after submission)
+  async refreshEmployerKYCStatus(employerId: string): Promise<{ status: string; kyc?: any; user?: any }> {
+    try {
+      console.log('🔄 Refreshing KYC status for employer:', employerId);
+      // Add a small delay to ensure database consistency
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return this.getEmployerKYCStatus(employerId);
+    } catch (error) {
+      console.error('❌ Error refreshing KYC status:', error);
+      throw error;
+    }
+  }
+
+  async uploadKYCDocument(file: File, documentType: 'aadhar' | 'pan' | 'passport' | 'driving_license') {
+    const formData = new FormData();
+    formData.append('document', file);
+    formData.append('documentType', documentType);
+    const res = await this.request<any>(`/upload/kyc-document`, {
+      method: 'POST',
+      body: formData,
+    });
+    return res?.data || res;
   }
 
   // Test API connectivity
@@ -353,19 +442,6 @@ class ApiService {
     });
   }
 
-  async approveApplication(applicationId: string, notes?: string) {
-    return this.request(`/enhanced-jobs/applications/${applicationId}/approve`, {
-      method: 'PATCH',
-      body: JSON.stringify({ notes }),
-    });
-  }
-
-  async rejectApplication(applicationId: string, reason: string) {
-    return this.request(`/enhanced-jobs/applications/${applicationId}/reject`, {
-      method: 'PATCH',
-      body: JSON.stringify({ reason }),
-    });
-  }
 
   async getStudentApplications(status?: string) {
     const queryParams = status ? new URLSearchParams({ status }) : '';
@@ -390,6 +466,24 @@ class ApiService {
 
   async getJob(jobId: string) {
     return this.request(`/jobs/${jobId}`);
+  }
+
+  async applyForJob(jobId: string) {
+    return this.request(`/enhanced-jobs/${jobId}/apply`, {
+      method: 'POST',
+    });
+  }
+
+  async approveApplication(applicationId: string) {
+    return this.request(`/enhanced-jobs/applications/${applicationId}/approve`, {
+      method: 'PATCH',
+    });
+  }
+
+  async rejectApplication(applicationId: string) {
+    return this.request(`/enhanced-jobs/applications/${applicationId}/reject`, {
+      method: 'PATCH',
+    });
   }
 
   async updateJob(id: string, jobData: any) {
@@ -420,13 +514,21 @@ class ApiService {
 
   // Application APIs
   async applyToJob(jobId: string, applicationData: any) {
-    return this.request('/applications', {
-      method: 'POST',
-      body: JSON.stringify({
-        job: jobId,
-        ...applicationData,
-      }),
-    });
+    try {
+      console.log('📝 Applying to job:', jobId, applicationData);
+      const response = await this.request('/applications', {
+        method: 'POST',
+        body: JSON.stringify({
+          jobId: jobId, // Use jobId instead of job for consistency
+          ...applicationData,
+        }),
+      });
+      console.log('✅ Job application submitted successfully:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error applying to job:', error);
+      throw error;
+    }
   }
 
   async getUserApplications(): Promise<ApplicationsResponse> {
@@ -562,18 +664,6 @@ class ApiService {
 
   // User approval/rejection removed - no approval needed for login/signup
 
-  async approveJob(jobId: string) {
-    return this.request(`/admin/jobs/${jobId}/approve`, {
-      method: 'PATCH',
-    });
-  }
-
-  async rejectJob(jobId: string, reason: string) {
-    return this.request(`/admin/jobs/${jobId}/reject`, {
-      method: 'PATCH',
-      body: JSON.stringify({ reason }),
-    });
-  }
 
   // KYC Management APIs (Admin)
   async getKYCSubmissions(status = 'all', page = 1, limit = 10) {
@@ -600,6 +690,110 @@ class ApiService {
       method: 'PUT',
       body: JSON.stringify({ reason }),
     });
+  }
+
+  // Employer Job Management APIs (Admin)
+  async getAllJobsForAdmin(status?: string, approvalStatus?: string, page = 1, limit = 10) {
+    try {
+      const params = new URLSearchParams();
+      if (status && status !== 'all') params.append('status', status);
+      if (approvalStatus && approvalStatus !== 'all') params.append('approvalStatus', approvalStatus);
+      params.append('page', page.toString());
+      params.append('limit', limit.toString());
+      
+      console.log('🔍 Fetching admin jobs with params:', params.toString());
+      
+      const response = await this.request(`/jobs/admin?${params}`, {
+        method: 'GET',
+      });
+      
+      console.log('📊 Admin jobs response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error fetching admin jobs:', error);
+      throw error;
+    }
+  }
+
+  // Employer KYC Management APIs (Admin)
+  async getAllKYCRecords(status?: string, page = 1, limit = 10) {
+    try {
+      const params = new URLSearchParams();
+      if (status && status !== 'all') params.append('status', status);
+      params.append('page', page.toString());
+      params.append('limit', limit.toString());
+      
+      console.log('🔍 Fetching employer KYC with params:', params.toString());
+      
+      const response = await this.request(`/kyc/admin/all?${params}`, {
+        method: 'GET',
+      });
+      
+      console.log('📊 Employer KYC response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error fetching employer KYC:', error);
+      throw error;
+    }
+  }
+
+  async approveEmployerKYC(kycId: string) {
+    try {
+      console.log('✅ Approving employer KYC:', kycId);
+      const response = await this.request(`/kyc/admin/${kycId}/approve`, {
+        method: 'PATCH',
+      });
+      console.log('📊 Approve KYC response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error approving employer KYC:', error);
+      throw error;
+    }
+  }
+
+  async rejectEmployerKYC(kycId: string, rejectionReason: string) {
+    try {
+      console.log('❌ Rejecting employer KYC:', kycId, 'Reason:', rejectionReason);
+      const response = await this.request(`/kyc/admin/${kycId}/reject`, {
+        method: 'PATCH',
+        body: JSON.stringify({ rejectionReason }),
+      });
+      console.log('📊 Reject KYC response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error rejecting employer KYC:', error);
+      throw error;
+    }
+  }
+
+  // Job Management APIs (Admin)
+  async approveJob(jobId: string) {
+    try {
+      console.log('✅ Approving job:', jobId);
+      const response = await this.request(`/jobs/${jobId}/approve`, {
+        method: 'PATCH',
+      });
+      console.log('📊 Approve job response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error approving job:', error);
+      throw error;
+    }
+  }
+
+  async rejectJob(jobId: string, rejectionReason: string) {
+    try {
+      console.log('❌ Rejecting job:', jobId, 'Reason:', rejectionReason);
+      const response = await this.request(`/jobs/${jobId}/reject`, {
+        method: 'PATCH',
+        body: JSON.stringify({ rejectionReason }),
+      });
+      console.log('📊 Reject job response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error rejecting job:', error);
+      throw error;
+    }
   }
 
   // Utility methods
@@ -688,6 +882,35 @@ class ApiService {
     }
     
     return 'Something went wrong. Please try again or contact support if the problem continues.';
+  }
+
+  // Admin Reports APIs
+  async getUserStatistics() {
+    try {
+      console.log('📊 Fetching user statistics...');
+      const response = await this.request('/admin/reports/users', {
+        method: 'GET',
+      });
+      console.log('📊 User statistics response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error fetching user statistics:', error);
+      throw error;
+    }
+  }
+
+  async getComprehensiveStatistics() {
+    try {
+      console.log('📊 Fetching comprehensive statistics...');
+      const response = await this.request('/admin/reports/comprehensive', {
+        method: 'GET',
+      });
+      console.log('📊 Comprehensive statistics response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error fetching comprehensive statistics:', error);
+      throw error;
+    }
   }
 }
 

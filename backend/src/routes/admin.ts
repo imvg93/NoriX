@@ -263,6 +263,40 @@ router.get('/kyc', authenticateToken, requireRole(['admin']), asyncHandler(async
   }, 'KYC submissions retrieved successfully');
 }));
 
+// @route   GET /api/admin/kyc/stats
+// @desc    Get KYC statistics for admin dashboard
+// @access  Private (Admin only)
+router.get('/kyc/stats', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  console.log('🔍 Admin KYC Stats - Starting stats query');
+  console.log('  Admin User ID:', req.user!._id);
+  
+  const [
+    totalKYC,
+    pendingKYC,
+    approvedKYC,
+    rejectedKYC
+  ] = await Promise.all([
+    KYC.countDocuments({ isActive: true }),
+    KYC.countDocuments({ verificationStatus: 'pending', isActive: true }),
+    KYC.countDocuments({ verificationStatus: 'approved', isActive: true }),
+    KYC.countDocuments({ verificationStatus: 'rejected', isActive: true })
+  ]);
+  
+  console.log('📊 Admin KYC Stats - Results:', {
+    totalKYC,
+    pendingKYC,
+    approvedKYC,
+    rejectedKYC
+  });
+  
+  sendSuccessResponse(res, {
+    total: totalKYC,
+    pending: pendingKYC,
+    approved: approvedKYC,
+    rejected: rejectedKYC
+  }, 'KYC statistics retrieved successfully');
+}));
+
 // @route   GET /api/admin/kyc/:id
 // @desc    Get specific KYC submission details
 // @access  Private (Admin only)
@@ -541,37 +575,6 @@ router.put('/kyc/:id/pending', authenticateToken, requireRole(['admin']), asyncH
   console.log('✅ Admin KYC Pending - User KYC status updated in both collections');
   
   sendSuccessResponse(res, { kyc }, 'KYC submission set to pending successfully');
-}));
-
-// @route   GET /api/admin/kyc/stats
-// @desc    Get KYC statistics for admin dashboard
-// @access  Private (Admin only)
-router.get('/kyc/stats', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
-  console.log('🔍 Admin KYC Stats - Starting stats query');
-  console.log('  Admin User ID:', req.user!._id);
-  
-  const [
-    totalKYC,
-    pendingKYC,
-    approvedKYC,
-    rejectedKYC
-  ] = await Promise.all([
-    KYC.countDocuments({ isActive: true }),
-    KYC.countDocuments({ verificationStatus: 'pending', isActive: true }),
-    KYC.countDocuments({ verificationStatus: 'approved', isActive: true }),
-    KYC.countDocuments({ verificationStatus: 'rejected', isActive: true })
-  ]);
-  
-  const stats = {
-    total: totalKYC,
-    pending: pendingKYC,
-    approved: approvedKYC,
-    rejected: rejectedKYC
-  };
-  
-  console.log('📊 Admin KYC Stats - Results:', stats);
-  
-  sendSuccessResponse(res, stats, 'KYC statistics retrieved successfully');
 }));
 
 // @route   GET /api/admin/users

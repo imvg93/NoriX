@@ -41,7 +41,7 @@ router.post('/avatar', authenticateToken, upload.single('avatar'), asyncHandler(
     throw new ValidationError('No file uploaded');
   }
 
-  const user = await User.findById(req.user!._id);
+  const user = req.user;
   if (!user) {
     throw new ValidationError('User not found');
   }
@@ -119,7 +119,7 @@ router.post('/company-logo', authenticateToken, upload.single('logo'), asyncHand
     throw new ValidationError('No file uploaded');
   }
 
-  const user = await User.findById(req.user!._id);
+  const user = req.user;
   if (!user || user.userType !== 'employer') {
     throw new ValidationError('Only employers can upload company logos');
   }

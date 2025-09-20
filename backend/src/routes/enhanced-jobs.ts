@@ -29,10 +29,24 @@ router.post('/', authenticateToken, requireEmployer, asyncHandler(async (req: Au
     throw new ValidationError('Missing required fields: jobTitle, description, location, salaryRange, workType, applicationDeadline');
   }
 
-  // Get employer data for auto-fill
-  const employer = await User.findById(req.user!._id);
+  // Get employer data for auto-fill (already available in req.user from auth middleware)
+  const employer = req.user;
+  console.log('🔍 Employer data from auth middleware:', {
+    id: employer?._id,
+    email: employer?.email,
+    userType: employer?.userType,
+    companyName: employer?.companyName,
+    name: employer?.name
+  });
+  
   if (!employer) {
+    console.error('❌ No employer data found in req.user');
     throw new ValidationError('Employer not found');
+  }
+  
+  if (employer.userType !== 'employer') {
+    console.error('❌ User is not an employer:', employer.userType);
+    throw new ValidationError('Only employers can post jobs');
   }
 
   // Create job with only essential fields
@@ -48,18 +62,30 @@ router.post('/', authenticateToken, requireEmployer, asyncHandler(async (req: Au
     applicationDeadline: new Date(applicationDeadline),
     
     // Auto-filled employer info
-    companyName: employer.companyName || employer.name || '',
+    companyName: employer.companyName || employer.name || 'Company Name',
     email: employer.email || '',
     phone: employer.phone || '',
+    companyLogo: employer.companyLogo || '',
+    businessType: employer.businessType || '',
+    employerName: employer.name || '',
     
     // System fields
     status: 'active',
-    highlighted: true, // New jobs are highlighted for 24 hours
+    highlighted: true, // Jobs stay highlighted until assigned
     createdAt: new Date()
   });
 
   // Populate employer info
   await job.populate('employerId', 'name email companyName');
+
+  console.log('✅ Job created successfully:', {
+    jobId: job._id,
+    jobTitle: job.jobTitle,
+    employerId: job.employerId,
+    companyName: job.companyName,
+    email: job.email,
+    approvalStatus: job.approvalStatus
+  });
 
   sendSuccessResponse(res, { job }, 'Job posted successfully', 201);
 }));

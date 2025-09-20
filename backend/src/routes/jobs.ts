@@ -3,8 +3,19 @@ import { authenticateToken, requireRole, AuthRequest, requireEmployer, optionalA
 import { Job } from '../models/Job';
 import { User } from '../models/User';
 import { CustomError } from '../middleware/errorHandler';
+import SocketManager from '../utils/socketManager';
+import EmailNotificationService from '../services/emailNotificationService';
 
 const router = express.Router();
+
+// Services will be injected from the main server
+let socketManager: SocketManager;
+let emailService: EmailNotificationService;
+
+export const setJobServices = (socket: SocketManager, email: EmailNotificationService) => {
+  socketManager = socket;
+  emailService = email;
+};
 
 // Get all jobs with filters
 router.get('/', async (req, res, next) => {
@@ -35,16 +46,16 @@ router.get('/', async (req, res, next) => {
     }
     if (search) {
       filter.$or = [
-        { title: { $regex: search, $options: 'i' } },
+        { jobTitle: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } },
-        { company: { $regex: search, $options: 'i' } }
+        { companyName: { $regex: search, $options: 'i' } }
       ];
     }
 
     const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
     
     const jobs = await Job.find(filter)
-      .populate('employer', 'name company industry')
+      .populate('employerId', 'name companyName businessType')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit as string));
@@ -65,11 +76,188 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// Admin routes for job management (must be before /:id route)
+router.get('/admin', authenticateToken, async (req: AuthRequest, res, next) => {
+  try {
+    if (req.user?.userType !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+
+    const { status, approvalStatus, page = 1, limit = 10 } = req.query;
+    
+    const filter: any = {};
+    if (status) filter.status = status;
+    if (approvalStatus) filter.approvalStatus = approvalStatus;
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const jobs = await Job.find(filter)
+      .populate('employerId', 'name email companyName phone')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(Number(limit));
+
+    const total = await Job.countDocuments(filter);
+
+    return res.json({
+      success: true,
+      data: {
+        jobs,
+        pagination: {
+          current: Number(page),
+          total: Math.ceil(total / Number(limit)),
+          count: jobs.length,
+          totalRecords: total
+        }
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/:id/approve', authenticateToken, async (req: AuthRequest, res, next) => {
+  try {
+    if (req.user?.userType !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+
+    const job = await Job.findById(req.params.id).populate('employerId', 'name email');
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        message: 'Job not found'
+      });
+    }
+
+    (job as any).approvalStatus = 'approved';
+    (job as any).approvedBy = req.user._id;
+    (job as any).approvedAt = new Date();
+    await job.save();
+
+    // Real-time notification to all students
+    if (socketManager) {
+      socketManager.notifyJobApproved({
+        id: job._id,
+        jobTitle: job.jobTitle,
+        companyName: job.companyName,
+        location: job.location,
+        jobType: job.workType,
+        salary: job.salaryRange,
+        description: job.description,
+        requirements: job.skillsRequired.join(', '),
+        createdAt: job.createdAt
+      });
+    }
+
+    // Email notification to employer
+    if (emailService && job.employerId) {
+      await emailService.sendJobApprovalNotification(
+        (job.employerId as any)._id.toString(),
+        {
+          id: job._id,
+          jobTitle: job.jobTitle,
+          companyName: job.companyName,
+          location: job.location,
+          jobType: job.workType,
+          salary: job.salaryRange
+        }
+      );
+    }
+
+    console.log(`✅ Job approved: ${job.jobTitle} - Real-time notifications sent`);
+
+    return res.json({
+      success: true,
+      message: 'Job approved successfully',
+      data: job
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/:id/reject', authenticateToken, async (req: AuthRequest, res, next) => {
+  try {
+    if (req.user?.userType !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+
+    const { rejectionReason } = req.body;
+    if (!rejectionReason) {
+      return res.status(400).json({
+        success: false,
+        message: 'Rejection reason is required'
+      });
+    }
+
+    const job = await Job.findById(req.params.id).populate('employerId', 'name email');
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        message: 'Job not found'
+      });
+    }
+
+    (job as any).approvalStatus = 'rejected';
+    (job as any).rejectionReason = rejectionReason;
+    (job as any).rejectedBy = req.user._id;
+    (job as any).rejectedAt = new Date();
+    await job.save();
+
+    // Real-time notification to employer
+    if (socketManager && job.employerId) {
+      socketManager.notifyJobRejected({
+        id: job._id,
+        jobTitle: job.jobTitle,
+        companyName: job.companyName,
+        location: job.location,
+        jobType: job.workType,
+        rejectionReason: rejectionReason
+      }, (job.employerId as any)._id.toString());
+    }
+
+    // Email notification to employer
+    if (emailService && job.employerId) {
+      await emailService.sendJobRejectionNotification(
+        (job.employerId as any)._id.toString(),
+        {
+          id: job._id,
+          jobTitle: job.jobTitle,
+          companyName: job.companyName,
+          location: job.location,
+          jobType: job.workType
+        },
+        rejectionReason
+      );
+    }
+
+    console.log(`❌ Job rejected: ${job.jobTitle} - Notifications sent to employer`);
+
+    return res.json({
+      success: true,
+      message: 'Job rejected successfully',
+      data: job
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 // Get single job by ID
 router.get('/:id', async (req, res, next) => {
   try {
     const job = await Job.findById(req.params.id)
-      .populate('employer', 'name company industry location description');
+      .populate('employerId', 'name companyName businessType location');
 
     if (!job) {
       throw new CustomError('Job not found', 404);
@@ -201,7 +389,7 @@ router.post('/', async (req: AuthRequest, res, next) => {
     await job.save();
     
     // Populate employer info
-    await job.populate('employer', 'name company email');
+    await job.populate('employerId', 'name companyName email');
 
     res.status(201).json({
       success: true,
@@ -269,7 +457,7 @@ router.get('/employer', async (req, res, next) => {
       status: 'active',
       approvalStatus: 'approved' 
     })
-      .populate('employer', 'name company email')
+      .populate('employerId', 'name companyName email')
       .sort({ createdAt: -1 });
 
     res.json({ jobs });
@@ -285,7 +473,7 @@ router.get('/category/:category', async (req, res, next) => {
       category: { $regex: req.params.category, $options: 'i' },
       status: 'active'
     })
-      .populate('employer', 'name company')
+      .populate('employerId', 'name companyName')
       .sort({ createdAt: -1 })
       .limit(20);
 
@@ -302,7 +490,7 @@ router.get('/location/:location', async (req, res, next) => {
       location: { $regex: req.params.location, $options: 'i' },
       status: 'active'
     })
-      .populate('employer', 'name company')
+      .populate('employerId', 'name companyName')
       .sort({ createdAt: -1 })
       .limit(20);
 

@@ -23,7 +23,7 @@ const HomePage: React.FC = () => {
       case 'student':
         return <StudentHome user={user} />;
       case 'admin':
-        return <AdminHome user={user} />;
+        return <AdminHome />;
       case 'employer':
         return <EmployerHome user={user} />;
       default:
