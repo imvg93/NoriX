@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:20-alpine
 
 # Set working directory
 WORKDIR /app
@@ -6,55 +6,27 @@ WORKDIR /app
 # Ensure npm uses the public registry to avoid connection resets
 RUN npm config set registry https://registry.npmjs.org/
 
-# Enable corepack just in case (harmless if unused)
-RUN corepack enable || true
-
-FROM base AS deps
-
-# Copy only manifests for deterministic install layer
+# Copy package files
 COPY package.json package-lock.json ./
 COPY backend/package.json ./backend/package.json
 COPY frontend/package.json ./frontend/package.json
 
-# Install all dependencies (including dev) for building
-# Avoid `npm ci`; use `npm install` for tolerance to lockfile drift
+# Install dependencies
 RUN npm install
 
-FROM base AS build
-
+# Copy source code
 COPY . .
 
-# Reuse node_modules from deps stage
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/backend/node_modules ./backend/node_modules
-COPY --from=deps /app/frontend/node_modules ./frontend/node_modules
-
-# Build backend (TypeScript) and frontend (Next.js)
+# Build the application
 RUN npm run build:backend && npm run build:frontend
 
-FROM node:20-alpine AS runner
-WORKDIR /app
-
-# Keep registry configuration in the final image as well
-RUN npm config set registry https://registry.npmjs.org/
-
+# Set production environment
 ENV NODE_ENV=production
 
-# Install only production dependencies for runtime using cache
-COPY package.json package-lock.json ./
-COPY backend/package.json ./backend/package.json
-COPY frontend/package.json ./frontend/package.json
-RUN npm install --omit=dev
+# Expose port
+EXPOSE 3000
 
-# Copy built artifacts and only necessary runtime files
-COPY --from=build /app/backend/dist ./backend/dist
-COPY --from=build /app/frontend/.next ./frontend/.next
-COPY --from=build /app/frontend/public ./frontend/public
-
-# Expose common ports (adjust as your backend/frontend serve ports)
-EXPOSE 3000 8080
-
-# Default command starts the backend compiled server; adjust if you proxy frontend via backend
-CMD ["node", "backend/dist/index.js"]
+# Start the application using Railway start script
+CMD ["node", "backend/railway-start.js"]
 
 
