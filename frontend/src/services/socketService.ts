@@ -99,7 +99,20 @@ class SocketService {
       console.log('🔌 Connecting to Socket.IO server...');
       
       // Get the correct server URL (remove /api from the API URL)
-      const serverUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000').replace('/api', '');
+      let serverUrl: string;
+      
+      if (process.env.NEXT_PUBLIC_API_URL) {
+        serverUrl = process.env.NEXT_PUBLIC_API_URL.replace('/api', '');
+      } else if (window.location.hostname.includes('vercel.app')) {
+        // For Vercel deployment, use Railway backend
+        serverUrl = 'https://studentjobs-backend-production.up.railway.app';
+      } else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        serverUrl = 'http://localhost:5000';
+      } else {
+        serverUrl = 'http://localhost:5000';
+      }
+      
+      console.log('🔌 Socket connecting to:', serverUrl);
       
       this.socket = io(serverUrl, {
         auth: {

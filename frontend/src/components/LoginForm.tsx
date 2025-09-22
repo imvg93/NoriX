@@ -8,8 +8,7 @@ import { apiService } from '../services/api';
 const LoginForm: React.FC = () => {
   const [formData, setFormData] = useState({
     email: '',
-    password: '',
-    userType: 'admin' as 'student' | 'employer' | 'admin'
+    password: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -23,11 +22,11 @@ const LoginForm: React.FC = () => {
     setError('');
 
     try {
-      console.log('🔍 Attempting login for:', formData.email, formData.userType);
+      console.log('🔍 Attempting auto-login for:', formData.email);
       
-      const response = await apiService.login(formData.email, formData.password, formData.userType);
+      const response = await apiService.loginAuto(formData.email, formData.password);
       
-      console.log('✅ Login successful:', response);
+      console.log('✅ Auto-login successful:', response);
       
       if (response.user && response.token) {
         // Store user data and token
@@ -45,14 +44,14 @@ const LoginForm: React.FC = () => {
         setError('Login failed. Please check your credentials.');
       }
     } catch (error: any) {
-      console.error('❌ Login error:', error);
+      console.error('❌ Auto-login error:', error);
       setError(error.message || 'Login failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -68,7 +67,7 @@ const LoginForm: React.FC = () => {
             Sign in to your account
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Admin Panel Access
+            Enter your email and password to access your dashboard
           </p>
         </div>
         
@@ -105,23 +104,6 @@ const LoginForm: React.FC = () => {
                 value={formData.password}
                 onChange={handleInputChange}
               />
-            </div>
-            <div>
-              <label htmlFor="userType" className="sr-only">
-                User Type
-              </label>
-              <select
-                id="userType"
-                name="userType"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                value={formData.userType}
-                onChange={handleInputChange}
-              >
-                <option value="admin">Admin</option>
-                <option value="employer">Employer</option>
-                <option value="student">Student</option>
-              </select>
             </div>
           </div>
 

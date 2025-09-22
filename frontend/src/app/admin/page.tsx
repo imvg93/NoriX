@@ -177,6 +177,21 @@ export default function AdminDashboard() {
     }
   });
 
+  // Force mobile view on small screens
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 640) {
+        document.body.classList.add('mobile-view');
+      } else {
+        document.body.classList.remove('mobile-view');
+      }
+    };
+    
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   useEffect(() => {
     const fetchAdminData = async () => {
       try {
@@ -310,10 +325,10 @@ export default function AdminDashboard() {
 
   const renderOverview = () => (
     <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Stats Cards - Mobile Optimized */}
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
         <motion.div 
-          className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+          className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
           whileHover={{ scale: 1.02 }}
         >
           <div className="flex items-center justify-between">
@@ -328,7 +343,7 @@ export default function AdminDashboard() {
         </motion.div>
 
         <motion.div 
-          className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+          className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
           whileHover={{ scale: 1.02 }}
         >
           <div className="flex items-center justify-between">
@@ -343,7 +358,7 @@ export default function AdminDashboard() {
         </motion.div>
 
         <motion.div 
-          className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+          className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
           whileHover={{ scale: 1.02 }}
         >
           <div className="flex items-center justify-between">
@@ -358,7 +373,7 @@ export default function AdminDashboard() {
         </motion.div>
 
         <motion.div 
-          className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+          className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
           whileHover={{ scale: 1.02 }}
         >
           <div className="flex items-center justify-between">
@@ -373,8 +388,8 @@ export default function AdminDashboard() {
         </motion.div>
       </div>
 
-      {/* Pending Approvals */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Pending Approvals - Mobile Optimized */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
         <motion.div 
           className="bg-white p-6 rounded-xl shadow-sm border border-gray-200"
           whileHover={{ scale: 1.02 }}
@@ -416,9 +431,9 @@ export default function AdminDashboard() {
 
   const renderStudents = () => (
     <div className="space-y-6">
-      {/* Search and Filter */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-        <div className="flex flex-col md:flex-row gap-4">
+      {/* Search and Filter - Mobile Optimized */}
+      <div className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -449,9 +464,76 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Students Table */}
+      {/* Students - Mobile Cards & Desktop Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile: Card Layout */}
+        <div className="sm:hidden">
+          <div className="p-3 space-y-2">
+            {data.students.map((student) => (
+              <motion.div 
+                key={student._id}
+                className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                whileHover={{ backgroundColor: '#f3f4f6' }}
+              >
+                {/* Header with name and status */}
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-gray-900 truncate">{student.name}</div>
+                    <div className="text-xs text-gray-500 truncate">{student.email}</div>
+                  </div>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(student.approvalStatus)}`}>
+                    {getStatusIcon(student.approvalStatus)}
+                    <span className="ml-1">{student.approvalStatus}</span>
+                  </span>
+                </div>
+                
+                {/* College */}
+                <div className="text-xs text-gray-700 mb-2 truncate">{student.college}</div>
+                
+                {/* Skills */}
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {student.skills.slice(0, 2).map((skill, index) => (
+                    <span key={index} className="px-1.5 py-0.5 bg-gray-100 text-gray-800 text-[10px] rounded-full">
+                      {skill}
+                    </span>
+                  ))}
+                  {student.skills.length > 2 && (
+                    <span className="px-1.5 py-0.5 bg-gray-100 text-gray-800 text-[10px] rounded-full">
+                      +{student.skills.length - 2}
+                    </span>
+                  )}
+                </div>
+                
+                {/* Footer with date and actions */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">{new Date(student.submittedAt).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => openApprovalModal(student._id, 'student', 'approve')}
+                      className="p-1 text-green-600 hover:text-green-900 rounded hover:bg-green-50"
+                      title="Approve"
+                    >
+                      <CheckCircle className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => openApprovalModal(student._id, 'student', 'reject')}
+                      className="p-1 text-red-600 hover:text-red-900 rounded hover:bg-red-50"
+                      title="Reject"
+                    >
+                      <XCircle className="w-3 h-3" />
+                    </button>
+                    <button className="p-1 text-blue-600 hover:text-blue-900 rounded hover:bg-blue-50" title="View">
+                      <Eye className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Desktop: Table Layout */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
@@ -532,9 +614,9 @@ export default function AdminDashboard() {
 
   const renderEmployers = () => (
     <div className="space-y-6">
-      {/* Search and Filter */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-        <div className="flex flex-col md:flex-row gap-4">
+      {/* Search and Filter - Mobile Optimized */}
+      <div className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -565,9 +647,63 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Employers Table */}
+      {/* Employers - Mobile Cards & Desktop Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile: Card Layout */}
+        <div className="sm:hidden">
+          <div className="p-3 space-y-2">
+            {data.employers.map((employer) => (
+              <motion.div 
+                key={employer._id}
+                className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                whileHover={{ backgroundColor: '#f3f4f6' }}
+              >
+                {/* Header with name and status */}
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-gray-900 truncate">{employer.name}</div>
+                    <div className="text-xs text-gray-500 truncate">{employer.email}</div>
+                  </div>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(employer.approvalStatus)}`}>
+                    {getStatusIcon(employer.approvalStatus)}
+                    <span className="ml-1">{employer.approvalStatus}</span>
+                  </span>
+                </div>
+                
+                {/* Company info */}
+                <div className="text-xs text-gray-700 mb-1 truncate">{employer.companyName}</div>
+                <div className="text-xs text-gray-600 mb-2 truncate">{employer.businessType}</div>
+                
+                {/* Footer with date and actions */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">{new Date(employer.submittedAt).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => openApprovalModal(employer._id, 'employer', 'approve')}
+                      className="p-1 text-green-600 hover:text-green-900 rounded hover:bg-green-50"
+                      title="Approve"
+                    >
+                      <CheckCircle className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => openApprovalModal(employer._id, 'employer', 'reject')}
+                      className="p-1 text-red-600 hover:text-red-900 rounded hover:bg-red-50"
+                      title="Reject"
+                    >
+                      <XCircle className="w-3 h-3" />
+                    </button>
+                    <button className="p-1 text-blue-600 hover:text-blue-900 rounded hover:bg-blue-50" title="View">
+                      <Eye className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Desktop: Table Layout */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
@@ -635,9 +771,9 @@ export default function AdminDashboard() {
 
   const renderJobs = () => (
     <div className="space-y-6">
-      {/* Search and Filter */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-        <div className="flex flex-col md:flex-row gap-4">
+      {/* Search and Filter - Mobile Optimized */}
+      <div className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -668,9 +804,64 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Jobs Table */}
+      {/* Jobs - Mobile Cards & Desktop Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile: Card Layout */}
+        <div className="sm:hidden">
+          <div className="p-3 space-y-2">
+            {data.jobs.map((job) => (
+              <motion.div 
+                key={job._id}
+                className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                whileHover={{ backgroundColor: '#f3f4f6' }}
+              >
+                {/* Header with title and status */}
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-gray-900 truncate">{job.title}</div>
+                    <div className="text-xs text-gray-500 truncate">{job.jobType}</div>
+                  </div>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(job.approvalStatus)}`}>
+                    {getStatusIcon(job.approvalStatus)}
+                    <span className="ml-1">{job.approvalStatus}</span>
+                  </span>
+                </div>
+                
+                {/* Company and location */}
+                <div className="text-xs text-gray-700 mb-1 truncate">{job.company}</div>
+                <div className="text-xs text-gray-600 mb-1 truncate">{job.location}</div>
+                <div className="text-xs text-gray-600 mb-2">₹{job.pay}/{job.payType}</div>
+                
+                {/* Footer with date and actions */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">{new Date(job.submittedAt).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => openApprovalModal(job._id, 'job', 'approve')}
+                      className="p-1 text-green-600 hover:text-green-900 rounded hover:bg-green-50"
+                      title="Approve"
+                    >
+                      <CheckCircle className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => openApprovalModal(job._id, 'job', 'reject')}
+                      className="p-1 text-red-600 hover:text-red-900 rounded hover:bg-red-50"
+                      title="Reject"
+                    >
+                      <XCircle className="w-3 h-3" />
+                    </button>
+                    <button className="p-1 text-blue-600 hover:text-blue-900 rounded hover:bg-blue-50" title="View">
+                      <Eye className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Desktop: Table Layout */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
@@ -742,10 +933,10 @@ export default function AdminDashboard() {
 
   const renderKYC = () => (
     <div className="space-y-6">
-      {/* KYC Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      {/* KYC Stats Cards - Mobile Optimized */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6">
         <motion.div 
-          className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+          className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
           whileHover={{ scale: 1.02 }}
         >
           <div className="flex items-center justify-between">
@@ -760,7 +951,7 @@ export default function AdminDashboard() {
         </motion.div>
 
         <motion.div 
-          className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+          className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
           whileHover={{ scale: 1.02 }}
         >
           <div className="flex items-center justify-between">
@@ -775,7 +966,7 @@ export default function AdminDashboard() {
         </motion.div>
 
         <motion.div 
-          className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+          className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
           whileHover={{ scale: 1.02 }}
         >
           <div className="flex items-center justify-between">
@@ -790,7 +981,7 @@ export default function AdminDashboard() {
         </motion.div>
 
         <motion.div 
-          className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+          className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
           whileHover={{ scale: 1.02 }}
         >
           <div className="flex items-center justify-between">
@@ -805,9 +996,9 @@ export default function AdminDashboard() {
         </motion.div>
       </div>
 
-      {/* Search and Filter */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-        <div className="flex flex-col md:flex-row gap-4">
+      {/* Search and Filter - Mobile Optimized */}
+      <div className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -838,9 +1029,80 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* KYC Submissions Table */}
+      {/* KYC Submissions - Mobile Cards & Desktop Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile: Card Layout */}
+        <div className="sm:hidden">
+          <div className="p-3 space-y-2">
+            {data.kycSubmissions.map((kyc) => (
+              <motion.div 
+                key={kyc._id}
+                className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                whileHover={{ backgroundColor: '#f3f4f6' }}
+              >
+                {/* Header with name and status */}
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-gray-900 truncate">{kyc.fullName}</div>
+                    <div className="text-xs text-gray-500 truncate">{kyc.email}</div>
+                  </div>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(kyc.verificationStatus)}`}>
+                    {getStatusIcon(kyc.verificationStatus)}
+                    <span className="ml-1">{kyc.verificationStatus}</span>
+                  </span>
+                </div>
+                
+                {/* College */}
+                <div className="text-xs text-gray-700 mb-2 truncate">{kyc.college}</div>
+                
+                {/* Documents */}
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {kyc.aadharCard && (
+                    <span className="px-1.5 py-0.5 bg-green-100 text-green-800 text-[10px] rounded-full">Aadhaar</span>
+                  )}
+                  {kyc.collegeIdCard && (
+                    <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded-full">College ID</span>
+                  )}
+                </div>
+                
+                {/* Footer with date and actions */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">{new Date(kyc.submittedAt).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => openKYCModal(kyc._id)}
+                      className="p-1 text-blue-600 hover:text-blue-900 rounded hover:bg-blue-50"
+                      title="View Details"
+                    >
+                      <Eye className="w-3 h-3" />
+                    </button>
+                    {kyc.verificationStatus === 'pending' && (
+                      <>
+                        <button
+                          onClick={() => openApprovalModal(kyc._id, 'kyc', 'approve')}
+                          className="p-1 text-green-600 hover:text-green-900 rounded hover:bg-green-50"
+                          title="Approve"
+                        >
+                          <CheckCircle className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => openApprovalModal(kyc._id, 'kyc', 'reject')}
+                          className="p-1 text-red-600 hover:text-red-900 rounded hover:bg-red-50"
+                          title="Reject"
+                        >
+                          <XCircle className="w-3 h-3" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Desktop: Table Layout */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
@@ -936,11 +1198,41 @@ export default function AdminDashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
+    <>
+      {/* Mobile viewport meta tag */}
+      <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+      <div className="min-h-screen bg-gray-50 mobile-dashboard">
+      {/* Header - Mobile Optimized */}
       <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+          {/* Mobile Layout */}
+          <div className="sm:hidden py-3">
+            <div className="flex items-center justify-between mb-2">
+              <button
+                onClick={() => window.history.back()}
+                className="flex items-center gap-1 text-gray-600 hover:text-gray-900 font-medium transition-colors text-sm"
+              >
+                <svg className="w-4 h-4 transition-transform duration-300 group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Back
+              </button>
+              <button 
+                onClick={() => window.location.reload()}
+                className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-1 text-sm"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Refresh
+              </button>
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-gray-900">Admin Dashboard</h1>
+              <p className="text-xs text-gray-600">Student Job Portal Management</p>
+            </div>
+          </div>
+          
+          {/* Desktop Layout */}
+          <div className="hidden sm:flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
               <button
                 onClick={() => window.history.back()}
@@ -969,37 +1261,40 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Navigation Tabs */}
+      {/* Navigation Tabs - Mobile Optimized */}
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex space-x-8">
-            {[
-              { id: 'overview', name: 'Overview', icon: TrendingUp },
-              { id: 'students', name: 'Students', icon: Users },
-              { id: 'employers', name: 'Employers', icon: Building2 },
-              { id: 'jobs', name: 'Jobs', icon: Briefcase },
-              { id: 'kyc', name: 'KYC Verification', icon: Shield },
-              { id: 'applications', name: 'Applications', icon: FileText }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-indigo-500 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <tab.icon className="w-4 h-4" />
-                {tab.name}
-              </button>
-            ))}
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+          <nav className="flex overflow-x-auto scrollbar-hide">
+            <div className="flex space-x-1 sm:space-x-8 min-w-max">
+              {[
+                { id: 'overview', name: 'Overview', icon: TrendingUp },
+                { id: 'students', name: 'Students', icon: Users },
+                { id: 'employers', name: 'Employers', icon: Building2 },
+                { id: 'jobs', name: 'Jobs', icon: Briefcase },
+                { id: 'kyc', name: 'KYC', icon: Shield },
+                { id: 'applications', name: 'Applications', icon: FileText }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-1 sm:gap-2 py-3 sm:py-4 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? 'border-indigo-500 text-indigo-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <tab.icon className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden xs:inline">{tab.name}</span>
+                  <span className="xs:hidden">{tab.name.split(' ')[0]}</span>
+                </button>
+              ))}
+            </div>
           </nav>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Main Content - Mobile Optimized */}
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-8">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -1265,5 +1560,6 @@ export default function AdminDashboard() {
         )}
       </AnimatePresence>
     </div>
+    </>
   );
 }

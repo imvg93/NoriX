@@ -201,6 +201,25 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
     throw new ValidationError('Invalid user type');
   }
 
+  // 🔒 SECURITY: Prevent unauthorized admin creation
+  if (userType === 'admin') {
+    const AUTHORIZED_ADMIN_EMAILS = [
+      'mework2003@gmail.com'        // Only authorized admin email
+    ];
+    
+    if (!AUTHORIZED_ADMIN_EMAILS.includes(email.toLowerCase())) {
+      console.log('🚨 SECURITY ALERT: Unauthorized admin creation attempt:', {
+        email: email,
+        ip: req.ip,
+        userAgent: req.get('User-Agent'),
+        timestamp: new Date().toISOString()
+      });
+      throw new ValidationError('Admin account creation is restricted. Please contact support.');
+    }
+    
+    console.log('✅ Authorized admin registration attempt:', email);
+  }
+
   // Validate student-specific fields
   if (userType === 'student' && !college) {
     throw new ValidationError('College/University is required for students');
@@ -288,6 +307,92 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
     },
     token
   }, 'User registered successfully', 201);
+}));
+
+// @route   POST /api/auth/login-auto
+// @desc    Login with email and password (auto-detect user role)
+// @access  Public
+router.post('/login-auto', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const { email, password } = req.body;
+
+  console.log('🔐 Auto-login attempt:', { email, passwordLength: password?.length });
+
+  // Validate input
+  if (!email || !password) {
+    console.log('❌ Missing required fields');
+    throw new ValidationError('Email and password are required');
+  }
+
+  // Find user by email
+  const user = await User.findOne({ email });
+  if (!user) {
+    console.log('❌ User not found:', email);
+    throw new ValidationError('No account found with this email address');
+  }
+
+  console.log('✅ User found:', { id: user._id, email: user.email, userType: user.userType });
+
+  // Check if user is active
+  if (!user.isActive) {
+    console.log('❌ User account is inactive:', email);
+    throw new ValidationError('Account is deactivated');
+  }
+
+  // Verify password
+  const isPasswordValid = await user.comparePassword(password);
+  if (!isPasswordValid) {
+    console.log('❌ Invalid password for:', email);
+    throw new ValidationError('Invalid email or password');
+  }
+
+  // Generate JWT token
+  const token = jwt.sign(
+    { 
+      userId: user._id, 
+      email: user.email, 
+      userType: user.userType 
+    },
+    process.env.JWT_SECRET!,
+    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+  );
+
+  // Log successful login for admin users
+  if (user.userType === 'admin') {
+    try {
+      await AdminLogin.create({
+        adminId: user._id,
+        adminEmail: user.email,
+        adminName: user.name,
+        loginStatus: 'success',
+        ipAddress: req.ip || req.connection.remoteAddress,
+        userAgent: req.get('User-Agent')
+      });
+    } catch (logError) {
+      console.error('Failed to log admin login:', logError);
+    }
+  }
+
+  console.log('✅ Auto-login successful:', { email, userType: user.userType });
+
+  sendSuccessResponse(res, {
+    user: {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      userType: user.userType,
+      college: user.college,
+      skills: user.skills,
+      availability: user.availability,
+      companyName: user.companyName,
+      businessType: user.businessType,
+      address: user.address,
+      isVerified: user.isVerified,
+      emailVerified: user.emailVerified,
+      createdAt: user.createdAt
+    },
+    token
+  }, 'Login successful');
 }));
 
 // @route   POST /api/auth/login

@@ -231,6 +231,14 @@ class ApiService {
     });
   }
 
+  async loginAuto(email: string, password: string): Promise<AuthResponse> {
+    console.log('🔐 Auto-login API call:', { email, apiUrl: API_BASE_URL });
+    return this.request('/auth/login-auto', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  }
+
   async loginRequestOTP(email: string, userType: string): Promise<{ message: string; email: string; userType: string }> {
     return this.request('/auth/login-request-otp', {
       method: 'POST',
@@ -770,6 +778,9 @@ class ApiService {
   async approveJob(jobId: string) {
     try {
       console.log('✅ Approving job:', jobId);
+      console.log('🌐 API Base URL:', API_BASE_URL);
+      console.log('🌐 Full endpoint:', `${API_BASE_URL}/jobs/${jobId}/approve`);
+      
       const response = await this.request(`/jobs/${jobId}/approve`, {
         method: 'PATCH',
       });
@@ -777,6 +788,13 @@ class ApiService {
       return response;
     } catch (error) {
       console.error('❌ Error approving job:', error);
+      console.error('❌ Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        status: (error as any)?.status,
+        details: (error as any)?.details,
+        endpoint: `/jobs/${jobId}/approve`,
+        apiUrl: API_BASE_URL
+      });
       throw error;
     }
   }
@@ -784,6 +802,9 @@ class ApiService {
   async rejectJob(jobId: string, rejectionReason: string) {
     try {
       console.log('❌ Rejecting job:', jobId, 'Reason:', rejectionReason);
+      console.log('🌐 API Base URL:', API_BASE_URL);
+      console.log('🌐 Full endpoint:', `${API_BASE_URL}/jobs/${jobId}/reject`);
+      
       const response = await this.request(`/jobs/${jobId}/reject`, {
         method: 'PATCH',
         body: JSON.stringify({ rejectionReason }),
@@ -792,6 +813,13 @@ class ApiService {
       return response;
     } catch (error) {
       console.error('❌ Error rejecting job:', error);
+      console.error('❌ Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        status: (error as any)?.status,
+        details: (error as any)?.details,
+        endpoint: `/jobs/${jobId}/reject`,
+        apiUrl: API_BASE_URL
+      });
       throw error;
     }
   }

@@ -137,66 +137,39 @@ const Login1 = ({
     }
 
     try {
-      // Try to login with password for different user types
-      const userTypes = ['student', 'employer', 'admin'];
-      let loginSuccess = false;
-      let lastError = '';
+      console.log('🔐 Attempting auto-login for:', formData.email);
+      const response: any = await apiService.loginAuto(formData.email.trim(), formData.password);
       
-      for (const userType of userTypes) {
-        try {
-          console.log(`🔐 Attempting login for userType: ${userType}`);
-          const response: any = await apiService.login(formData.email.trim(), formData.password, userType);
-          
-          console.log('🔐 Password login response:', response);
-          
-          const { user, token } = response.data || response;
-          
-          if (token && user) {
-            // Store the token and user data
-            localStorage.setItem('token', token);
-            localStorage.setItem('user', JSON.stringify(user));
-            
-            // Login the user using AuthContext
-            login(user, token);
-            
-            setSuccess('Login successful! Redirecting to your dashboard...');
-            
-            // Redirect immediately to appropriate dashboard based on user type
-            const redirectPath = user.userType === 'student' ? '/student-home' 
-                               : user.userType === 'employer' ? '/employer-home'
-                               : user.userType === 'admin' ? '/admin-home'
-                               : '/';
-            
-            console.log('🚀 Redirecting to:', redirectPath);
-            
-            router.push(redirectPath);
-            loginSuccess = true;
-            break;
-          }
-        } catch (error: any) {
-          console.log(`❌ Login failed for ${userType}:`, error.message);
-          lastError = error.message;
-          // Continue to next user type
-          continue;
-        }
-      }
+      console.log('🔐 Auto-login response:', response);
       
-      if (!loginSuccess) {
-        // Show specific error message based on the last error
-        if (lastError.includes('Incorrect password')) {
-          setError('Incorrect password. Please check your password and try again.');
-        } else if (lastError.includes('No account found')) {
-          setError('No account found with this email address. Please check your email or sign up for a new account.');
-        } else if (lastError.includes('Invalid user type')) {
-          setError('Invalid user type for this account. Please try a different user type.');
-        } else if (lastError.includes('Account is deactivated')) {
-          setError('Your account has been deactivated. Please contact support for assistance.');
-        } else {
-          setError('Invalid email or password. Please try again or use OTP login.');
-        }
+      const { user, token } = response.data || response;
+      
+      if (token && user) {
+        // Store the token and user data
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
+        
+        // Login the user using AuthContext
+        login(user, token);
+        
+        setSuccess('Login successful! Redirecting to your dashboard...');
+        
+        // Redirect immediately to appropriate dashboard based on user type
+        const redirectPath = user.userType === 'student' ? '/student-home' 
+                           : user.userType === 'employer' ? '/employer-home'
+                           : user.userType === 'admin' ? '/admin-home'
+                           : '/';
+        
+        console.log('🚀 Redirecting to:', redirectPath);
+        
+        router.push(redirectPath);
+        return;
+      } else {
+        setError('Login failed. Please check your credentials.');
       }
     } catch (error: any) {
-      console.error('❌ Login error:', error);
+      console.error('❌ Auto-login error:', error);
+      setError(error.message || 'Login failed. Please try again.');
       setError(apiService.handleError(error));
     } finally {
       setLoading(false);
@@ -376,42 +349,6 @@ const Login1 = ({
             {step === 'login' && (
               <form className="flex flex-col gap-6" onSubmit={handlePasswordLogin}>
                 <div className="flex flex-col gap-4">
-                  {/* User Type Selection */}
-                  <div className="flex items-center justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setUserType('student')}
-                      className={`flex-1 h-10 border rounded-xl text-sm font-medium transition-all duration-300 ${
-                        userType === 'student'
-                          ? 'border-green-600 bg-green-50 text-green-700'
-                          : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      🎓 Student
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setUserType('employer')}
-                      className={`flex-1 h-10 border rounded-xl text-sm font-medium transition-all duration-300 ${
-                        userType === 'employer'
-                          ? 'border-green-600 bg-green-50 text-green-700'
-                          : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      💼 Employer
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setUserType('admin')}
-                      className={`flex-1 h-10 border rounded-xl text-sm font-medium transition-all duration-300 ${
-                        userType === 'admin'
-                          ? 'border-red-600 bg-red-50 text-red-700'
-                          : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      👑 Admin
-                    </button>
-                  </div>
                   <div className="relative group">
                     <Input 
                       type="email" 

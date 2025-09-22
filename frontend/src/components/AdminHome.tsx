@@ -10,7 +10,6 @@ import {
   Users, 
   Building, 
   BookOpen, 
-  Activity, 
   AlertTriangle, 
   Plus, 
   Eye,
@@ -31,20 +30,14 @@ import {
   User,
   CreditCard,
   FileCheck,
-  Download
+  Download,
+  UserCheck
 } from 'lucide-react';
 import StatsCard from './StatsCard';
 import NotificationCard from './NotificationCard';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/api';
 
-interface Activity {
-  id: number;
-  action: string;
-  user: string;
-  time: string;
-  type: string;
-}
 
 interface SystemAlert {
   id: number;
@@ -162,7 +155,6 @@ const AdminHome: React.FC = () => {
       kycApproved: 0,
       kycPending: 0
     },
-    recentActivity: [] as Activity[],
     systemAlerts: [] as SystemAlert[]
   });
   const [loading, setLoading] = useState(true);
@@ -345,6 +337,8 @@ const AdminHome: React.FC = () => {
   const handleJobApproval = async (jobId: string, action: 'approve' | 'reject', reason?: string) => {
     try {
       console.log(`🔍 Processing job ${action} for job ID: ${jobId}`);
+      console.log('🌐 Current API URL:', process.env.NEXT_PUBLIC_API_URL);
+      console.log('🌐 Current hostname:', window.location.hostname);
       
       if (action === 'approve') {
         console.log('✅ Approving job...');
@@ -366,9 +360,20 @@ const AdminHome: React.FC = () => {
       
       console.log('✅ Job approval process completed successfully');
       
+      // Show success message
+      alert(`Job ${action}d successfully!`);
+      
     } catch (error) {
       console.error('❌ Error handling job approval:', error);
-      alert(`Failed to ${action} job: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('❌ Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        status: (error as any)?.status,
+        details: (error as any)?.details
+      });
+      
+      // More detailed error message
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to ${action} job: ${errorMessage}`);
     }
   };
 
@@ -483,17 +488,29 @@ const AdminHome: React.FC = () => {
       try {
         setLoading(true);
         
-        // Fetch real admin statistics
-        const statsResponse = await apiService.getAdminStats() as any;
-        const stats = statsResponse.data || statsResponse;
+        // Fetch admin statistics and KYC stats in parallel
+        const [statsResponse, kycStatsResponse] = await Promise.all([
+          apiService.getAdminStats() as any,
+          apiService.getKYCStats() as any
+        ]);
         
-        const usersTotal = (stats.users?.total ?? ((stats.users?.students || 0) + (stats.users?.employers || 0) + (stats.users?.admins || 0))) || 0;
-        const usersActive = (stats.users?.active ?? stats.users?.activeUsers) || 0;
-        const kycApproved = (stats.kyc?.approved) || 0;
-        const kycPending = (stats.kyc?.pending) || 0;
+        const stats = statsResponse.data || statsResponse;
+        const kycStats = kycStatsResponse.data || kycStatsResponse;
+        
+        console.log('📊 Admin stats response:', stats);
+        console.log('📊 KYC stats response:', kycStats);
+        
+        // Extract user data
+        const usersTotal = stats.users?.total || 0;
+        const usersActive = stats.users?.active || stats.users?.activeUsers || 0;
+        
+        // Extract KYC data
+        const kycApproved = kycStats.approved || 0;
+        const kycPending = kycStats.pending || 0;
 
-        const cpuUsage: number | null = (stats.performance?.cpuUsage ?? stats.performance?.cpu?.usage ?? stats.system?.cpuUsage) ?? null;
-        const memoryUsage: number | null = (stats.performance?.memoryUsage ?? stats.performance?.memory?.usage ?? stats.system?.memoryUsage) ?? null;
+        // System performance (placeholder for now)
+        const cpuUsage: number | null = null; // TODO: Implement system performance monitoring
+        const memoryUsage: number | null = null;
 
         setSystemPerformance({ cpuUsage, memoryUsage });
 
@@ -504,7 +521,6 @@ const AdminHome: React.FC = () => {
             kycApproved: kycApproved,
             kycPending: kycPending
           },
-          recentActivity: [], // TODO: Implement recent activity API
           systemAlerts: [
             {
               id: 1,
@@ -525,8 +541,15 @@ const AdminHome: React.FC = () => {
           ]
         });
         
+        console.log('✅ Admin data loaded:', {
+          totalUsers: usersTotal,
+          activeUsers: usersActive,
+          kycApproved: kycApproved,
+          kycPending: kycPending
+        });
+        
       } catch (error) {
-        console.error('Error fetching admin data:', error);
+        console.error('❌ Error fetching admin data:', error);
         // Keep default data on error
         setSystemPerformance({ cpuUsage: null, memoryUsage: null });
         setData({
@@ -536,7 +559,6 @@ const AdminHome: React.FC = () => {
             kycApproved: 0,
             kycPending: 0
           },
-          recentActivity: [],
           systemAlerts: []
         });
       } finally {
@@ -589,67 +611,108 @@ const AdminHome: React.FC = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-8 space-y-4 sm:space-y-6">
-      {/* Navigation Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 gap-3 sticky top-0 z-20">
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <Link 
-            href="/home" 
-            className="flex items-center gap-2 px-3 py-2 sm:px-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs sm:text-sm font-medium"
-          >
-            <Shield className="w-4 h-4" />
-            Home
-          </Link>
-          <Link 
-            href="/admin-dashboard" 
-            className="flex items-center gap-2 px-3 py-2 sm:px-4 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-xs sm:text-sm font-medium"
-          >
-            <FileText className="w-4 h-4" />
-            KYC Dashboard
-          </Link>
-          <button 
-            onClick={() => window.history.back()} 
-            className="flex items-center gap-2 px-3 py-2 sm:px-4 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-xs sm:text-sm font-medium"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </button>
-        </div>
-        <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4">
-          <div className="text-left sm:text-right">
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900">{user?.name || user?.email || 'Admin'} Dashboard</h2>
-            <p className="text-xs sm:text-sm text-gray-600">System Management & Analytics</p>
+    <div className="max-w-6xl mx-auto px-2 sm:px-4 lg:px-8 space-y-3 sm:space-y-6">
+      {/* Navigation Header - Improved Mobile */}
+      <div className="flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 gap-3 sticky top-0 z-20">
+        {/* Mobile: Stacked layout */}
+        <div className="flex flex-col sm:hidden gap-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">{user?.name || user?.email || 'Admin'}</h2>
+            <button 
+              onClick={handleLogout}
+              className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs font-medium"
+            >
+              <LogOut className="w-3 h-3" />
+              Logout
+            </button>
           </div>
-          <button 
-            onClick={handleLogout}
-            className="flex items-center gap-2 px-3 py-2 sm:px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs sm:text-sm font-medium"
-          >
-            <LogOut className="w-4 h-4" />
-            Logout
-          </button>
+          <p className="text-xs text-gray-600">Admin Dashboard</p>
+          <div className="flex flex-wrap gap-2">
+            <Link 
+              href="/home" 
+              className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs font-medium"
+            >
+              <Shield className="w-3 h-3" />
+              Home
+            </Link>
+            <Link 
+              href="/admin-dashboard" 
+              className="flex items-center gap-1 px-2 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-xs font-medium"
+            >
+              <FileText className="w-3 h-3" />
+              KYC Dashboard
+            </Link>
+            <button 
+              onClick={() => window.history.back()} 
+              className="flex items-center gap-1 px-2 py-1 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-xs font-medium"
+            >
+              <ArrowLeft className="w-3 h-3" />
+              Back
+            </button>
+          </div>
+        </div>
+        
+        {/* Desktop: Original layout */}
+        <div className="hidden sm:flex sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <Link 
+              href="/home" 
+              className="flex items-center gap-2 px-3 py-2 sm:px-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs sm:text-sm font-medium"
+            >
+              <Shield className="w-4 h-4" />
+              Home
+            </Link>
+            <Link 
+              href="/admin-dashboard" 
+              className="flex items-center gap-2 px-3 py-2 sm:px-4 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-xs sm:text-sm font-medium"
+            >
+              <FileText className="w-4 h-4" />
+              KYC Dashboard
+            </Link>
+            <button 
+              onClick={() => window.history.back()} 
+              className="flex items-center gap-2 px-3 py-2 sm:px-4 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-xs sm:text-sm font-medium"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back
+            </button>
+          </div>
+          <div className="flex items-center justify-end gap-3 sm:gap-4">
+            <div className="text-right">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900">{user?.name || user?.email || 'Admin'} Dashboard</h2>
+              <p className="text-xs sm:text-sm text-gray-600">System Management & Analytics</p>
+            </div>
+            <button 
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-3 py-2 sm:px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs sm:text-sm font-medium"
+            >
+              <LogOut className="w-4 h-4" />
+              Logout
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Welcome Banner */}
+      {/* Welcome Banner - Improved Mobile */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="bg-gradient-to-r from-green-600 to-green-700 rounded-2xl p-4 sm:p-6 text-white"
+        className="bg-gradient-to-r from-green-600 to-green-700 rounded-xl p-3 sm:p-6 text-white"
       >
-        <div className="flex items-center gap-3 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <div className="p-2 sm:p-3 bg-white/20 rounded-full">
-            <Shield className="w-6 h-6 sm:w-8 sm:h-8" />
+            <Shield className="w-5 h-5 sm:w-8 sm:h-8" />
           </div>
-          <div>
-            <h1 className="text-lg sm:text-2xl font-bold">Welcome back, {user?.name || user?.email || 'Admin'}!</h1>
-            <p className="text-green-100 text-xs sm:text-sm">Here's your system overview and recent activities</p>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-base sm:text-2xl font-bold truncate">Welcome back, {user?.name || user?.email || 'Admin'}!</h1>
+            <p className="text-green-100 text-xs sm:text-sm">System overview and management</p>
           </div>
         </div>
       </motion.div>
 
-      {/* Stats Cards - wired to real admin stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Stats Cards - Improved Mobile Layout */}
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
         <StatsCard
           title="Total Users"
           value={(data.stats.totalUsers || 0).toLocaleString()}
@@ -661,7 +724,7 @@ const AdminHome: React.FC = () => {
         <StatsCard
           title="Active Users"
           value={(data.stats.activeUsers || 0).toLocaleString()}
-          icon={Activity}
+          icon={UserCheck}
           color="green"
           change="Currently active"
           changeType="positive"
@@ -684,59 +747,7 @@ const AdminHome: React.FC = () => {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        {/* Recent Activity */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <Activity className="w-5 h-5 text-green-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
-          </div>
-          <div className="space-y-3">
-            {data.recentActivity.map((activity: Activity) => (
-              <div key={activity.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="p-2 bg-green-100 rounded-full">
-                  <Clock className="w-4 h-4 text-green-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">{activity.action}</p>
-                  <p className="text-xs text-gray-600">by {activity.user}</p>
-                </div>
-                <span className="text-xs text-gray-500">{activity.time}</span>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* System Alerts */}
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <AlertTriangle className="w-5 h-5 text-orange-600" />
-            <h2 className="text-lg font-semibold text-gray-900">System Alerts</h2>
-          </div>
-          <div className="space-y-3">
-            {data.systemAlerts.map((alert: SystemAlert) => (
-              <NotificationCard
-                key={alert.id}
-                title={alert.title}
-                message={alert.message}
-                type={alert.type}
-                timestamp={alert.timestamp}
-                isRead={alert.isRead}
-              />
-            ))}
-          </div>
-        </motion.div>
-      </div>
+     
 
       {/* Quick Actions */}
       <motion.div
@@ -764,32 +775,7 @@ const AdminHome: React.FC = () => {
         </div>
       </motion.div>
 
-      {/* Performance Overview - uses CPU/Memory from /api/admin/stats */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.4 }}
-        className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6"
-      >
-        <div className="flex items-center gap-2 mb-4">
-          <TrendingUp className="w-5 h-5 text-blue-600" />
-          <h2 className="text-lg font-semibold text-gray-900">System Performance</h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
-          <div className="text-center p-4 bg-blue-50 rounded-lg">
-            <div className="text-2xl font-bold text-blue-600">{systemPerformance.cpuUsage ?? '—'}%</div>
-            <div className="text-sm text-blue-600">CPU Usage</div>
-          </div>
-          <div className="text-center p-4 bg-green-50 rounded-lg">
-            <div className="text-2xl font-bold text-green-600">{systemPerformance.memoryUsage ?? '—'}%</div>
-            <div className="text-sm text-green-600">Memory Usage</div>
-          </div>
-          <div className="text-center p-4 bg-purple-50 rounded-lg">
-            <div className="text-2xl font-bold text-purple-600">{(data.stats.activeUsers || 0).toLocaleString()}</div>
-            <div className="text-sm text-purple-600">Active Users</div>
-          </div>
-        </div>
-      </motion.div>
+     
 
       {/* KYC Management Section */}
       <motion.div
@@ -893,37 +879,54 @@ const AdminHome: React.FC = () => {
           </div>
         ) : (
           <>
-            {/* Mobile: Card list */}
-            <div className="sm:hidden space-y-3">
+            {/* Mobile: Improved Card list */}
+            <div className="sm:hidden space-y-2">
               {filteredKYCSubmissions.map((kyc) => (
-                <div key={kyc._id} className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold text-gray-900">{kyc.fullName}</div>
-                      <div className="text-xs text-gray-500">{kyc.email}</div>
+                <div key={kyc._id} className="p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                  {/* Header with name and status */}
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-gray-900 truncate">{kyc.fullName}</div>
+                      <div className="text-xs text-gray-500 truncate">{kyc.email}</div>
                     </div>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(kyc.verificationStatus)}`}>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(kyc.verificationStatus)}`}>
                       {getStatusIcon(kyc.verificationStatus)}
                       <span className="ml-1 capitalize">{kyc.verificationStatus}</span>
                     </span>
                   </div>
-                  <div className="mt-2 text-xs text-gray-700">{kyc.college}</div>
-                  <div className="mt-2 flex flex-wrap gap-1">
+                  
+                  {/* College info */}
+                  <div className="text-xs text-gray-700 mb-2 truncate">{kyc.college}</div>
+                  
+                  {/* Documents */}
+                  <div className="flex flex-wrap gap-1 mb-2">
                     {kyc.aadharCard && (
-                      <span className="px-2 py-0.5 bg-green-100 text-green-800 text-[11px] rounded-full">Aadhaar</span>
+                      <span className="px-1.5 py-0.5 bg-green-100 text-green-800 text-[10px] rounded-full">Aadhaar</span>
                     )}
                     {kyc.collegeIdCard && (
-                      <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[11px] rounded-full">College ID</span>
+                      <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded-full">College ID</span>
                     )}
                   </div>
-                  <div className="mt-3 flex items-center justify-between">
+                  
+                  {/* Footer with date and actions */}
+                  <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-500">{new Date(kyc.submittedAt).toLocaleDateString()}</span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
                       <button onClick={() => openKYCModal(kyc._id)} className="px-2 py-1 text-xs text-blue-600 bg-blue-50 rounded hover:bg-blue-100">View</button>
                       {(kyc.verificationStatus === 'pending' || kyc.verificationStatus === 'in-review') && (
                         <>
                           <button onClick={() => openApprovalModal(kyc._id, 'approve', 'kyc')} className="px-2 py-1 text-xs text-white bg-green-600 rounded hover:bg-green-700">Approve</button>
                           <button onClick={() => openApprovalModal(kyc._id, 'reject', 'kyc')} className="px-2 py-1 text-xs text-red-700 bg-red-100 rounded hover:bg-red-200">Reject</button>
+                        </>
+                      )}
+                      {kyc.verificationStatus === 'approved' && (
+                        <>
+                          <button onClick={() => openApprovalModal(kyc._id, 'reject', 'kyc')} className="px-2 py-1 text-xs text-red-700 bg-red-100 rounded hover:bg-red-200">Reject</button>
+                        </>
+                      )}
+                      {kyc.verificationStatus === 'rejected' && (
+                        <>
+                          <button onClick={() => openApprovalModal(kyc._id, 'approve', 'kyc')} className="px-2 py-1 text-xs text-white bg-green-600 rounded hover:bg-green-700">Approve</button>
                         </>
                       )}
                     </div>
@@ -1005,6 +1008,24 @@ const AdminHome: React.FC = () => {
                             </button>
                           </>
                         )}
+                        {kyc.verificationStatus === 'approved' && (
+                          <button
+                            onClick={() => openApprovalModal(kyc._id, 'reject', 'kyc')}
+                            className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50"
+                            title="Reject"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
+                        )}
+                        {kyc.verificationStatus === 'rejected' && (
+                          <button
+                            onClick={() => openApprovalModal(kyc._id, 'approve', 'kyc')}
+                            className="text-green-600 hover:text-green-900 p-1 rounded hover:bg-green-50"
+                            title="Approve"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </motion.tr>
@@ -1084,48 +1105,67 @@ const AdminHome: React.FC = () => {
           </div>
         ) : (
           <>
-            {/* Mobile: Card list */}
-            <div className="sm:hidden space-y-3">
+            {/* Mobile: Improved Card list */}
+            <div className="sm:hidden space-y-2">
               {filteredEmployerJobs.map((job) => (
                 <motion.div 
                   key={job._id} 
-                  className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm"
+                  className="p-3 bg-white rounded-lg border border-gray-200 shadow-sm"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1">
-                      <div className="text-sm font-semibold text-gray-900">{job.jobTitle}</div>
-                      <div className="text-xs text-gray-500">{job.companyName}</div>
-                      <div className="text-xs text-gray-600 mt-1">{job.location}</div>
-                      <div className="text-xs text-gray-600">₹{job.salaryRange}</div>
+                  {/* Header with title and status */}
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-gray-900 truncate">{job.jobTitle}</div>
+                      <div className="text-xs text-gray-500 truncate">{job.companyName}</div>
                     </div>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(job.approvalStatus)}`}>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(job.approvalStatus)}`}>
                       {getStatusIcon(job.approvalStatus)}
                       <span className="ml-1 capitalize">{job.approvalStatus}</span>
                     </span>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {job.skillsRequired.slice(0, 3).map((skill, index) => (
-                      <span key={index} className="px-2 py-0.5 bg-gray-100 text-gray-800 text-[11px] rounded-full">
+                  
+                  {/* Job details */}
+                  <div className="text-xs text-gray-700 mb-2">
+                    <div className="truncate">{job.location}</div>
+                    <div className="truncate">₹{job.salaryRange}</div>
+                  </div>
+                  
+                  {/* Skills */}
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {job.skillsRequired.slice(0, 2).map((skill, index) => (
+                      <span key={index} className="px-1.5 py-0.5 bg-gray-100 text-gray-800 text-[10px] rounded-full">
                         {skill}
                       </span>
                     ))}
-                    {job.skillsRequired.length > 3 && (
-                      <span className="px-2 py-0.5 bg-gray-100 text-gray-800 text-[11px] rounded-full">
-                        +{job.skillsRequired.length - 3}
+                    {job.skillsRequired.length > 2 && (
+                      <span className="px-1.5 py-0.5 bg-gray-100 text-gray-800 text-[10px] rounded-full">
+                        +{job.skillsRequired.length - 2}
                       </span>
                     )}
                   </div>
-                  <div className="mt-3 flex items-center justify-between">
+                  
+                  {/* Footer with date and actions */}
+                  <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-500">{new Date(job.createdAt).toLocaleDateString()}</span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
                       <button onClick={() => openJobModal(job)} className="px-2 py-1 text-xs text-blue-600 bg-blue-50 rounded hover:bg-blue-100">View</button>
                       {job.approvalStatus === 'pending' && (
                         <>
                           <button onClick={() => openApprovalModal(job._id, 'approve', 'job')} className="px-2 py-1 text-xs text-white bg-green-600 rounded hover:bg-green-700">Approve</button>
                           <button onClick={() => openApprovalModal(job._id, 'reject', 'job')} className="px-2 py-1 text-xs text-red-700 bg-red-100 rounded hover:bg-red-200">Reject</button>
+                        </>
+                      )}
+                      {job.approvalStatus === 'approved' && (
+                        <>
+                          <button onClick={() => openApprovalModal(job._id, 'reject', 'job')} className="px-2 py-1 text-xs text-red-700 bg-red-100 rounded hover:bg-red-200">Reject</button>
+                        </>
+                      )}
+                      {job.approvalStatus === 'rejected' && (
+                        <>
+                          <button onClick={() => openApprovalModal(job._id, 'approve', 'job')} className="px-2 py-1 text-xs text-white bg-green-600 rounded hover:bg-green-700">Approve</button>
                         </>
                       )}
                     </div>
@@ -1202,6 +1242,24 @@ const AdminHome: React.FC = () => {
                                 <XCircle className="w-4 h-4" />
                               </button>
                             </>
+                          )}
+                          {job.approvalStatus === 'approved' && (
+                            <button
+                              onClick={() => openApprovalModal(job._id, 'reject', 'job')}
+                              className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50"
+                              title="Reject"
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          )}
+                          {job.approvalStatus === 'rejected' && (
+                            <button
+                              onClick={() => openApprovalModal(job._id, 'approve', 'job')}
+                              className="text-green-600 hover:text-green-900 p-1 rounded hover:bg-green-50"
+                              title="Approve"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </button>
                           )}
                         </div>
                       </td>
@@ -1322,46 +1380,63 @@ const AdminHome: React.FC = () => {
           </div>
         ) : (
           <>
-            {/* Mobile: Card list */}
-            <div className="sm:hidden space-y-3">
+            {/* Mobile: Improved Card list */}
+            <div className="sm:hidden space-y-2">
               {filteredEmployerKYCSubmissions.map((kyc) => (
                 <motion.div 
                   key={kyc._id} 
-                  className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm"
+                  className="p-3 bg-white rounded-lg border border-gray-200 shadow-sm"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1">
-                      <div className="text-sm font-semibold text-gray-900">{kyc.companyName}</div>
-                      <div className="text-xs text-gray-500">{kyc.employerId.email}</div>
-                      <div className="text-xs text-gray-600 mt-1">{kyc.authorizedName || 'N/A'}</div>
+                  {/* Header with company and status */}
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-gray-900 truncate">{kyc.companyName}</div>
+                      <div className="text-xs text-gray-500 truncate">{kyc.employerId.email}</div>
                     </div>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(kyc.status)}`}>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(kyc.status)}`}>
                       {getStatusIcon(kyc.status)}
                       <span className="ml-1 capitalize">{kyc.status}</span>
                     </span>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-1">
+                  
+                  {/* Contact person */}
+                  <div className="text-xs text-gray-700 mb-2 truncate">{kyc.authorizedName || 'N/A'}</div>
+                  
+                  {/* Documents */}
+                  <div className="flex flex-wrap gap-1 mb-2">
                     {kyc.GSTNumber && (
-                      <span className="px-2 py-0.5 bg-green-100 text-green-800 text-[11px] rounded-full">GST</span>
+                      <span className="px-1.5 py-0.5 bg-green-100 text-green-800 text-[10px] rounded-full">GST</span>
                     )}
                     {kyc.PAN && (
-                      <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[11px] rounded-full">PAN</span>
+                      <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded-full">PAN</span>
                     )}
                     {kyc.city && (
-                      <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-[11px] rounded-full">{kyc.city}</span>
+                      <span className="px-1.5 py-0.5 bg-purple-100 text-purple-800 text-[10px] rounded-full">{kyc.city}</span>
                     )}
                   </div>
-                  <div className="mt-3 flex items-center justify-between">
+                  
+                  {/* Footer with date and actions */}
+                  <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-500">{new Date(kyc.submittedAt).toLocaleDateString()}</span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
                       <button onClick={() => openEmployerKYCModal(kyc)} className="px-2 py-1 text-xs text-blue-600 bg-blue-50 rounded hover:bg-blue-100">View</button>
                       {kyc.status === 'pending' && (
                         <>
                           <button onClick={() => openApprovalModal(kyc._id, 'approve', 'employerKYC')} className="px-2 py-1 text-xs text-white bg-green-600 rounded hover:bg-green-700">Approve</button>
                           <button onClick={() => openApprovalModal(kyc._id, 'reject', 'employerKYC')} className="px-2 py-1 text-xs text-red-700 bg-red-100 rounded hover:bg-red-200">Reject</button>
+                        </>
+                      )}
+                      {kyc.status === 'approved' && (
+                        <>
+                          <button onClick={() => openApprovalModal(kyc._id, 'reject', 'employerKYC')} className="px-2 py-1 text-xs text-red-700 bg-red-100 rounded hover:bg-red-200">Reject</button>
+                        </>
+                      )}
+                      {kyc.status === 'rejected' && (
+                        <>
+                          <button onClick={() => openApprovalModal(kyc._id, 'approve', 'employerKYC')} className="px-2 py-1 text-xs text-white bg-green-600 rounded hover:bg-green-700">Approve</button>
                         </>
                       )}
                     </div>
@@ -1453,6 +1528,24 @@ const AdminHome: React.FC = () => {
                                 <XCircle className="w-4 h-4" />
                               </button>
                             </>
+                          )}
+                          {kyc.status === 'approved' && (
+                            <button
+                              onClick={() => openApprovalModal(kyc._id, 'reject', 'employerKYC')}
+                              className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50"
+                              title="Reject"
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          )}
+                          {kyc.status === 'rejected' && (
+                            <button
+                              onClick={() => openApprovalModal(kyc._id, 'approve', 'employerKYC')}
+                              className="text-green-600 hover:text-green-900 p-1 rounded hover:bg-green-50"
+                              title="Approve"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </button>
                           )}
                         </div>
                       </td>
@@ -1652,8 +1745,30 @@ const AdminHome: React.FC = () => {
                 </div>
 
                 {/* Action Buttons */}
-                {selectedJob.approvalStatus === 'pending' && (
-                  <div className="flex gap-3 justify-end mt-6 pt-6 border-t">
+                <div className="flex gap-3 justify-end mt-6 pt-6 border-t">
+                  {selectedJob.approvalStatus === 'pending' && (
+                    <>
+                      <button
+                        onClick={() => {
+                          setShowJobModal(false);
+                          openApprovalModal(selectedJob._id, 'reject', 'job');
+                        }}
+                        className="px-6 py-2 text-red-700 bg-red-100 rounded-lg hover:bg-red-200 transition-colors font-medium"
+                      >
+                        Reject Job
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowJobModal(false);
+                          openApprovalModal(selectedJob._id, 'approve', 'job');
+                        }}
+                        className="px-6 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors font-medium"
+                      >
+                        Approve Job
+                      </button>
+                    </>
+                  )}
+                  {selectedJob.approvalStatus === 'approved' && (
                     <button
                       onClick={() => {
                         setShowJobModal(false);
@@ -1663,6 +1778,8 @@ const AdminHome: React.FC = () => {
                     >
                       Reject Job
                     </button>
+                  )}
+                  {selectedJob.approvalStatus === 'rejected' && (
                     <button
                       onClick={() => {
                         setShowJobModal(false);
@@ -1672,8 +1789,8 @@ const AdminHome: React.FC = () => {
                     >
                       Approve Job
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </motion.div>
           </motion.div>
@@ -1806,8 +1923,30 @@ const AdminHome: React.FC = () => {
                 </div>
 
                 {/* Action Buttons */}
-                {selectedEmployerKYC.status === 'pending' && (
-                  <div className="flex gap-3 justify-end mt-6 pt-6 border-t">
+                <div className="flex gap-3 justify-end mt-6 pt-6 border-t">
+                  {selectedEmployerKYC.status === 'pending' && (
+                    <>
+                      <button
+                        onClick={() => {
+                          setShowEmployerKYCModal(false);
+                          openApprovalModal(selectedEmployerKYC._id, 'reject', 'employerKYC');
+                        }}
+                        className="px-6 py-2 text-red-700 bg-red-100 rounded-lg hover:bg-red-200 transition-colors font-medium"
+                      >
+                        Reject KYC
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowEmployerKYCModal(false);
+                          openApprovalModal(selectedEmployerKYC._id, 'approve', 'employerKYC');
+                        }}
+                        className="px-6 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors font-medium"
+                      >
+                        Approve KYC
+                      </button>
+                    </>
+                  )}
+                  {selectedEmployerKYC.status === 'approved' && (
                     <button
                       onClick={() => {
                         setShowEmployerKYCModal(false);
@@ -1817,6 +1956,8 @@ const AdminHome: React.FC = () => {
                     >
                       Reject KYC
                     </button>
+                  )}
+                  {selectedEmployerKYC.status === 'rejected' && (
                     <button
                       onClick={() => {
                         setShowEmployerKYCModal(false);
@@ -1826,8 +1967,8 @@ const AdminHome: React.FC = () => {
                     >
                       Approve KYC
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </motion.div>
           </motion.div>
@@ -2079,8 +2220,30 @@ const AdminHome: React.FC = () => {
                 </div>
 
                 {/* Action Buttons */}
-                {(selectedKYC.verificationStatus === 'pending' || selectedKYC.verificationStatus === 'in-review') && (
-                  <div className="flex gap-3 justify-end mt-6 pt-6 border-t">
+                <div className="flex gap-3 justify-end mt-6 pt-6 border-t">
+                  {(selectedKYC.verificationStatus === 'pending' || selectedKYC.verificationStatus === 'in-review') && (
+                    <>
+                      <button
+                        onClick={() => {
+                          setShowKYCModal(false);
+                          openApprovalModal(selectedKYC._id, 'reject');
+                        }}
+                        className="px-6 py-2 text-red-700 bg-red-100 rounded-lg hover:bg-red-200 transition-colors font-medium"
+                      >
+                        Reject KYC
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowKYCModal(false);
+                          openApprovalModal(selectedKYC._id, 'approve');
+                        }}
+                        className="px-6 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors font-medium"
+                      >
+                        Approve KYC
+                      </button>
+                    </>
+                  )}
+                  {selectedKYC.verificationStatus === 'approved' && (
                     <button
                       onClick={() => {
                         setShowKYCModal(false);
@@ -2090,6 +2253,8 @@ const AdminHome: React.FC = () => {
                     >
                       Reject KYC
                     </button>
+                  )}
+                  {selectedKYC.verificationStatus === 'rejected' && (
                     <button
                       onClick={() => {
                         setShowKYCModal(false);
@@ -2099,8 +2264,8 @@ const AdminHome: React.FC = () => {
                     >
                       Approve KYC
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </motion.div>
           </motion.div>

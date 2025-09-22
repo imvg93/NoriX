@@ -158,6 +158,326 @@
     .mobile-full {
       @apply w-full;
     }
+    
+    /* Force mobile view for admin dashboard */
+    body.mobile-view {
+      font-size: 14px;
+    }
+    
+    body.mobile-view .max-w-7xl {
+      max-width: 100%;
+      padding-left: 8px;
+      padding-right: 8px;
+    }
+    
+    body.mobile-view .px-2 {
+      padding-left: 8px;
+      padding-right: 8px;
+    }
+    
+    body.mobile-view .px-3 {
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+    
+    body.mobile-view .px-4 {
+      padding-left: 16px;
+      padding-right: 16px;
+    }
+    
+    body.mobile-view .px-6 {
+      padding-left: 16px;
+      padding-right: 16px;
+    }
+    
+    body.mobile-view .py-3 {
+      padding-top: 8px;
+      padding-bottom: 8px;
+    }
+    
+    body.mobile-view .py-4 {
+      padding-top: 12px;
+      padding-bottom: 12px;
+    }
+    
+    body.mobile-view .py-6 {
+      padding-top: 16px;
+      padding-bottom: 16px;
+    }
+    
+    body.mobile-view .gap-3 {
+      gap: 8px;
+    }
+    
+    body.mobile-view .gap-4 {
+      gap: 12px;
+    }
+    
+    body.mobile-view .gap-6 {
+      gap: 16px;
+    }
+    
+    body.mobile-view .space-y-6 > * + * {
+      margin-top: 16px;
+    }
+    
+    body.mobile-view .space-y-4 > * + * {
+      margin-top: 12px;
+    }
+    
+    body.mobile-view .space-y-2 > * + * {
+      margin-top: 8px;
+    }
+    
+    body.mobile-view .text-lg {
+      font-size: 16px;
+    }
+    
+    body.mobile-view .text-xl {
+      font-size: 18px;
+    }
+    
+    body.mobile-view .text-2xl {
+      font-size: 20px;
+    }
+    
+    body.mobile-view .text-3xl {
+      font-size: 24px;
+    }
+    
+    body.mobile-view .text-4xl {
+      font-size: 28px;
+    }
+    
+    body.mobile-view .rounded-xl {
+      border-radius: 8px;
+    }
+    
+    body.mobile-view .rounded-lg {
+      border-radius: 6px;
+    }
+    
+    body.mobile-view .shadow-sm {
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    }
+    
+    body.mobile-view .shadow-md {
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+    
+    /* Mobile dashboard specific styles */
+    .mobile-dashboard {
+      font-size: 14px;
+    }
+    
+    .mobile-dashboard .max-w-7xl {
+      max-width: 100%;
+      padding-left: 8px;
+      padding-right: 8px;
+    }
+    
+    .mobile-dashboard .px-2 {
+      padding-left: 8px;
+      padding-right: 8px;
+    }
+    
+    .mobile-dashboard .px-3 {
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+    
+    .mobile-dashboard .px-4 {
+      padding-left: 16px;
+      padding-right: 16px;
+    }
+    
+    .mobile-dashboard .px-6 {
+      padding-left: 16px;
+      padding-right: 16px;
+    }
+    
+    .mobile-dashboard .py-3 {
+      padding-top: 8px;
+      padding-bottom: 8px;
+    }
+    
+    .mobile-dashboard .py-4 {
+      padding-top: 12px;
+      padding-bottom: 12px;
+    }
+    
+    .mobile-dashboard .py-6 {
+      padding-top: 16px;
+      padding-bottom: 16px;
+    }
+    
+    .mobile-dashboard .gap-3 {
+      gap: 8px;
+    }
+    
+    .mobile-dashboard .gap-4 {
+      gap: 12px;
+    }
+    
+    .mobile-dashboard .gap-6 {
+      gap: 16px;
+    }
+    
+    .mobile-dashboard .space-y-6 > * + * {
+      margin-top: 16px;
+    }
+    
+    .mobile-dashboard .space-y-4 > * + * {
+      margin-top: 12px;
+    }
+    
+    .mobile-dashboard .space-y-2 > * + * {
+      margin-top: 8px;
+    }
+    
+    .mobile-dashboard .text-lg {
+      font-size: 16px;
+    }
+    
+    .mobile-dashboard .text-xl {
+      font-size: 18px;
+    }
+    
+    .mobile-dashboard .text-2xl {
+      font-size: 20px;
+    }
+    
+    .mobile-dashboard .text-3xl {
+      font-size: 24px;
+    }
+    
+    .mobile-dashboard .text-4xl {
+      font-size: 28px;
+    }
+    
+    .mobile-dashboard .rounded-xl {
+      border-radius: 8px;
+    }
+    
+    .mobile-dashboard .rounded-lg {
+      border-radius: 6px;
+    }
+    
+    .mobile-dashboard .shadow-sm {
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    }
+    
+    .mobile-dashboard .shadow-md {
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+    
+    /* Force mobile layout on small screens */
+    @media (max-width: 640px) {
+      .mobile-dashboard {
+        font-size: 14px !important;
+      }
+      
+      .mobile-dashboard .max-w-7xl {
+        max-width: 100% !important;
+        padding-left: 8px !important;
+        padding-right: 8px !important;
+      }
+      
+      .mobile-dashboard .px-2 {
+        padding-left: 8px !important;
+        padding-right: 8px !important;
+      }
+      
+      .mobile-dashboard .px-3 {
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+      }
+      
+      .mobile-dashboard .px-4 {
+        padding-left: 16px !important;
+        padding-right: 16px !important;
+      }
+      
+      .mobile-dashboard .px-6 {
+        padding-left: 16px !important;
+        padding-right: 16px !important;
+      }
+      
+      .mobile-dashboard .py-3 {
+        padding-top: 8px !important;
+        padding-bottom: 8px !important;
+      }
+      
+      .mobile-dashboard .py-4 {
+        padding-top: 12px !important;
+        padding-bottom: 12px !important;
+      }
+      
+      .mobile-dashboard .py-6 {
+        padding-top: 16px !important;
+        padding-bottom: 16px !important;
+      }
+      
+      .mobile-dashboard .gap-3 {
+        gap: 8px !important;
+      }
+      
+      .mobile-dashboard .gap-4 {
+        gap: 12px !important;
+      }
+      
+      .mobile-dashboard .gap-6 {
+        gap: 16px !important;
+      }
+      
+      .mobile-dashboard .space-y-6 > * + * {
+        margin-top: 16px !important;
+      }
+      
+      .mobile-dashboard .space-y-4 > * + * {
+        margin-top: 12px !important;
+      }
+      
+      .mobile-dashboard .space-y-2 > * + * {
+        margin-top: 8px !important;
+      }
+      
+      .mobile-dashboard .text-lg {
+        font-size: 16px !important;
+      }
+      
+      .mobile-dashboard .text-xl {
+        font-size: 18px !important;
+      }
+      
+      .mobile-dashboard .text-2xl {
+        font-size: 20px !important;
+      }
+      
+      .mobile-dashboard .text-3xl {
+        font-size: 24px !important;
+      }
+      
+      .mobile-dashboard .text-4xl {
+        font-size: 28px !important;
+      }
+      
+      .mobile-dashboard .rounded-xl {
+        border-radius: 8px !important;
+      }
+      
+      .mobile-dashboard .rounded-lg {
+        border-radius: 6px !important;
+      }
+      
+      .mobile-dashboard .shadow-sm {
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+      }
+      
+      .mobile-dashboard .shadow-md {
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+      }
+    }
   }
   
   /* Smooth transitions for better UX */
