@@ -10,6 +10,11 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Railway-specific configuration
+  // Ensure proper port handling
+  env: {
+    PORT: process.env.PORT || '3000',
+  },
   turbopack: {
     rules: {
       '*.svg': {
