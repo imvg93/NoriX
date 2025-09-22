@@ -500,7 +500,7 @@ class ApiService {
   }
 
   async getEmployerJobs(): Promise<JobsResponse> {
-    return this.request<JobsResponse>('/jobs/employer');
+    return this.request<JobsResponse>('/jobs/employer/jobs');
   }
 
   async updateJobStatus(id: string, status: string) {

@@ -450,7 +450,8 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res, next) => 
 });
 
 // Get jobs by employer (public - no authentication required for now)
-router.get('/employer', async (req, res, next) => {
+// NOTE: This route must be placed BEFORE the /:id route to avoid conflicts
+router.get('/employer/jobs', async (req, res, next) => {
   try {
     // Return only approved jobs for public viewing
     const jobs = await Job.find({ 
