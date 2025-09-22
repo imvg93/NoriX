@@ -17,16 +17,16 @@ RUN npm install
 # Copy source code
 COPY . .
 
-# Build the application
-RUN npm run build:backend && npm run build:frontend
+# Build the backend application only (Railway only needs backend)
+RUN npm run build:backend
 
 # Set production environment
 ENV NODE_ENV=production
 
-# Expose port
-EXPOSE 3000
+# Expose port (Railway will use PORT environment variable)
+EXPOSE 5000
 
-# Start the application directly
+# Start the backend application directly
 CMD ["node", "backend/dist/index.js"]
 
 
