@@ -14,14 +14,15 @@ class SocketManager {
   private connectedUsers: Map<string, string> = new Map(); // userId -> socketId
 
   constructor(server: HTTPServer) {
-    const allowAll = process.env.ALLOW_ALL_CORS === 'true' || process.env.ALLOW_ALL_CORS === '1';
+    // Environment-aware CORS configuration
+    const isProduction = process.env.NODE_ENV === 'production';
+    const allowedOrigins = isProduction 
+      ? ['https://me-work.vercel.app']
+      : ['http://localhost:3000'];
+    
     this.io = new SocketIOServer(server, {
-      cors: allowAll ? {
-        origin: (origin, callback) => callback(null, true),
-        methods: ["GET", "POST"],
-        credentials: true
-      } : {
-        origin: process.env.FRONTEND_URL || "http://localhost:3000",
+      cors: {
+        origin: allowedOrigins,
         methods: ["GET", "POST"],
         credentials: true
       },
@@ -35,7 +36,8 @@ class SocketManager {
     this.setupMiddleware();
     this.setupEventHandlers();
     
-    console.log('🔌 Socket.IO server initialized with CORS:', allowAll ? 'permissive' : 'restricted');
+    console.log('🔌 Socket.IO server initialized with CORS:', 'environment-aware');
+    console.log(`   Allowed origins: ${allowedOrigins.join(', ')}`);
   }
 
   private setupMiddleware() {
