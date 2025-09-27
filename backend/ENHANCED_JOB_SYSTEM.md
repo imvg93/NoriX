@@ -27,7 +27,7 @@ interface IJob {
   description: string;                    // Job description
   salary: string;                         // Display salary (e.g., "₹15,000/month")
   status: 'active' | 'paused' | 'closed' | 'expired' | 'pending';
-  highlighted: boolean;                   // For first 24 hours or until student sees it
+  highlighted: boolean;                   // Stays true until employer deletes the job
   createdAt: Date;                       // When job was posted
   
   // Additional fields for enhanced functionality
@@ -343,7 +343,7 @@ Content-Type: application/json
 - New jobs are automatically highlighted (`highlighted: true`)
 - Highlighted jobs appear prominently in student dashboard
 - Highlighted status is removed when student applies or views the job
-- Jobs remain highlighted for 24 hours or until student interaction
+- Jobs remain highlighted until the employer deletes the job (or an admin removes it)
 
 ### 2. Real-time Notifications
 - Employers receive notifications when students apply

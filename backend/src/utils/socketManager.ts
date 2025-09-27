@@ -116,6 +116,33 @@ class SocketManager {
     });
   }
 
+  // Emit job approval notification to all students
+  public emitJobApproval(jobId: string, jobData: any) {
+    console.log(`📡 Emitting job approval notification for job: ${jobId}`);
+    
+    // Emit to all connected users (students will filter this on frontend)
+    this.io.emit('job:approved', {
+      jobId,
+      job: jobData,
+      timestamp: new Date()
+    });
+    
+    console.log(`✅ Job approval notification sent for job: ${jobId}`);
+  }
+
+  // Emit new application notification to employer
+  public emitNewApplication(employerId: string, applicationData: any) {
+    console.log(`📡 Emitting new application notification to employer: ${employerId}`);
+    
+    // Emit to employer's personal room
+    this.io.to(`user:${employerId}`).emit('application:new', {
+      ...applicationData,
+      timestamp: new Date()
+    });
+    
+    console.log(`✅ New application notification sent to employer: ${employerId}`);
+  }
+
   // Emit to all admins
   public emitToAdmins(event: string, data: any) {
     console.log(`📡 Emitting to admins: ${event}`);

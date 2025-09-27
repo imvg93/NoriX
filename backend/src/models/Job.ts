@@ -19,6 +19,7 @@ export interface IJob extends Document {
   
   // System fields
   status: 'active' | 'paused' | 'closed' | 'expired';
+  approvalStatus: 'pending' | 'approved' | 'rejected';
   highlighted: boolean;
   createdAt: Date;
   
@@ -114,6 +115,11 @@ const jobSchema = new Schema<IJob>({
     enum: ['active', 'paused', 'closed', 'expired'],
     default: 'active'
   },
+  approvalStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending'
+  },
   highlighted: {
     type: Boolean,
     default: true // New jobs are highlighted by default
@@ -135,6 +141,7 @@ jobSchema.index({ createdAt: -1 });
 jobSchema.index({ applicationDeadline: 1 });
 jobSchema.index({ workType: 1 });
 jobSchema.index({ location: 1 });
+jobSchema.index({ approvalStatus: 1 });
 
 // Virtual for job duration
 jobSchema.virtual('duration').get(function(this: IJob) {

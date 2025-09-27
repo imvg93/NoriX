@@ -71,9 +71,14 @@ export const errorHandler = (
   let error = { ...err };
   error.message = err.message;
 
-  // Concise logging
+  // Concise logging + stack for server-side diagnosis
   const timestamp = new Date().toISOString();
   console.warn(`[${timestamp}] ${req.method} ${req.url} -> ${err.message}`);
+  if (process.env.NODE_ENV !== 'test') {
+    if ((err as any).stack) {
+      console.error(`[${timestamp}] Stack:`, (err as any).stack);
+    }
+  }
 
   // Mongoose bad ObjectId
   if (err.name === 'CastError') {
@@ -185,8 +190,9 @@ export const sendSuccessResponse = (
   statusCode: number = 200
 ): void => {
   res.status(statusCode).json({
-    success: true,
-    message,
-    data
+    success: false,
+    message: statusCode === 500 && process.env.NODE_ENV === 'production' ? 'Internal Server Error' : message,
+    statusCode,
+    ...(process.env.NODE_ENV !== 'production' ? { error: { name: err.name, message: err.message } } : {})
   });
 };

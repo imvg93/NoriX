@@ -29,7 +29,7 @@ const Login1 = ({
     url: "/",
     src: "https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=200&h=60&fit=crop&crop=center",
     alt: "StudentJobs Logo",
-    title: "MeWork",
+    title: "NoriX",
   },
   buttonText = "Send OTP",
   googleText = "Sign up with Google",
@@ -377,41 +377,7 @@ const Login1 = ({
               <form className="flex flex-col gap-6" onSubmit={handlePasswordLogin}>
                 <div className="flex flex-col gap-4">
                   {/* User Type Selection */}
-                  <div className="flex items-center justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setUserType('student')}
-                      className={`flex-1 h-10 border rounded-xl text-sm font-medium transition-all duration-300 ${
-                        userType === 'student'
-                          ? 'border-green-600 bg-green-50 text-green-700'
-                          : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      🎓 Student
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setUserType('employer')}
-                      className={`flex-1 h-10 border rounded-xl text-sm font-medium transition-all duration-300 ${
-                        userType === 'employer'
-                          ? 'border-green-600 bg-green-50 text-green-700'
-                          : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      💼 Employer
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setUserType('admin')}
-                      className={`flex-1 h-10 border rounded-xl text-sm font-medium transition-all duration-300 ${
-                        userType === 'admin'
-                          ? 'border-red-600 bg-red-50 text-red-700'
-                          : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      👑 Admin
-                    </button>
-                  </div>
+                  
                   <div className="relative group">
                     <Input 
                       type="email" 

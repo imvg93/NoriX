@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import Application from '../models/Application';
 import Job from '../models/Job';
 import { authenticateToken, requireStudent, requireEmployer, AuthRequest } from '../middleware/auth';
-import { asyncHandler, sendSuccessResponse, ValidationError } from '../middleware/errorHandler';
+import { asyncHandler, sendSuccessResponse, sendErrorResponse, ValidationError } from '../middleware/errorHandler';
 
 const router = express.Router();
 
@@ -11,14 +11,14 @@ const router = express.Router();
 // @desc    Apply for a job
 // @access  Private (Students only)
 router.post('/', authenticateToken, requireStudent, asyncHandler(async (req: AuthRequest, res: express.Response) => {
-  const { jobId, coverLetter, expectedPay, availability } = req.body;
+  const { jobId, coverLetter, expectedPay, availability, resume } = req.body;
 
   if (!jobId) {
     throw new ValidationError('Job ID is required');
   }
 
   // Check if job exists and is active
-  const job = await Job.findById(jobId);
+  const job = await Job.findById(new mongoose.Types.ObjectId(jobId));
   if (!job) {
     throw new ValidationError('Job not found');
   }
@@ -27,33 +27,62 @@ router.post('/', authenticateToken, requireStudent, asyncHandler(async (req: Aut
     throw new ValidationError('Job is not active');
   }
 
-  // Check if already applied
+  // Check if already applied (support both legacy and new fields)
   const existingApplication = await Application.findOne({
-    jobId: jobId,
-    studentId: req.user!._id
+    $or: [
+      { jobId: new mongoose.Types.ObjectId(jobId) as any, studentId: new mongoose.Types.ObjectId(req.user!._id) as any },
+      { job: new mongoose.Types.ObjectId(jobId) as any, student: new mongoose.Types.ObjectId(req.user!._id) as any }
+    ]
   });
 
   if (existingApplication) {
     throw new ValidationError('You have already applied for this job');
   }
 
-  // Create application
-  const application = await Application.create({
-    jobId: jobId,
-    studentId: req.user!._id,
-    employer: job.employerId,
-    coverLetter,
-    expectedPay: expectedPay ? Number(expectedPay) : undefined,
-    availability: availability || req.user!.availability
-  });
-
-  // Note: Job application count increment removed as it's not in the simplified schema
+  // Create application with both legacy and new refs set
+  let application;
+  try {
+    application = await Application.create({
+      jobId: new mongoose.Types.ObjectId(jobId),
+      studentId: new mongoose.Types.ObjectId(req.user!._id),
+      // also set legacy fields for any unique index on (job, student)
+      job: new mongoose.Types.ObjectId(jobId) as any,
+      student: new mongoose.Types.ObjectId(req.user!._id) as any,
+      employer: job.employerId,
+      status: 'applied',
+      appliedAt: new Date(),
+      coverLetter: coverLetter || undefined,
+      resume: resume || undefined,
+      expectedPay: expectedPay ? Number(expectedPay) : undefined,
+      availability: availability || (req.user as any)?.availability
+    });
+  } catch (createErr: any) {
+    if (createErr && (createErr.code === 11000 || createErr.code === 11001)) {
+      throw new ValidationError('You have already applied for this job');
+    }
+    throw createErr;
+  }
 
   // Populate job and employer info
   await application.populate([
-    { path: 'job', select: 'title company location pay payType' },
+    { path: 'jobId', select: 'jobTitle companyName location salaryRange' },
     { path: 'employer', select: 'name companyName' }
   ]);
+
+  // Emit real-time notification to employer about new application
+  const socketManager = (global as any).socketManager;
+  if (socketManager && job.employerId) {
+    socketManager.emitNewApplication(job.employerId.toString(), {
+      applicationId: application._id,
+      studentId: req.user!._id,
+      studentName: req.user!.name,
+      jobId: jobId,
+      jobTitle: job.jobTitle,
+      company: job.companyName,
+      status: 'applied',
+      appliedAt: new Date()
+    });
+  }
 
   sendSuccessResponse(res, { application }, 'Application submitted successfully', 201);
 }));
@@ -64,29 +93,34 @@ router.post('/', authenticateToken, requireStudent, asyncHandler(async (req: Aut
 router.get('/my-applications', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { page = 1, limit = 10, status } = req.query;
 
-  const query: any = { studentId: req.user!._id };
+  try {
+    const query: any = { studentId: req.user!._id };
 
-  if (status) {
-    query.status = status;
-  }
-
-  const applications = await Application.find(query)
-    .populate('jobId', 'title company location pay payType status')
-    .populate('employer', 'name companyName')
-    .limit(Number(limit) * 1)
-    .skip((Number(page) - 1) * Number(limit))
-    .sort({ appliedAt: -1 });
-
-  const total = await Application.countDocuments(query);
-
-  sendSuccessResponse(res, {
-    applications,
-    pagination: {
-      current: Number(page),
-      pages: Math.ceil(total / Number(limit)),
-      total
+    if (status) {
+      query.status = status;
     }
-  }, 'Applications retrieved successfully');
+
+    const applications = await Application.find(query)
+      .populate('jobId', 'jobTitle companyName location salaryRange workType status')
+      .populate('employer', 'name companyName')
+      .limit(Number(limit) * 1)
+      .skip((Number(page) - 1) * Number(limit))
+      .sort({ appliedAt: -1 });
+
+    const total = await Application.countDocuments(query);
+
+    sendSuccessResponse(res, {
+      applications,
+      pagination: {
+        current: Number(page),
+        pages: Math.ceil(total / Number(limit)),
+        total
+      }
+    }, 'Applications retrieved successfully');
+  } catch (e: any) {
+    console.error('❌ Failed to fetch my applications:', e?.message);
+    return sendErrorResponse(res, 500, 'Failed to fetch applications', process.env.NODE_ENV !== 'production' ? e?.message : undefined);
+  }
 }));
 
 // @route   GET /api/applications/employer/all
@@ -106,7 +140,7 @@ router.get('/employer/all', authenticateToken, requireEmployer, asyncHandler(asy
   }
 
   const applications = await Application.find(query)
-    .populate('jobId', 'title company location pay payType status')
+    .populate('jobId', 'jobTitle companyName location salaryRange workType status')
     .populate('studentId', 'name email phone college skills')
     .limit(Number(limit) * 1)
     .skip((Number(page) - 1) * Number(limit))
@@ -169,7 +203,7 @@ router.get('/job/:jobId', authenticateToken, requireEmployer, asyncHandler(async
 // @access  Private (Application owner or job owner)
 router.get('/:id', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const application = await Application.findById(req.params.id)
-    .populate('jobId', 'title company location pay payType status')
+    .populate('jobId', 'jobTitle companyName location salaryRange workType status')
     .populate('studentId', 'name college skills availability rating')
     .populate('employer', 'name companyName');
 

@@ -169,11 +169,16 @@ const AdminHome: React.FC<AdminHomeProps> = ({ user }) => {
         await apiService.rejectKYC(kycId, reason || '');
       }
       
+      // Show success message
+      const successMessage = action === 'approve' ? 'KYC approved successfully!' : 'KYC rejected successfully!';
+      alert(successMessage);
+      
       // Refresh KYC data
       fetchKYCData();
       setShowApprovalModal(false);
     } catch (error) {
       console.error('Error handling KYC approval:', error);
+      alert(`Failed to ${action} KYC. Please try again.`);
     }
   };
 

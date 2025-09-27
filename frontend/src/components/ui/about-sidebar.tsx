@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 interface SidebarProps {
@@ -11,7 +12,7 @@ export function AboutSidebar({ className }: SidebarProps) {
   const [activeSection, setActiveSection] = useState("about");
 
   const sections = [
-    { id: "about", name: "About MeWork", href: "#about" },
+    { id: "about", name: "About NoriX", href: "#about" },
     { id: "mission", name: "Our Mission", href: "#mission" },
     { id: "stats", name: "Our Impact", href: "#stats" },
     { id: "story", name: "Our Story", href: "#story" },
@@ -25,10 +26,16 @@ export function AboutSidebar({ className }: SidebarProps) {
       <div className="p-6">
         {/* Logo */}
         <div className="flex items-center space-x-2 mb-8">
-          <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-sm">M</span>
+          <div className="relative h-10 w-32">
+            <Image
+              src="/img/logogreen.png"
+              alt="NoriX logo"
+              fill
+              sizes="128px"
+              className="object-contain"
+              priority
+            />
           </div>
-          <h2 className="text-xl font-bold text-green-600">MeWork</h2>
         </div>
 
         {/* Navigation */}

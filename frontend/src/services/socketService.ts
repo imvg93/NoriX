@@ -24,7 +24,15 @@ class SocketService {
 
     console.log('🔌 Connecting to Socket.IO server...');
 
-    this.socket = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001', {
+    const socketUrl = (process.env.NEXT_PUBLIC_SOCKET_URL
+      || (process.env.NEXT_PUBLIC_API_URL
+        ? process.env.NEXT_PUBLIC_API_URL.replace(/\/?api\/?$/, '')
+        : 'http://localhost:5000')) as string;
+
+    console.log('🔌 Socket connecting to:', socketUrl);
+
+    this.socket = io(socketUrl, {
+      path: '/socket.io',
       auth: {
         token: token
       },
@@ -107,6 +115,24 @@ class SocketService {
     // Status response events
     this.socket.on('kyc:status:response', (data) => {
       console.log('📡 Received KYC status response:', data);
+    });
+
+    // Job approval events
+    this.socket.on('job:approved', (data) => {
+      console.log('📡 Received job approval notification:', data);
+      // Emit custom event for components to listen to
+      window.dispatchEvent(new CustomEvent('jobApproved', {
+        detail: data
+      }));
+    });
+
+    // New application events
+    this.socket.on('application:new', (data) => {
+      console.log('📡 Received new application notification:', data);
+      // Emit custom event for components to listen to
+      window.dispatchEvent(new CustomEvent('newApplication', {
+        detail: data
+      }));
     });
   }
 

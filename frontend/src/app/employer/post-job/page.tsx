@@ -103,7 +103,7 @@ const PostJobPage = () => {
 
       await apiService.createJob(jobData);
       
-      alert('Job posted successfully! Your job will be highlighted for 24 hours to attract more applicants.');
+      alert('Job posted successfully! Your job will stay highlighted until you delete it, helping it stand out to applicants.');
       router.push('/employer-home');
     } catch (error) {
       console.error('Error posting job:', error);

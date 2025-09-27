@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import Image from "next/image";
 import { 
   ArrowLeft, 
   Search, 
   MapPin, 
   Clock, 
-  DollarSign,
+  IndianRupee,
   Star,
   Users,
   Briefcase,
@@ -125,6 +126,50 @@ export default function JobsPage() {
     }
   ];
 
+  const salaryRanges: Record<string, string> = {
+    "Catering boy / Catering staff": "₹180-260/hr",
+    "Waiter / Server": "₹150-230/hr",
+    "Barista (coffee shop staff)": "₹180-240/hr",
+    "Fast food crew (KFC, McDonald's, Domino's, etc.)": "₹12,000-17,000/mo",
+    "Delivery boy (food delivery like Zomato/Swiggy)": "₹22,000-32,000/mo",
+    "Dishwasher / Kitchen helper": "₹140-200/hr",
+    "Event staff (serving, cleaning, organizing)": "₹800-1,200/shift",
+    "Bartender assistant": "₹200-320/hr",
+    "Sales associate (mall, clothing store, electronics shop)": "₹14,000-20,000/mo",
+    "Cashier": "₹13,000-18,000/mo",
+    "Customer service helper": "₹15,000-22,000/mo",
+    "Store stocker / Shelf organizer": "₹700-1,000/shift",
+    "Promotional staff (handing flyers, samples, etc.)": "₹900-1,400/shift",
+    "Mall kiosk helper": "₹12,000-16,000/mo",
+    "Courier delivery (Amazon, Flipkart, DTDC, etc.)": "₹18,000-26,000/mo",
+    "Warehouse helper": "₹700-1,100/day",
+    "Loading/unloading staff": "₹750-1,200/day",
+    "Bike/Car driver (with license)": "₹20,000-28,000/mo",
+    "Office boy / Peon": "₹12,000-16,000/mo",
+    "Part-time tutor (school/college subjects)": "₹400-700/hr",
+    "Home tuition teacher": "₹500-900/hr",
+    "Library assistant": "₹10,000-14,000/mo",
+    "Teaching assistant (for coaching institutes)": "₹15,000-22,000/mo",
+    "Construction helper": "₹750-1,200/day",
+    "Painter's helper": "₹700-1,100/day",
+    "Security guard": "₹14,000-20,000/mo",
+    "Housekeeping staff (hotels, offices, apartments)": "₹12,000-17,000/mo",
+    "Cleaning boy / Janitor": "₹500-800/shift",
+    "Gardener": "₹600-900/day",
+    "Event coordinator assistant": "₹1,000-1,600/shift",
+    "Wedding helper (decoration, serving, setup)": "₹900-1,400/shift",
+    "Ticket checker (cinema, events, exhibitions)": "₹9,000-13,000/mo",
+    "Stage setup crew": "₹800-1,300/shift",
+    "Data entry (basic, offline)": "₹10,000-15,000/mo",
+    "Call center (voice/non-voice, non-tech support)": "₹16,000-24,000/mo",
+    "Babysitting / Caretaker": "₹300-500/hr",
+    "Pet walking / Pet care": "₹200-350/hr",
+    "Delivery of newspapers/milk": "₹6,000-10,000/mo",
+    "Packing staff (factories, small industries)": "₹700-1,000/shift"
+  };
+
+  const getSalaryRange = (job: string) => salaryRanges[job] ?? "₹500-900/shift";
+
   const filteredCategories = jobCategories.filter(category => {
     if (selectedCategory && category.id !== selectedCategory) return false;
     if (searchQuery) {
@@ -147,11 +192,15 @@ export default function JobsPage() {
               <ArrowLeft className="w-4 h-4" />
               Back to Home
             </Link>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">M</span>
-              </div>
-              <span className="text-xl font-bold text-gray-900">MeWork</span>
+            <div className="relative h-10 w-32">
+              <Image
+                src="/img/logogreen.png"
+                alt="NoriX logo"
+                fill
+                sizes="128px"
+                className="object-contain"
+                priority
+              />
             </div>
           </div>
         </div>
@@ -308,8 +357,8 @@ export default function JobsPage() {
                             </div>
                             <div className="ml-4">
                               <div className="flex items-center gap-1 text-green-600">
-                                <DollarSign className="w-4 h-4" />
-                                <span className="font-semibold">$15-25/hr</span>
+                                <IndianRupee className="w-4 h-4" />
+                                <span className="font-semibold">{getSalaryRange(job)}</span>
                               </div>
                             </div>
                           </div>
@@ -351,13 +400,13 @@ export default function JobsPage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
-                href="/student-signup"
+                href="/login"
                 className="bg-white text-green-600 px-8 py-4 rounded-xl font-semibold hover:bg-gray-100 transition-colors"
               >
                 Find Jobs
               </Link>
               <Link
-                href="/employer-signup"
+                href="/login"
                 className="bg-green-700 text-white px-8 py-4 rounded-xl font-semibold hover:bg-green-800 transition-colors border border-green-500"
               >
                 Post Jobs
@@ -376,7 +425,7 @@ export default function JobsPage() {
                 <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
                   <span className="text-white font-bold text-lg">M</span>
                 </div>
-                <span className="text-xl font-bold">MeWork</span>
+                <span className="text-xl font-bold">NoriX</span>
               </div>
               <p className="text-gray-400 text-sm">
                 Connecting students with flexible work opportunities worldwide.
@@ -409,7 +458,7 @@ export default function JobsPage() {
           </div>
           <div className="border-t border-gray-800 mt-8 pt-8 text-center">
             <p className="text-gray-400 text-sm">
-              © 2024 MeWork. All rights reserved.
+              © 2024 NoriX. All rights reserved.
             </p>
           </div>
         </div>

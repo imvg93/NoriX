@@ -35,16 +35,16 @@ router.get('/', async (req, res, next) => {
     }
     if (search) {
       filter.$or = [
-        { title: { $regex: search, $options: 'i' } },
+        { jobTitle: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } },
-        { company: { $regex: search, $options: 'i' } }
+        { companyName: { $regex: search, $options: 'i' } }
       ];
     }
 
     const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
     
     const jobs = await Job.find(filter)
-      .populate('employer', 'name company industry')
+      .populate('employerId', 'name companyName')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit as string));
@@ -69,7 +69,7 @@ router.get('/', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const job = await Job.findById(req.params.id)
-      .populate('employer', 'name company industry location description');
+      .populate('employerId', 'name companyName email');
 
     if (!job) {
       throw new CustomError('Job not found', 404);
@@ -165,43 +165,25 @@ router.post('/', async (req: AuthRequest, res, next) => {
       : (skills ? String(skills).split(',').map((s: string) => s.trim()).filter((s: string) => s) : []);
 
     const job = new Job({
-      title,
+      jobTitle: title,
       description,
-      requirements: requirementsString,
       location,
-      type, // Full-time / Part-time etc (optional field in schema)
-      category: category || 'non-it',
-      salary,
-      benefits,
-      schedule: workHours || schedule,
-      startDate: immediateStart ? now : startDate,
-      employer: (employer as any)._id,
-      status: 'pending', // Jobs need admin approval before going active
+      salaryRange: salary,
+      workType: type || 'Full-time',
+      skillsRequired: skillsArray,
+      employerId: (employer as any)._id,
+      companyName: company,
+      email: contactEmail,
+      phone: contactPhone,
+      status: 'active', // Jobs start as active
       approvalStatus: 'pending', // All new jobs need admin approval
-      submittedAt: new Date(),
-      // Additional fields
-      skills: skillsArray,
-      workHours,
-      shiftType,
-      experience,
-      education,
-      contactEmail,
-      contactPhone,
-      company,
-      // Fields required by Job schema but not provided by form
-      businessType: (employer as any).businessType || 'Other',
-      jobType: 'Other',
-      pay,
-      payType,
-      timing: 'Flexible',
-      positions: 1,
-      expiryDate: defaultExpiry
+      createdAt: new Date()
     });
 
     await job.save();
     
     // Populate employer info
-    await job.populate('employer', 'name company email');
+    await job.populate('employerId', 'name companyName email');
 
     res.status(201).json({
       success: true,
@@ -269,7 +251,7 @@ router.get('/employer', async (req, res, next) => {
       status: 'active',
       approvalStatus: 'approved' 
     })
-      .populate('employer', 'name company email')
+      .populate('employerId', 'name companyName email')
       .sort({ createdAt: -1 });
 
     res.json({ jobs });
@@ -312,24 +294,27 @@ router.get('/location/:location', async (req, res, next) => {
   }
 });
 
-// Admin: Update job status
-router.patch('/:id/status', authenticateToken, requireRole(['admin']), async (req, res, next) => {
+// Update job status (admin or owning employer)
+router.patch('/:id/status', authenticateToken, async (req: AuthRequest, res, next) => {
   try {
     const { status } = req.body;
     
-    if (!['pending', 'active', 'rejected', 'expired'].includes(status)) {
+    if (!['pending', 'active', 'rejected', 'expired', 'closed', 'paused'].includes(status)) {
       throw new CustomError('Invalid status', 400);
     }
 
-    const job = await Job.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true, runValidators: true }
-    );
+    const job = await Job.findById(req.params.id);
 
     if (!job) {
       throw new CustomError('Job not found', 404);
     }
+
+    if (req.user!.userType !== 'admin' && job.employerId.toString() !== req.user!._id) {
+      throw new CustomError('Not authorized to update this job status', 403);
+    }
+
+    job.status = status;
+    await job.save();
 
     res.json(job);
   } catch (error) {

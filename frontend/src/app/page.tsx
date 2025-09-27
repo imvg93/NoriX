@@ -1,6 +1,7 @@
 "use client";
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useState } from 'react';
 
 export default function Home() {
@@ -12,12 +13,18 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">M</span>
-            </div>
-                <h1 className="text-xl sm:text-2xl font-bold text-green-600">MeWork</h1>
-              </div>
+              <Link href="/" className="flex items-center">
+                <div className="relative h-12 w-40 sm:h-16 sm:w-56">
+                  <Image
+                    src="/img/logowhite.png"
+                    alt="NoriX logo"
+                    fill
+                    sizes="(max-width: 640px) 160px, 224px"
+                    priority
+                    className="object-contain"
+                  />
+                </div>
+              </Link>
             </div>
             {/* Desktop Navigation */}
             <nav className="hidden md:flex items-center space-x-6 lg:space-x-8">
@@ -83,7 +90,7 @@ export default function Home() {
             <Link href="/admin-dashboard" className="block text-gray-700 hover:text-gray-900 font-medium py-2">
               Admin Dashboard
             </Link>
-            <Link href="/employer-home" className="block bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors text-center">
+            <Link href="/login" className="block bg-[#32A4A6] text-white px-4 py-2 rounded-lg font-medium hover:bg-[#32A4A6] transition-colors text-center">
               Post Jobs
             </Link>
           </div>
@@ -95,7 +102,7 @@ export default function Home() {
         {/* Abstract Shapes Background - Hidden on mobile for better performance */}
         <div className="absolute inset-0 hidden sm:block">
           {/* Left side dark green circle with blue lines */}
-          <div className="absolute left-0 top-20 w-64 sm:w-80 lg:w-96 h-64 sm:h-80 lg:h-96 bg-green-800 rounded-full opacity-20"></div>
+          <div className="absolute left-0 top-20 w-64 sm:w-80 lg:w-96 h-64 sm:h-80 lg:h-96 bg-[#32A4A6] rounded-full opacity-20"></div>
           <div className="absolute left-20 sm:left-32 top-32 sm:top-40 w-2 h-24 sm:h-32 bg-blue-500 transform rotate-45"></div>
           <div className="absolute left-28 sm:left-40 top-40 sm:top-48 w-2 h-16 sm:h-24 bg-blue-400 transform rotate-45"></div>
           
@@ -116,7 +123,7 @@ export default function Home() {
         </div>
 
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-green-800 mb-6 sm:mb-8 leading-tight">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-[#32A4A6] mb-6 sm:mb-8 leading-tight">
             Find trusted student works
           </h1>
           
@@ -128,7 +135,7 @@ export default function Home() {
                 placeholder="What kind of job are you looking for?"
                 className="w-full px-4 sm:px-6 py-3 sm:py-4 text-base sm:text-lg border-2 border-gray-300 rounded-xl sm:rounded-2xl focus:outline-none focus:border-green-500"
               />
-              <button className="absolute right-1 sm:right-2 top-1 sm:top-2 bg-green-600 text-white p-1.5 sm:p-2 rounded-lg sm:rounded-xl hover:bg-green-700 transition-colors">
+              <button className="absolute right-1 sm:right-2 top-1 sm:top-2 bg-[#32A4A6] text-white p-1.5 sm:p-2 rounded-lg sm:rounded-xl hover:bg-green-700 transition-colors">
                 <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
@@ -251,12 +258,16 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap justify-center gap-2 sm:gap-4">
             {[
-              'Web Development',
-              'Mobile App Development',
-              'Data Analysis',
-              'UI/UX Design',
-              'Software Testing',
-              'DevOps'
+              'Shop Keeping',
+              'Sales associate',
+              'Restaurant staff',
+              'Food delivery boy',
+              'Office assistant',
+              'Event coordinator',
+              'Event staff',
+              'Event helper',
+              'Event helper',
+              'Library assistant'
             ].map((subcategory) => (
               <button key={subcategory} className="px-3 sm:px-6 py-2 sm:py-3 border-2 border-gray-300 rounded-lg text-gray-700 font-medium hover:border-gray-400 hover:bg-gray-50 transition-colors text-sm sm:text-base">
                 {subcategory}
@@ -281,7 +292,7 @@ export default function Home() {
               <div className="mb-6">
                 <div className="w-full h-48 sm:h-56 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-center">
                   <div className="text-center">
-                    <div className="w-16 h-16 bg-green-600 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <div className="w-16 h-16 bg-[#32A4A6] rounded-lg flex items-center justify-center mx-auto mb-3">
                       <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                       </svg>
@@ -290,7 +301,7 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              <h3 className="text-xl font-bold text-green-600 mb-3">Build your brand</h3>
+              <h3 className="text-xl font-bold text-[#32A4A6] mb-3">Build your brand</h3>
               <p className="text-gray-600 leading-relaxed">
                 Create a professional company profile that attracts the best student talent and showcases your culture.
               </p>
@@ -301,7 +312,7 @@ export default function Home() {
               <div className="mb-6">
                 <div className="w-full h-48 sm:h-56 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-center">
                   <div className="text-center">
-                    <div className="w-16 h-16 bg-green-600 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <div className="w-16 h-16 bg-[#32A4A6] rounded-lg flex items-center justify-center mx-auto mb-3">
                       <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                       </svg>
@@ -310,7 +321,7 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              <h3 className="text-xl font-bold text-green-600 mb-3">Find the right candidates</h3>
+              <h3 className="text-xl font-bold text-[#32A4A6] mb-3">Find the right candidates</h3>
               <p className="text-gray-600 leading-relaxed">
                 Use advanced filters to find students with the exact skills, experience, and qualifications you need.
               </p>
@@ -321,7 +332,7 @@ export default function Home() {
               <div className="mb-6">
                 <div className="w-full h-48 sm:h-56 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-center">
                   <div className="text-center">
-                    <div className="w-16 h-16 bg-green-600 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <div className="w-16 h-16 bg-[#32A4A6] rounded-lg flex items-center justify-center mx-auto mb-3">
                       <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                       </svg>
@@ -330,7 +341,7 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              <h3 className="text-xl font-bold text-green-600 mb-3">Connect with Gen Z</h3>
+                  <h3 className="text-xl font-bold text-[#32A4A6] mb-3">Connect with Gen Z</h3>
               <p className="text-gray-600 leading-relaxed">
                 Reach students where they are with our mobile-optimized platform designed for the next generation.
               </p>
@@ -341,7 +352,7 @@ export default function Home() {
               <div className="mb-6">
                 <div className="w-full h-48 sm:h-56 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-center">
                   <div className="text-center">
-                    <div className="w-16 h-16 bg-green-600 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <div className="w-16 h-16 bg-[#32A4A6] rounded-lg flex items-center justify-center mx-auto mb-3">
                       <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
@@ -350,7 +361,7 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              <h3 className="text-xl font-bold text-green-600 mb-3">Reduce time to hire</h3>
+              <h3 className="text-xl font-bold text-[#32A4A6] mb-3">Reduce time to hire</h3>
               <p className="text-gray-600 leading-relaxed">
                 Streamline your hiring process with automated screening, instant messaging, and quick decision tools.
               </p>
@@ -679,9 +690,9 @@ export default function Home() {
             <div className="space-y-4">
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">M</span>
+                  <span className="text-white font-bold text-lg">NX</span>
                 </div>
-                <span className="text-xl font-bold">MeWork</span>
+                <span className="text-xl font-bold">NoriX</span>
               </div>
               <p className="text-gray-400 text-sm leading-relaxed">
                 Connecting skilled students with opportunities worldwide. Find trusted help for your projects.
@@ -754,7 +765,7 @@ export default function Home() {
           <div className="border-t border-gray-800 mt-12 pt-8">
             <div className="flex flex-col md:flex-row justify-between items-center">
               <p className="text-gray-400 text-sm">
-                © 2024 MeWork. All rights reserved.
+              © 2024 NoriX. All rights reserved.
               </p>
               <div className="flex space-x-6 mt-4 md:mt-0">
                 <a href="#" className="text-gray-400 hover:text-white text-sm transition-colors">English</a>
