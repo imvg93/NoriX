@@ -6,10 +6,11 @@ import fs from 'fs';
 import KYC from '../models/KYC';
 import User from '../models/User';
 import { KYCAudit } from '../models/KYCAudit';
-import { authenticateToken, AuthRequest } from '../middleware/auth';
+import { authenticateToken, AuthRequest, requireEmployer } from '../middleware/auth';
 import { asyncHandler, sendSuccessResponse, ValidationError } from '../middleware/errorHandler';
 import { uploadImage, deleteImage } from '../config/cloudinary';
 import { computeKycStatus, getKycStatusMessage } from '../utils/kycStatusHelper';
+import EmployerKYC from '../models/EmployerKYC';
 
 const router = express.Router();
 
@@ -54,6 +55,271 @@ router.get('/profile', authenticateToken, asyncHandler(async (req: AuthRequest, 
   }
 
   sendSuccessResponse(res, { kyc }, 'KYC profile retrieved successfully');
+}));
+
+// Test route to debug
+router.get('/employer/test', (req, res) => {
+  res.json({ message: 'Employer KYC test route is working!' });
+});
+
+// ===== Employer KYC endpoints =====
+// POST /api/kyc/employer → submit employer KYC to employer_kyc collection
+router.post('/employer', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const employerId = req.user!._id;
+  const { 
+    companyName, 
+    companyEmail, 
+    companyPhone, 
+    authorizedName, 
+    designation, 
+    address, 
+    city, 
+    latitude, 
+    longitude, 
+    GSTNumber, 
+    PAN, 
+    documents 
+  } = req.body || {};
+
+  // Validate required fields
+  if (!companyName || !companyName.trim()) {
+    throw new ValidationError('Company name is required');
+  }
+
+  // Check if KYC is already approved
+  const existing = await EmployerKYC.findOne({ employerId });
+  if (existing && existing.status === 'approved') {
+    throw new ValidationError('KYC already approved. Cannot modify approved KYC.');
+  }
+
+  // Prepare KYC data
+  const kycData: any = {
+    employerId,
+    companyName: companyName.trim(),
+    companyEmail: companyEmail?.trim() || undefined,
+    companyPhone: companyPhone?.trim() || undefined,
+    authorizedName: authorizedName?.trim() || undefined,
+    designation: designation?.trim() || undefined,
+    address: address?.trim() || undefined,
+    city: city?.trim() || undefined,
+    latitude: latitude?.trim() || undefined,
+    longitude: longitude?.trim() || undefined,
+    GSTNumber: GSTNumber?.trim() || undefined,
+    PAN: PAN?.trim() || undefined,
+    documents: documents || {},
+    status: 'pending',
+    submittedAt: new Date()
+  };
+
+  // If resubmitting after rejection, clear rejection reason
+  if (existing?.status === 'rejected') {
+    delete kycData.rejectionReason;
+  }
+
+  // Save or update KYC record
+  const record = await EmployerKYC.findOneAndUpdate(
+    { employerId },
+    { $set: kycData },
+    { new: true, upsert: true }
+  );
+
+  // Update User model for compatibility with existing job posting logic
+  const updatedUser = await User.findByIdAndUpdate(employerId, {
+    kycStatus: 'pending',
+    isVerified: false,
+    kycPendingAt: new Date(),
+    $unset: { kycVerifiedAt: 1, kycRejectedAt: 1 }
+  }, { new: true });
+
+  console.log('✅ Employer KYC submitted successfully:', {
+    employerId,
+    kycId: record._id,
+    status: record.status,
+    userKycStatus: updatedUser?.kycStatus,
+    submittedAt: record.submittedAt
+  });
+
+  return sendSuccessResponse(res, { 
+    kyc: record,
+    user: {
+      _id: updatedUser?._id,
+      kycStatus: updatedUser?.kycStatus,
+      isVerified: updatedUser?.isVerified
+    },
+    completionPercentage: (record as any).completionPercentage,
+    fullAddress: (record as any).fullAddress
+  }, 'Employer KYC submitted successfully');
+}));
+
+// GET /api/kyc/employer/:id/status → fetch employer KYC status
+router.get('/employer/:id/status', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { id } = req.params;
+  
+  console.log('🔍 Fetching KYC status for employer:', id);
+  
+  // Get user KYC status
+  const user = await User.findById(id).select('kycStatus isVerified kycVerifiedAt kycRejectedAt kycPendingAt');
+  
+  // Get detailed KYC record
+  const kycRecord = await EmployerKYC.findOne({ employerId: id });
+  
+  // Determine the most accurate status
+  let status = 'not-submitted';
+  if (kycRecord) {
+    status = kycRecord.status;
+  } else if (user?.kycStatus) {
+    status = user.kycStatus;
+  }
+  
+  console.log('📊 KYC Status Debug:', {
+    employerId: id,
+    userKycStatus: user?.kycStatus,
+    kycRecordStatus: kycRecord?.status,
+    finalStatus: status,
+    hasKycRecord: !!kycRecord,
+    userVerified: user?.isVerified
+  });
+  
+  return sendSuccessResponse(res, { 
+    status, 
+    kyc: kycRecord,
+    user: {
+      kycStatus: user?.kycStatus,
+      isVerified: user?.isVerified,
+      kycVerifiedAt: user?.kycVerifiedAt,
+      kycRejectedAt: user?.kycRejectedAt,
+      kycPendingAt: user?.kycPendingAt
+    },
+    completionPercentage: (kycRecord as any)?.completionPercentage || 0,
+    fullAddress: (kycRecord as any)?.fullAddress || null,
+    submittedAt: kycRecord?.submittedAt || null,
+    reviewedAt: kycRecord?.reviewedAt || null
+  }, 'Employer KYC status retrieved');
+}));
+
+// ===== Admin KYC Management Endpoints =====
+// GET /api/kyc/admin/pending → Get all pending employer KYC
+router.get('/admin/pending', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  // Check if user is admin
+  if (req.user?.userType !== 'admin') {
+    throw new ValidationError('Admin access required');
+  }
+
+  const pendingKYC = await EmployerKYC.find({ status: 'pending' })
+    .populate('employerId', 'name email companyName phone')
+    .sort({ submittedAt: -1 });
+
+  return sendSuccessResponse(res, { 
+    pendingKYC,
+    count: pendingKYC.length 
+  }, 'Pending KYC records retrieved');
+}));
+
+// PATCH /api/kyc/admin/:id/approve → Approve employer KYC
+router.patch('/admin/:id/approve', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  // Check if user is admin
+  if (req.user?.userType !== 'admin') {
+    throw new ValidationError('Admin access required');
+  }
+
+  const { id } = req.params;
+
+  const kycRecord = await EmployerKYC.findById(id);
+  if (!kycRecord) {
+    throw new ValidationError('KYC record not found');
+  }
+
+  // Update KYC status to approved
+  kycRecord.status = 'approved';
+  kycRecord.reviewedBy = req.user._id;
+  kycRecord.reviewedAt = new Date();
+  kycRecord.rejectionReason = undefined;
+  
+  await kycRecord.save();
+
+  // Update User model
+  await User.findByIdAndUpdate(kycRecord.employerId, {
+    kycStatus: 'approved',
+    isVerified: true,
+    kycVerifiedAt: new Date(),
+    $unset: { kycPendingAt: 1, kycRejectedAt: 1 }
+  });
+
+  return sendSuccessResponse(res, { kyc: kycRecord }, 'KYC approved successfully');
+}));
+
+// PATCH /api/kyc/admin/:id/reject → Reject employer KYC
+router.patch('/admin/:id/reject', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  // Check if user is admin
+  if (req.user?.userType !== 'admin') {
+    throw new ValidationError('Admin access required');
+  }
+
+  const { id } = req.params;
+  const { rejectionReason } = req.body;
+
+  if (!rejectionReason || !rejectionReason.trim()) {
+    throw new ValidationError('Rejection reason is required');
+  }
+
+  const kycRecord = await EmployerKYC.findById(id);
+  if (!kycRecord) {
+    throw new ValidationError('KYC record not found');
+  }
+
+  // Update KYC status to rejected
+  kycRecord.status = 'rejected';
+  kycRecord.reviewedBy = req.user._id;
+  kycRecord.reviewedAt = new Date();
+  kycRecord.rejectionReason = rejectionReason.trim();
+  
+  await kycRecord.save();
+
+  // Update User model
+  await User.findByIdAndUpdate(kycRecord.employerId, {
+    kycStatus: 'rejected',
+    isVerified: false,
+    kycRejectedAt: new Date(),
+    $unset: { kycPendingAt: 1, kycVerifiedAt: 1 }
+  });
+
+  return sendSuccessResponse(res, { kyc: kycRecord }, 'KYC rejected successfully');
+}));
+
+// GET /api/kyc/admin/all → Get all employer KYC records
+router.get('/admin/all', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  // Check if user is admin
+  if (req.user?.userType !== 'admin') {
+    throw new ValidationError('Admin access required');
+  }
+
+  const { status, page = 1, limit = 10 } = req.query;
+  
+  const filter: any = {};
+  if (status && status !== 'all') {
+    filter.status = status;
+  }
+
+  const skip = (Number(page) - 1) * Number(limit);
+
+  const kycRecords = await EmployerKYC.find(filter)
+    .populate('employerId', 'name email companyName phone')
+    .populate('reviewedBy', 'name email')
+    .sort({ submittedAt: -1 })
+    .skip(skip)
+    .limit(Number(limit));
+
+  const total = await EmployerKYC.countDocuments(filter);
+
+  return sendSuccessResponse(res, { 
+    kycRecords,
+    pagination: {
+      current: Number(page),
+      total: Math.ceil(total / Number(limit)),
+      count: kycRecords.length,
+      totalRecords: total
+    }
+  }, 'All KYC records retrieved');
 }));
 
 // @route   GET /api/student/profile

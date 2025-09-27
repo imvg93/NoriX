@@ -36,6 +36,8 @@ import StatsCard from './StatsCard';
 import NotificationCard from './NotificationCard';
 import { apiService, type JobsResponse, type Job, type ApplicationsResponse } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
+import NotificationDropdown from './NotificationDropdown';
 
 interface JobPosting extends Job {
   applications: number;
@@ -110,6 +112,17 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
   const [selectedStatus, setSelectedStatus] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [filteredJobs, setFilteredJobs] = useState<JobPosting[]>([]);
+  const [kycStatus, setKycStatus] = useState<'not-submitted' | 'pending' | 'approved' | 'rejected' | null>(null);
+  const [showKycModal, setShowKycModal] = useState(false);
+  const [submittingKyc, setSubmittingKyc] = useState(false);
+  const [kycForm, setKycForm] = useState<{ companyName: string; GSTNumber: string; PAN: string; companyEmail?: string; companyPhone?: string; authorizedName?: string; designation?: string; address?: string; city?: string; latitude?: string; longitude?: string; proofUrl?: string }>({
+    companyName: user?.companyName || '',
+    GSTNumber: '',
+    PAN: ''
+  });
+  const [kycStep, setKycStep] = useState<number>(1);
+  const totalKycSteps = 4;
+  const [proofUploading, setProofUploading] = useState<boolean>(false);
 
   // Fetch data from API
   const fetchData = React.useCallback(async () => {
@@ -255,6 +268,54 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
     });
   }, []);
 
+  useEffect(() => {
+    const fetchKyc = async () => {
+      try {
+        if (!user?._id) return;
+        const res = await apiService.getEmployerKYCStatus(user._id);
+        setKycStatus((res?.status as any) || 'not-submitted');
+      } catch (e) {
+        setKycStatus('not-submitted');
+      }
+    };
+    fetchKyc();
+  }, [user]);
+
+  // Lock background scroll when modal is open
+  useEffect(() => {
+    const original = document.body.style.overflow;
+    if (showKycModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = original || '';
+    }
+    return () => {
+      document.body.style.overflow = original || '';
+    };
+  }, [showKycModal]);
+  const canPostJob = kycStatus === 'approved';
+  const handleKycInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setKycForm(prev => ({ ...prev, [name]: value } as any));
+  };
+  const submitEmployerKYC = async () => {
+    try {
+      setSubmittingKyc(true);
+      await apiService.submitEmployerKYC({
+        companyName: kycForm.companyName,
+        GSTNumber: kycForm.GSTNumber || undefined,
+        PAN: kycForm.PAN || undefined,
+      });
+      alert('KYC submitted. Status set to Pending.');
+      setKycStatus('pending');
+      setShowKycModal(false);
+    } catch (e: any) {
+      alert(e?.message || 'Failed to submit KYC');
+    } finally {
+      setSubmittingKyc(false);
+    }
+  };
+
   // Filter jobs based on search and filters
   useEffect(() => {
     let filtered = data.jobPostings;
@@ -352,6 +413,7 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
             <h2 className="text-lg font-semibold text-gray-900">Employer Dashboard</h2>
             <p className="text-sm text-gray-600">Manage your job postings and applications</p>
           </div>
+          <NotificationDropdown />
           <button 
             onClick={handleLogout}
             className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
@@ -377,15 +439,62 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
             <h1 className="text-2xl font-bold">Welcome back, {user?.companyName || 'Employer'}!</h1>
             <p className="text-orange-100">Manage your job postings and find the perfect candidates for your non-IT and daily labor positions</p>
           </div>
-          <Link
-            href="/employer/post-job"
-            className="flex items-center gap-2 px-6 py-3 bg-white text-orange-600 rounded-lg hover:bg-orange-50 transition-colors font-medium"
-          >
-            <Plus className="w-5 h-5" />
-            Post New Job
-          </Link>
+          {canPostJob ? (
+            <Link
+              href="/employer/post-job"
+              className="flex items-center gap-2 px-6 py-3 bg-white text-orange-600 rounded-lg hover:bg-orange-50 transition-colors font-medium"
+            >
+              <Plus className="w-5 h-5" />
+              Post New Job
+            </Link>
+          ) : (
+            <button
+              onClick={() => router.push('/employer/kyc')}
+              className="flex items-center gap-2 px-6 py-3 bg-white text-orange-600 rounded-lg hover:bg-orange-50 transition-colors font-medium"
+            >
+              <Plus className="w-5 h-5" />
+              Complete KYC to Post
+            </button>
+          )}
         </div>
       </motion.div>
+
+      {/* KYC Status Banner */}
+      {kycStatus !== 'approved' && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Employer KYC Required</h3>
+              <p className="text-sm text-gray-600">
+                {kycStatus === 'pending' && 'Your KYC is under review. You will be able to post jobs once approved.'}
+                {kycStatus === 'rejected' && 'Your KYC was rejected. Please resubmit with correct details.'}
+                {(kycStatus === 'not-submitted' || kycStatus === null) && 'Please submit your company KYC to start posting jobs.'}
+              </p>
+            </div>
+            <div>
+              {kycStatus === 'pending' && (
+                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Pending</span>
+              )}
+              {kycStatus === 'rejected' && (
+                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Rejected</span>
+              )}
+              {(kycStatus === 'not-submitted' || kycStatus === null) && (
+                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">Not Submitted</span>
+              )}
+            </div>
+          </div>
+          {(kycStatus === 'not-submitted' || kycStatus === 'rejected') && (
+            <div className="mt-3">
+              <button
+                onClick={() => router.push('/employer/kyc')}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+              >
+                Open KYC Form
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -432,6 +541,7 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
       >
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+
           {quickActions.map((action) => (
             action.href ? (
               <Link
@@ -439,10 +549,12 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
                 href={action.href}
                 className="group p-4 bg-gray-50 rounded-xl hover:bg-orange-50 hover:border-orange-200 border border-transparent transition-all duration-200"
               >
+
                 <div className="flex items-center gap-3">
                   <div className={`p-3 bg-${action.color}-100 rounded-full group-hover:bg-${action.color}-200 transition-colors`}>
                     <action.icon className={`w-6 h-6 text-${action.color}-600`} />
                   </div>
+
                   <div className="flex-1">
                     <h3 className="font-medium text-gray-900 group-hover:text-orange-700">
                       {action.name}
@@ -469,13 +581,16 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
                   <div className="flex-1">
                     <h3 className="font-medium text-gray-900 group-hover:text-orange-700">
                       {action.name}
+
                     </h3>
                     <p className="text-sm text-gray-600">{action.description}</p>
                   </div>
                 </div>
+
               </button>
             )
           ))}
+
         </div>
       </motion.div>
 
@@ -491,13 +606,23 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
             <Briefcase className="w-5 h-5 text-orange-600" />
             <h2 className="text-lg font-semibold text-gray-900">Your Job Postings</h2>
           </div>
-          <Link
-            href="/employer/post-job"
-            className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
-          >
-            <Plus className="w-4 h-4" />
-            Post New Job
-          </Link>
+          {canPostJob ? (
+            <Link
+              href="/employer/post-job"
+              className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
+            >
+              <Plus className="w-4 h-4" />
+              Post New Job
+            </Link>
+          ) : (
+            <button
+              onClick={() => router.push('/employer/kyc')}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg cursor-not-allowed text-sm font-medium"
+            >
+              <Plus className="w-4 h-4" />
+              Post New Job (KYC Required)
+            </button>
+          )}
         </div>
         
         {/* Search and Filters */}
@@ -554,13 +679,23 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
               <Briefcase className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No jobs found</h3>
               <p className="text-gray-600 mb-4">Start by posting your first job to attract candidates</p>
-              <Link
-                href="/employer/post-job"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium"
-              >
-                <Plus className="w-4 h-4" />
-                Post Your First Job
-              </Link>
+              {canPostJob ? (
+                <Link
+                  href="/employer/post-job"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  Post Your First Job
+                </Link>
+              ) : (
+                <button
+                  onClick={() => router.push('/employer/kyc')}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-gray-300 text-gray-700 rounded-lg cursor-not-allowed font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  Complete KYC to Post
+                </button>
+              )}
             </div>
           ) : (
             filteredJobs.map((job) => (

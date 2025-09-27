@@ -1,130 +1,140 @@
 "use client";
 
+
 import { useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
+
 import { 
-  ArrowLeft, 
   Search, 
   MapPin, 
+  Filter, 
+  Building, 
   Clock, 
   IndianRupee,
   Star,
   Users,
-  Briefcase,
-  Utensils,
-  ShoppingBag,
-  Truck,
-  GraduationCap,
-  HardHat,
   Calendar,
-  Home,
-  Filter,
-  ChevronDown
-} from "lucide-react";
+  Briefcase,
+  Eye,
+  Heart
+} from 'lucide-react';
+import { apiService } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
-export default function JobsPage() {
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+// Use the Job interface from the API service
+interface Job {
+  _id: string;
+  title: string;
+  description: string;
+  company: string;
+  location: string;
+  salary?: number;
+  payType?: string;
+  type: string;
+  category: string;
+  status: string;
+  employer: string;
+  createdAt: string;
+  views?: number;
+  applicationsCount?: number;
+  requirements?: string[];
+}
 
-  const jobCategories = [
-    {
-      id: "food-hospitality",
-      title: "🍴 Food & Hospitality",
-      icon: Utensils,
-      color: "bg-orange-100 text-orange-600",
-      jobs: [
-        "Catering boy / Catering staff",
-        "Waiter / Server",
-        "Barista (coffee shop staff)",
-        "Fast food crew (KFC, McDonald's, Domino's, etc.)",
-        "Delivery boy (food delivery like Zomato/Swiggy)",
-        "Dishwasher / Kitchen helper",
-        "Event staff (serving, cleaning, organizing)",
-        "Bartender assistant"
-      ]
-    },
-    {
-      id: "retail-sales",
-      title: "🛍️ Retail & Sales",
-      icon: ShoppingBag,
-      color: "bg-blue-100 text-blue-600",
-      jobs: [
-        "Sales associate (mall, clothing store, electronics shop)",
-        "Cashier",
-        "Customer service helper",
-        "Store stocker / Shelf organizer",
-        "Promotional staff (handing flyers, samples, etc.)",
-        "Mall kiosk helper"
-      ]
-    },
-    {
-      id: "logistics-delivery",
-      title: "🚚 Logistics & Delivery",
-      icon: Truck,
-      color: "bg-green-100 text-green-600",
-      jobs: [
-        "Courier delivery (Amazon, Flipkart, DTDC, etc.)",
-        "Warehouse helper",
-        "Loading/unloading staff",
-        "Bike/Car driver (with license)",
-        "Office boy / Peon"
-      ]
-    },
-    {
-      id: "education-tutoring",
-      title: "🏫 Education & Tutoring",
-      icon: GraduationCap,
-      color: "bg-purple-100 text-purple-600",
-      jobs: [
-        "Part-time tutor (school/college subjects)",
-        "Home tuition teacher",
-        "Library assistant",
-        "Teaching assistant (for coaching institutes)"
-      ]
-    },
-    {
-      id: "labor-ground-work",
-      title: "👷‍♂️ Labor & On-Ground Work",
-      icon: HardHat,
-      color: "bg-yellow-100 text-yellow-600",
-      jobs: [
-        "Construction helper",
-        "Painter's helper",
-        "Security guard",
-        "Housekeeping staff (hotels, offices, apartments)",
-        "Cleaning boy / Janitor",
-        "Gardener"
-      ]
-    },
-    {
-      id: "event-promotion",
-      title: "🎉 Event & Promotion Jobs",
-      icon: Calendar,
-      color: "bg-pink-100 text-pink-600",
-      jobs: [
-        "Event coordinator assistant",
-        "Wedding helper (decoration, serving, setup)",
-        "Ticket checker (cinema, events, exhibitions)",
-        "Stage setup crew"
-      ]
-    },
-    {
-      id: "miscellaneous",
-      title: "🏠 Miscellaneous",
-      icon: Home,
-      color: "bg-gray-100 text-gray-600",
-      jobs: [
-        "Data entry (basic, offline)",
-        "Call center (voice/non-voice, non-tech support)",
-        "Babysitting / Caretaker",
-        "Pet walking / Pet care",
-        "Delivery of newspapers/milk",
-        "Packing staff (factories, small industries)"
-      ]
+interface JobsResponse {
+  jobs: Job[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
+interface ApplicationsResponse {
+  applications: Array<{
+    _id: string;
+    job: Job;
+    student: string | {
+      _id: string;
+      name: string;
+      email: string;
+      phone?: string;
+      college?: string;
+      skills?: string[];
+    };
+    employer: string;
+    status: string;
+    appliedDate: string;
+    coverLetter?: string;
+    expectedPay?: number;
+    availability?: string;
+  }>;
+}
+
+const JobsPage = () => {
+  const router = useRouter();
+  const { user, isAuthenticated } = useAuth();
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedLocation, setSelectedLocation] = useState('');
+  const [selectedType, setSelectedType] = useState('');
+  const [appliedJobs, setAppliedJobs] = useState<string[]>([]);
+
+  // Fetch jobs and applied jobs
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch available jobs
+        const jobsResponse = await apiService.getJobs() as JobsResponse;
+        setJobs(jobsResponse.jobs || []);
+        
+        // Fetch user's applications to check which jobs they've applied to
+        if (isAuthenticated && user?.userType === 'student') {
+          try {
+            const applicationsResponse = await apiService.getUserApplications() as ApplicationsResponse;
+            const appliedJobIds = (applicationsResponse.applications || []).map(app => 
+              typeof app.job === 'string' ? app.job : app.job._id
+            );
+            setAppliedJobs(appliedJobIds);
+          } catch (error) {
+            console.error('Error fetching applications:', error);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching jobs:', error);
+        setJobs([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [isAuthenticated, user]);
+
+  // Filter jobs based on search and filters
+  const filteredJobs = jobs.filter(job => {
+    const matchesSearch = job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         job.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         job.company.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesLocation = !selectedLocation || job.location.toLowerCase().includes(selectedLocation.toLowerCase());
+    const matchesType = !selectedType || job.type === selectedType;
+    
+    return matchesSearch && matchesLocation && matchesType;
+  });
+
+  // Apply for job
+  const handleApply = async (jobId: string) => {
+    if (!isAuthenticated) {
+      router.push('/login');
+      return;
     }
-  ];
+
 
   const salaryRanges: Record<string, string> = {
     "Catering boy / Catering staff": "₹180-260/hr",
@@ -175,16 +185,41 @@ export default function JobsPage() {
     if (searchQuery) {
       return category.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
              category.jobs.some(job => job.toLowerCase().includes(searchQuery.toLowerCase()));
+
     }
-    return true;
-  });
+
+    try {
+      await apiService.applyForJob(jobId);
+      setAppliedJobs(prev => [...prev, jobId]);
+      alert('Application submitted successfully!');
+    } catch (error: any) {
+      console.error('Error applying for job:', error);
+      alert(error.message || 'Failed to apply for job');
+    }
+  };
+
+  // Get unique locations and work types for filters
+  const locations = [...new Set(jobs.map(job => job.location))];
+  const workTypes = [...new Set(jobs.map(job => job.type))];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading jobs...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
+
             <Link 
               href="/"
               className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors font-medium"
@@ -201,152 +236,102 @@ export default function JobsPage() {
                 className="object-contain"
                 priority
               />
+
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Available Jobs</h1>
+              <p className="text-gray-600">Find your next opportunity</p>
+              </div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-500">{filteredJobs.length} jobs found</span>
+
             </div>
           </div>
         </div>
       </div>
 
-      {/* Hero Section */}
-      <section className="py-12 sm:py-16 bg-gradient-to-br from-green-50 to-blue-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-            >
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6">
-                Find Your Perfect <span className="text-green-600">Job</span>
-              </h1>
-              <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-8">
-                Discover thousands of opportunities across various industries. 
-                From hospitality to tech, find work that fits your schedule and skills.
-              </p>
-            </motion.div>
-
-            {/* Search Bar */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="max-w-2xl mx-auto"
-            >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Search and Filters */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Search */}
               <div className="relative">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="text"
-                  placeholder="Search jobs, skills, or companies..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-4 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              </div>
-            </motion.div>
+                placeholder="Search jobs..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              />
           </div>
 
-          {/* Quick Stats */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-4xl mx-auto"
-          >
-            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 text-center border border-white/20">
-              <Users className="w-8 h-8 text-green-600 mx-auto mb-3" />
-              <div className="text-2xl font-bold text-gray-900">10,000+</div>
-              <div className="text-gray-600">Active Jobs</div>
-            </div>
-            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 text-center border border-white/20">
-              <Briefcase className="w-8 h-8 text-blue-600 mx-auto mb-3" />
-              <div className="text-2xl font-bold text-gray-900">500+</div>
-              <div className="text-gray-600">Companies</div>
-            </div>
-            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 text-center border border-white/20">
-              <Star className="w-8 h-8 text-yellow-600 mx-auto mb-3" />
-              <div className="text-2xl font-bold text-gray-900">4.8/5</div>
-              <div className="text-gray-600">Rating</div>
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Category Filter */}
-      <section className="py-8 bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-wrap gap-3 justify-center">
-            <button
-              onClick={() => setSelectedCategory(null)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                selectedCategory === null
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+            {/* Location Filter */}
+            <select
+              value={selectedLocation}
+              onChange={(e) => setSelectedLocation(e.target.value)}
+              className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent"
             >
-              All Categories
-            </button>
-            {jobCategories.map((category) => (
+              <option value="">All Locations</option>
+              {locations.map(location => (
+                <option key={location} value={location}>{location}</option>
+              ))}
+            </select>
+
+            {/* Work Type Filter */}
+            <select
+              value={selectedType}
+              onChange={(e) => setSelectedType(e.target.value)}
+              className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            >
+              <option value="">All Types</option>
+              {workTypes.map(type => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+
+            {/* Clear Filters */}
               <button
-                key={category.id}
-                onClick={() => setSelectedCategory(category.id)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                  selectedCategory === category.id
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {category.title}
+              onClick={() => {
+                setSearchTerm('');
+                setSelectedLocation('');
+                setSelectedType('');
+              }}
+              className="px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors"
+            >
+              Clear Filters
               </button>
-            ))}
           </div>
         </div>
-      </section>
 
-      {/* Job Categories */}
-      <section className="py-12 sm:py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="space-y-8">
-            {filteredCategories.map((category, index) => (
+        {/* Jobs Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {filteredJobs.map((job, index) => (
               <motion.div
-                key={category.id}
-                id={category.id}
-                initial={{ opacity: 0, y: 30 }}
+              key={job._id}
+              initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-                className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-200"
-              >
-                {/* Category Header */}
-                <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-6 border-b border-gray-200">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 ${category.color} rounded-xl flex items-center justify-center`}>
-                      <category.icon className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h2 className="text-2xl font-bold text-gray-900">{category.title}</h2>
-                      <p className="text-gray-600">{category.jobs.length} job types available</p>
-                    </div>
+              transition={{ duration: 0.5, delay: index * 0.1 }}
+              className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
+            >
+              {/* Job Header */}
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  {/* Company Logo */}
+                  <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden">
+                    <Building className="w-6 h-6 text-gray-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 text-lg">{job.title}</h3>
+                    <p className="text-gray-600">{job.company}</p>
+                  </div>
                   </div>
                 </div>
 
-                {/* Jobs Grid */}
-                <div className="p-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {category.jobs.map((job, jobIndex) => (
-                      <motion.div
-                        key={jobIndex}
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.4, delay: (index * 0.1) + (jobIndex * 0.05) }}
-                        className="group"
-                      >
-                        <div className="bg-gray-50 hover:bg-gray-100 rounded-xl p-4 transition-all duration-200 border border-gray-200 hover:border-gray-300 hover:shadow-md">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <h3 className="font-semibold text-gray-900 mb-2 group-hover:text-green-600 transition-colors">
-                                {job}
-                              </h3>
-                              <div className="flex items-center gap-4 text-sm text-gray-500">
-                                <div className="flex items-center gap-1">
+              {/* Job Details */}
+              <div className="space-y-3 mb-4">
+                <div className="flex items-center gap-2 text-gray-600">
                                   <MapPin className="w-4 h-4" />
+
                                   <span>Remote/On-site</span>
                                 </div>
                                 <div className="flex items-center gap-1">
@@ -366,21 +351,69 @@ export default function JobsPage() {
                             <div className="flex items-center gap-1 text-yellow-500">
                               <Star className="w-4 h-4 fill-current" />
                               <span className="text-sm font-medium">4.5+</span>
+
                             </div>
-                            <button className="text-green-600 hover:text-green-700 font-medium text-sm transition-colors">
-                              Apply Now →
-                            </button>
-                          </div>
-                        </div>
-                      </motion.div>
+
+              {/* Description */}
+              <p className="text-gray-700 mb-4 line-clamp-3">{job.description}</p>
+
+              {/* Skills */}
+              {job.requirements && job.requirements.length > 0 && (
+                <div className="mb-4">
+                  <div className="flex flex-wrap gap-2">
+                    {job.requirements.slice(0, 3).map((skill, index) => (
+                      <span key={index} className="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-xs">
+                        {skill}
+                      </span>
                     ))}
+                    {job.requirements.length > 3 && (
+                      <span className="text-gray-500 text-xs px-2 py-1">
+                        +{job.requirements.length - 3} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Job Footer */}
+              <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                <div className="flex items-center gap-4 text-sm text-gray-500">
+                  <span>Posted {new Date(job.createdAt).toLocaleDateString()}</span>
+                  <span>Views: {job.views || 0}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => router.push(`/jobs/${job._id}`)}
+                    className="px-3 py-2 text-gray-600 hover:text-gray-900 transition-colors"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  {isAuthenticated && user?.userType === 'student' ? (
+                    appliedJobs.includes(job._id) ? (
+                      <span className="px-4 py-2 bg-green-100 text-green-600 rounded-xl text-sm font-medium">
+                        Applied
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleApply(job._id)}
+                        className="px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-colors"
+                      >
+                        Apply Now
+                      </button>
+                    )
+                  ) : (
+                    <button
+                      onClick={() => router.push('/login')}
+                      className="px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-colors"
+                    >
+                      Login to Apply
+                            </button>
+                  )}
                   </div>
                 </div>
               </motion.div>
             ))}
           </div>
-        </div>
-      </section>
 
       {/* CTA Section */}
       <section className="py-16 bg-gradient-to-r from-green-600 to-blue-600">
@@ -454,8 +487,11 @@ export default function JobsPage() {
                 <li><a href="#" className="hover:text-white transition-colors">Contact Us</a></li>
                 <li><a href="#" className="hover:text-white transition-colors">Safety</a></li>
               </ul>
+
             </div>
+        )}
           </div>
+
           <div className="border-t border-gray-800 mt-8 pt-8 text-center">
             <p className="text-gray-400 text-sm">
               © 2024 NoriX. All rights reserved.
@@ -463,6 +499,9 @@ export default function JobsPage() {
           </div>
         </div>
       </footer>
+
     </div>
   );
-}
+};
+
+export default JobsPage;

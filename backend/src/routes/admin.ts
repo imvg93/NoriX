@@ -15,43 +15,67 @@ const router = express.Router();
 // @desc    Get admin dashboard statistics
 // @access  Private (Admin only)
 router.get('/stats', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  console.log('🔍 Admin Stats - Starting comprehensive stats query');
+  console.log('  Admin User ID:', req.user!._id);
+  
   const [
     totalUsers,
     totalStudents,
     totalEmployers,
-    pendingUserApprovals,
+    totalAdmins,
+    activeUsers,
+    verifiedUsers,
     totalJobs,
     pendingJobApprovals,
     approvedJobs,
+    rejectedJobs,
+    activeJobs,
     totalApplications
   ] = await Promise.all([
     User.countDocuments(),
     User.countDocuments({ userType: 'student' }),
     User.countDocuments({ userType: 'employer' }),
-    0, // No user approval needed
+    User.countDocuments({ userType: 'admin' }),
+    User.countDocuments({ isActive: true }),
+    User.countDocuments({ isVerified: true }),
     Job.countDocuments(),
     Job.countDocuments({ approvalStatus: 'pending' }),
     Job.countDocuments({ approvalStatus: 'approved' }),
+    Job.countDocuments({ approvalStatus: 'rejected' }),
+    Job.countDocuments({ status: 'active' }),
     // Note: Application count would need to be added if Application model exists
     0 // Placeholder for now
   ]);
 
-  sendSuccessResponse(res, {
+  const stats = {
     users: {
       total: totalUsers,
       students: totalStudents,
       employers: totalEmployers,
+      admins: totalAdmins,
+      active: activeUsers,
+      verified: verifiedUsers,
       pendingApprovals: 0 // No user approval needed
     },
     jobs: {
       total: totalJobs,
+      active: activeJobs,
       pendingApprovals: pendingJobApprovals,
-      approved: approvedJobs
+      approved: approvedJobs,
+      rejected: rejectedJobs
     },
     applications: {
       total: totalApplications
+    },
+    performance: {
+      cpuUsage: null, // TODO: Implement system performance monitoring
+      memoryUsage: null
     }
-  }, 'Admin statistics retrieved successfully');
+  };
+
+  console.log('📊 Admin Stats - Results:', stats);
+  
+  sendSuccessResponse(res, stats, 'Admin statistics retrieved successfully');
 }));
 
 // User approval routes removed - no approval needed for login/signup
@@ -275,6 +299,40 @@ router.get('/kyc', authenticateToken, requireRole(['admin']), asyncHandler(async
       hasPrev: Number(page) > 1
     }
   }, 'KYC submissions retrieved successfully');
+}));
+
+// @route   GET /api/admin/kyc/stats
+// @desc    Get KYC statistics for admin dashboard
+// @access  Private (Admin only)
+router.get('/kyc/stats', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  console.log('🔍 Admin KYC Stats - Starting stats query');
+  console.log('  Admin User ID:', req.user!._id);
+  
+  const [
+    totalKYC,
+    pendingKYC,
+    approvedKYC,
+    rejectedKYC
+  ] = await Promise.all([
+    KYC.countDocuments({ isActive: true }),
+    KYC.countDocuments({ verificationStatus: 'pending', isActive: true }),
+    KYC.countDocuments({ verificationStatus: 'approved', isActive: true }),
+    KYC.countDocuments({ verificationStatus: 'rejected', isActive: true })
+  ]);
+  
+  console.log('📊 Admin KYC Stats - Results:', {
+    totalKYC,
+    pendingKYC,
+    approvedKYC,
+    rejectedKYC
+  });
+  
+  sendSuccessResponse(res, {
+    total: totalKYC,
+    pending: pendingKYC,
+    approved: approvedKYC,
+    rejected: rejectedKYC
+  }, 'KYC statistics retrieved successfully');
 }));
 
 // @route   GET /api/admin/kyc/:id
@@ -555,37 +613,6 @@ router.put('/kyc/:id/pending', authenticateToken, requireRole(['admin']), asyncH
   console.log('✅ Admin KYC Pending - User KYC status updated in both collections');
   
   sendSuccessResponse(res, { kyc }, 'KYC submission set to pending successfully');
-}));
-
-// @route   GET /api/admin/kyc/stats
-// @desc    Get KYC statistics for admin dashboard
-// @access  Private (Admin only)
-router.get('/kyc/stats', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
-  console.log('🔍 Admin KYC Stats - Starting stats query');
-  console.log('  Admin User ID:', req.user!._id);
-  
-  const [
-    totalKYC,
-    pendingKYC,
-    approvedKYC,
-    rejectedKYC
-  ] = await Promise.all([
-    KYC.countDocuments({ isActive: true }),
-    KYC.countDocuments({ verificationStatus: 'pending', isActive: true }),
-    KYC.countDocuments({ verificationStatus: 'approved', isActive: true }),
-    KYC.countDocuments({ verificationStatus: 'rejected', isActive: true })
-  ]);
-  
-  const stats = {
-    total: totalKYC,
-    pending: pendingKYC,
-    approved: approvedKYC,
-    rejected: rejectedKYC
-  };
-  
-  console.log('📊 Admin KYC Stats - Results:', stats);
-  
-  sendSuccessResponse(res, stats, 'KYC statistics retrieved successfully');
 }));
 
 // @route   GET /api/admin/users

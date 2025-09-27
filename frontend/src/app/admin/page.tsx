@@ -176,6 +176,21 @@ export default function AdminDashboard() {
     }
   });
 
+  // Force mobile view on small screens
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 640) {
+        document.body.classList.add('mobile-view');
+      } else {
+        document.body.classList.remove('mobile-view');
+      }
+    };
+    
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   useEffect(() => {
     const fetchAdminData = async () => {
       try {
@@ -437,41 +452,119 @@ export default function AdminDashboard() {
     }
   };
 
-  const statsCards = useMemo(() => ([
-    {
-      title: 'Total Students',
-      value: data.overview.totalStudents,
-      icon: Users,
-      accent: 'indigo',
-      description: data.overview.pendingStudentApprovals ? `${data.overview.pendingStudentApprovals} pending approvals` : 'All clear',
-    },
-    {
-      title: 'Total Employers',
-      value: data.overview.totalEmployers,
-      icon: Building2,
-      accent: 'green',
-      description: data.overview.pendingEmployerApprovals ? `${data.overview.pendingEmployerApprovals} pending approvals` : 'All clear',
-    },
-    {
-      title: 'Total Jobs',
-      value: data.overview.totalJobs,
-      icon: Briefcase,
-      accent: 'blue',
-      description: data.overview.pendingJobApprovals ? `${data.overview.pendingJobApprovals} pending approvals` : 'All clear',
-    },
-    {
-      title: 'Applications',
-      value: data.overview.totalApplications,
-      icon: FileText,
-      accent: 'purple',
-      description: 'Platform-wide applications',
-    }
-  ]), [data.overview]);
 
-  const StudentSection = () => (
-    <section className="space-y-6">
-      <div className="bg-white/60 backdrop-blur-sm p-6 rounded-2xl border border-gray-200 shadow-sm">
-        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+  const renderOverview = () => (
+    <div className="space-y-6">
+      {/* Stats Cards - Mobile Optimized */}
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+        <motion.div 
+          className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+          whileHover={{ scale: 1.02 }}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Total Students</p>
+              <p className="text-3xl font-bold text-indigo-600">{data.overview.totalStudents}</p>
+            </div>
+            <div className="p-3 bg-indigo-100 rounded-lg">
+              <Users className="w-6 h-6 text-indigo-600" />
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div 
+          className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+          whileHover={{ scale: 1.02 }}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Total Employers</p>
+              <p className="text-3xl font-bold text-green-600">{data.overview.totalEmployers}</p>
+            </div>
+            <div className="p-3 bg-green-100 rounded-lg">
+              <Building2 className="w-6 h-6 text-green-600" />
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div 
+          className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+          whileHover={{ scale: 1.02 }}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Total Jobs</p>
+              <p className="text-3xl font-bold text-blue-600">{data.overview.totalJobs}</p>
+            </div>
+            <div className="p-3 bg-blue-100 rounded-lg">
+              <Briefcase className="w-6 h-6 text-blue-600" />
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div 
+          className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+          whileHover={{ scale: 1.02 }}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Applications</p>
+              <p className="text-3xl font-bold text-purple-600">{data.overview.totalApplications}</p>
+            </div>
+            <div className="p-3 bg-purple-100 rounded-lg">
+              <FileText className="w-6 h-6 text-purple-600" />
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Pending Approvals - Mobile Optimized */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+        <motion.div 
+          className="bg-white p-6 rounded-xl shadow-sm border border-gray-200"
+          whileHover={{ scale: 1.02 }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Pending Student Approvals</h3>
+            <UserCheck className="w-5 h-5 text-yellow-600" />
+          </div>
+          <div className="text-2xl font-bold text-yellow-600 mb-2">{data.overview.pendingStudentApprovals}</div>
+          <p className="text-sm text-gray-600">Students waiting for approval</p>
+        </motion.div>
+
+        <motion.div 
+          className="bg-white p-6 rounded-xl shadow-sm border border-gray-200"
+          whileHover={{ scale: 1.02 }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Pending Employer Approvals</h3>
+            <Building2 className="w-5 h-5 text-yellow-600" />
+          </div>
+          <div className="text-2xl font-bold text-yellow-600 mb-2">{data.overview.pendingEmployerApprovals}</div>
+          <p className="text-sm text-gray-600">Employers waiting for approval</p>
+        </motion.div>
+
+        <motion.div 
+          className="bg-white p-6 rounded-xl shadow-sm border border-gray-200"
+          whileHover={{ scale: 1.02 }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Pending Job Approvals</h3>
+            <Briefcase className="w-5 h-5 text-yellow-600" />
+          </div>
+          <div className="text-2xl font-bold text-yellow-600 mb-2">{data.overview.pendingJobApprovals}</div>
+          <p className="text-sm text-gray-600">Jobs waiting for approval</p>
+        </motion.div>
+      </div>
+    </div>
+  );
+
+  const renderStudents = () => (
+    <div className="space-y-6">
+      {/* Search and Filter - Mobile Optimized */}
+      <div className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -503,9 +596,79 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+
+      {/* Students - Mobile Cards & Desktop Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        {/* Mobile: Card Layout */}
+        <div className="sm:hidden">
+          <div className="p-3 space-y-2">
+            {data.students.map((student) => (
+              <motion.div 
+                key={student._id}
+                className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                whileHover={{ backgroundColor: '#f3f4f6' }}
+              >
+                {/* Header with name and status */}
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-gray-900 truncate">{student.name}</div>
+                    <div className="text-xs text-gray-500 truncate">{student.email}</div>
+                  </div>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(student.approvalStatus)}`}>
+                    {getStatusIcon(student.approvalStatus)}
+                    <span className="ml-1">{student.approvalStatus}</span>
+                  </span>
+                </div>
+                
+                {/* College */}
+                <div className="text-xs text-gray-700 mb-2 truncate">{student.college}</div>
+                
+                {/* Skills */}
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {student.skills.slice(0, 2).map((skill, index) => (
+                    <span key={index} className="px-1.5 py-0.5 bg-gray-100 text-gray-800 text-[10px] rounded-full">
+                      {skill}
+                    </span>
+                  ))}
+                  {student.skills.length > 2 && (
+                    <span className="px-1.5 py-0.5 bg-gray-100 text-gray-800 text-[10px] rounded-full">
+                      +{student.skills.length - 2}
+                    </span>
+                  )}
+                </div>
+                
+                {/* Footer with date and actions */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">{new Date(student.submittedAt).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => openApprovalModal(student._id, 'student', 'approve')}
+                      className="p-1 text-green-600 hover:text-green-900 rounded hover:bg-green-50"
+                      title="Approve"
+                    >
+                      <CheckCircle className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => openApprovalModal(student._id, 'student', 'reject')}
+                      className="p-1 text-red-600 hover:text-red-900 rounded hover:bg-red-50"
+                      title="Reject"
+                    >
+                      <XCircle className="w-3 h-3" />
+                    </button>
+                    <button className="p-1 text-blue-600 hover:text-blue-900 rounded hover:bg-blue-50" title="View">
+                      <Eye className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Desktop: Table Layout */}
+        <div className="hidden sm:block overflow-x-auto">
+          <table className="w-full">
+
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Student</th>
@@ -586,10 +749,13 @@ export default function AdminDashboard() {
     </section>
   );
 
-  const EmployerSection = () => (
-    <section className="space-y-6">
-      <div className="bg-white/60 backdrop-blur-sm p-6 rounded-2xl border border-gray-200 shadow-sm">
-        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+
+  const renderEmployers = () => (
+    <div className="space-y-6">
+      {/* Search and Filter - Mobile Optimized */}
+      <div className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -621,9 +787,66 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+
+      {/* Employers - Mobile Cards & Desktop Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        {/* Mobile: Card Layout */}
+        <div className="sm:hidden">
+          <div className="p-3 space-y-2">
+            {data.employers.map((employer) => (
+              <motion.div 
+                key={employer._id}
+                className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                whileHover={{ backgroundColor: '#f3f4f6' }}
+              >
+                {/* Header with name and status */}
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-gray-900 truncate">{employer.name}</div>
+                    <div className="text-xs text-gray-500 truncate">{employer.email}</div>
+                  </div>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(employer.approvalStatus)}`}>
+                    {getStatusIcon(employer.approvalStatus)}
+                    <span className="ml-1">{employer.approvalStatus}</span>
+                  </span>
+                </div>
+                
+                {/* Company info */}
+                <div className="text-xs text-gray-700 mb-1 truncate">{employer.companyName}</div>
+                <div className="text-xs text-gray-600 mb-2 truncate">{employer.businessType}</div>
+                
+                {/* Footer with date and actions */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">{new Date(employer.submittedAt).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => openApprovalModal(employer._id, 'employer', 'approve')}
+                      className="p-1 text-green-600 hover:text-green-900 rounded hover:bg-green-50"
+                      title="Approve"
+                    >
+                      <CheckCircle className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => openApprovalModal(employer._id, 'employer', 'reject')}
+                      className="p-1 text-red-600 hover:text-red-900 rounded hover:bg-red-50"
+                      title="Reject"
+                    >
+                      <XCircle className="w-3 h-3" />
+                    </button>
+                    <button className="p-1 text-blue-600 hover:text-blue-900 rounded hover:bg-blue-50" title="View">
+                      <Eye className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Desktop: Table Layout */}
+        <div className="hidden sm:block overflow-x-auto">
+          <table className="w-full">
+
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Employer</th>
@@ -691,10 +914,13 @@ export default function AdminDashboard() {
     </section>
   );
 
-  const JobSection = () => (
-    <section className="space-y-6">
-      <div className="bg-white/60 backdrop-blur-sm p-6 rounded-2xl border border-gray-200 shadow-sm">
-        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+
+  const renderJobs = () => (
+    <div className="space-y-6">
+      {/* Search and Filter - Mobile Optimized */}
+      <div className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -726,9 +952,67 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+
+      {/* Jobs - Mobile Cards & Desktop Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        {/* Mobile: Card Layout */}
+        <div className="sm:hidden">
+          <div className="p-3 space-y-2">
+            {data.jobs.map((job) => (
+              <motion.div 
+                key={job._id}
+                className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                whileHover={{ backgroundColor: '#f3f4f6' }}
+              >
+                {/* Header with title and status */}
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-gray-900 truncate">{job.title}</div>
+                    <div className="text-xs text-gray-500 truncate">{job.jobType}</div>
+                  </div>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(job.approvalStatus)}`}>
+                    {getStatusIcon(job.approvalStatus)}
+                    <span className="ml-1">{job.approvalStatus}</span>
+                  </span>
+                </div>
+                
+                {/* Company and location */}
+                <div className="text-xs text-gray-700 mb-1 truncate">{job.company}</div>
+                <div className="text-xs text-gray-600 mb-1 truncate">{job.location}</div>
+                <div className="text-xs text-gray-600 mb-2">₹{job.pay}/{job.payType}</div>
+                
+                {/* Footer with date and actions */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">{new Date(job.submittedAt).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => openApprovalModal(job._id, 'job', 'approve')}
+                      className="p-1 text-green-600 hover:text-green-900 rounded hover:bg-green-50"
+                      title="Approve"
+                    >
+                      <CheckCircle className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => openApprovalModal(job._id, 'job', 'reject')}
+                      className="p-1 text-red-600 hover:text-red-900 rounded hover:bg-red-50"
+                      title="Reject"
+                    >
+                      <XCircle className="w-3 h-3" />
+                    </button>
+                    <button className="p-1 text-blue-600 hover:text-blue-900 rounded hover:bg-blue-50" title="View">
+                      <Eye className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Desktop: Table Layout */}
+        <div className="hidden sm:block overflow-x-auto">
+          <table className="w-full">
+
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Job Title</th>
@@ -800,19 +1084,45 @@ export default function AdminDashboard() {
     </section>
   );
 
-  const KYCSection = () => (
-    <section className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {[
-          { title: 'Total KYC', value: data.kycStats.total, icon: Shield, accent: 'blue' },
-          { title: 'Pending Review', value: data.kycStats.pending, icon: Clock, accent: 'amber' },
-          { title: 'Approved', value: data.kycStats.approved, icon: CheckCircle, accent: 'green' },
-          { title: 'Rejected', value: data.kycStats.rejected, icon: XCircle, accent: 'red' }
-        ].map((stat) => (
+
+  const renderKYC = () => (
+    <div className="space-y-6">
+      {/* KYC Stats Cards - Mobile Optimized */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6">
         <motion.div 
-            key={stat.title}
-            whileHover={{ translateY: -4 }}
-            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6"
+          className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+          whileHover={{ scale: 1.02 }}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Total KYC</p>
+              <p className="text-3xl font-bold text-blue-600">{data.kycStats.total}</p>
+            </div>
+            <div className="p-3 bg-blue-100 rounded-lg">
+              <Shield className="w-6 h-6 text-blue-600" />
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div 
+          className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+          whileHover={{ scale: 1.02 }}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Pending Review</p>
+              <p className="text-3xl font-bold text-yellow-600">{data.kycStats.pending}</p>
+            </div>
+            <div className="p-3 bg-yellow-100 rounded-lg">
+              <Clock className="w-6 h-6 text-yellow-600" />
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div 
+          className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+          whileHover={{ scale: 1.02 }}
+
         >
           <div className="flex items-center justify-between">
             <div>
@@ -824,11 +1134,26 @@ export default function AdminDashboard() {
             </div>
           </div>
         </motion.div>
-        ))}
+
+        <motion.div 
+          className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+          whileHover={{ scale: 1.02 }}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Rejected</p>
+              <p className="text-3xl font-bold text-red-600">{data.kycStats.rejected}</p>
+            </div>
+            <div className="p-3 bg-red-100 rounded-lg">
+              <XCircle className="w-6 h-6 text-red-600" />
+
             </div>
 
-      <div className="bg-white/60 backdrop-blur-sm p-6 rounded-2xl border border-gray-200 shadow-sm">
-        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+
+      {/* Search and Filter - Mobile Optimized */}
+      <div className="bg-white p-3 sm:p-6 rounded-xl shadow-sm border border-gray-200">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -860,9 +1185,83 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+
+      {/* KYC Submissions - Mobile Cards & Desktop Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        {/* Mobile: Card Layout */}
+        <div className="sm:hidden">
+          <div className="p-3 space-y-2">
+            {data.kycSubmissions.map((kyc) => (
+              <motion.div 
+                key={kyc._id}
+                className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                whileHover={{ backgroundColor: '#f3f4f6' }}
+              >
+                {/* Header with name and status */}
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-gray-900 truncate">{kyc.fullName}</div>
+                    <div className="text-xs text-gray-500 truncate">{kyc.email}</div>
+                  </div>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(kyc.verificationStatus)}`}>
+                    {getStatusIcon(kyc.verificationStatus)}
+                    <span className="ml-1">{kyc.verificationStatus}</span>
+                  </span>
+                </div>
+                
+                {/* College */}
+                <div className="text-xs text-gray-700 mb-2 truncate">{kyc.college}</div>
+                
+                {/* Documents */}
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {kyc.aadharCard && (
+                    <span className="px-1.5 py-0.5 bg-green-100 text-green-800 text-[10px] rounded-full">Aadhaar</span>
+                  )}
+                  {kyc.collegeIdCard && (
+                    <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded-full">College ID</span>
+                  )}
+                </div>
+                
+                {/* Footer with date and actions */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">{new Date(kyc.submittedAt).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => openKYCModal(kyc._id)}
+                      className="p-1 text-blue-600 hover:text-blue-900 rounded hover:bg-blue-50"
+                      title="View Details"
+                    >
+                      <Eye className="w-3 h-3" />
+                    </button>
+                    {kyc.verificationStatus === 'pending' && (
+                      <>
+                        <button
+                          onClick={() => openApprovalModal(kyc._id, 'kyc', 'approve')}
+                          className="p-1 text-green-600 hover:text-green-900 rounded hover:bg-green-50"
+                          title="Approve"
+                        >
+                          <CheckCircle className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => openApprovalModal(kyc._id, 'kyc', 'reject')}
+                          className="p-1 text-red-600 hover:text-red-900 rounded hover:bg-red-50"
+                          title="Reject"
+                        >
+                          <XCircle className="w-3 h-3" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Desktop: Table Layout */}
+        <div className="hidden sm:block overflow-x-auto">
+          <table className="w-full">
+
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Student</th>
@@ -969,15 +1368,44 @@ export default function AdminDashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100">
-      <div className="bg-white/80 backdrop-blur border-b border-slate-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-slate-900">Admin Control Center</h1>
-              <p className="text-sm text-slate-500 mt-1">Monitor platform metrics, approvals, and KYC from a single view.</p>
+
+    <>
+      {/* Mobile viewport meta tag */}
+      <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+      <div className="min-h-screen bg-gray-50 mobile-dashboard">
+      {/* Header - Mobile Optimized */}
+      <div className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+          {/* Mobile Layout */}
+          <div className="sm:hidden py-3">
+            <div className="flex items-center justify-between mb-2">
+              <button
+                onClick={() => window.history.back()}
+                className="flex items-center gap-1 text-gray-600 hover:text-gray-900 font-medium transition-colors text-sm"
+              >
+                <svg className="w-4 h-4 transition-transform duration-300 group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Back
+              </button>
+              <button 
+                onClick={() => window.location.reload()}
+                className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-1 text-sm"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Refresh
+              </button>
             </div>
-            <div className="flex gap-3">
+            <div>
+              <h1 className="text-lg font-bold text-gray-900">Admin Dashboard</h1>
+              <p className="text-xs text-gray-600">Student Job Portal Management</p>
+            </div>
+          </div>
+          
+          {/* Desktop Layout */}
+          <div className="hidden sm:flex items-center justify-between h-16">
+            <div className="flex items-center gap-4">
+
               <button
                 onClick={() => window.history.back()}
                 className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors"
@@ -995,25 +1423,37 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
-        <motion.section
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="space-y-6"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {statsCards.map((card) => (
-              <motion.div
-                key={card.title}
-                whileHover={{ translateY: -6 }}
-                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500 font-medium">{card.title}</p>
-                    <p className={`text-3xl font-semibold text-${card.accent}-600 mt-2`}>{card.value}</p>
-                    <p className="text-xs text-gray-400 mt-2">{card.description}</p>
+
+      {/* Navigation Tabs - Mobile Optimized */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+          <nav className="flex overflow-x-auto scrollbar-hide">
+            <div className="flex space-x-1 sm:space-x-8 min-w-max">
+              {[
+                { id: 'overview', name: 'Overview', icon: TrendingUp },
+                { id: 'students', name: 'Students', icon: Users },
+                { id: 'employers', name: 'Employers', icon: Building2 },
+                { id: 'jobs', name: 'Jobs', icon: Briefcase },
+                { id: 'kyc', name: 'KYC', icon: Shield },
+                { id: 'applications', name: 'Applications', icon: FileText }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-1 sm:gap-2 py-3 sm:py-4 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? 'border-indigo-500 text-indigo-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <tab.icon className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden xs:inline">{tab.name}</span>
+                  <span className="xs:hidden">{tab.name.split(' ')[0]}</span>
+                </button>
+              ))}
+            </div>
+          </nav>
+
         </div>
                   <div className={`p-3 rounded-xl bg-${card.accent}-50 text-${card.accent}-500`}>
                     <card.icon className="w-6 h-6" />
@@ -1022,6 +1462,11 @@ export default function AdminDashboard() {
               </motion.div>
             ))}
       </div>
+
+
+      {/* Main Content - Mobile Optimized */}
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-8">
+        <AnimatePresence mode="wait">
 
           <motion.div
             initial={{ opacity: 0, y: 15 }}
@@ -1341,5 +1786,6 @@ export default function AdminDashboard() {
         )}
       </AnimatePresence>
     </div>
+    </>
   );
 }
