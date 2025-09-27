@@ -29,7 +29,8 @@ import {
   Settings,
   BarChart3,
   X,
-  LogOut
+  LogOut,
+  RefreshCcw
 } from 'lucide-react';
 import StatsCard from './StatsCard';
 import NotificationCard from './NotificationCard';
@@ -40,6 +41,16 @@ import NotificationDropdown from './NotificationDropdown';
 
 interface JobPosting extends Job {
   applications: number;
+  applicants?: Array<{
+    applicationId: string;
+    studentId: string;
+    name: string;
+    email: string;
+    skills?: string[];
+    resumeUrl?: string;
+    appliedAt: string;
+    status: string;
+  }>;
 }
 
 interface EmployerApplication {
@@ -47,8 +58,10 @@ interface EmployerApplication {
   student: {
     name: string;
     email: string;
+    skills?: string[];
   };
   job: {
+    _id: string;
     title: string;
     company: string;
   };
@@ -112,69 +125,75 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
   const [proofUploading, setProofUploading] = useState<boolean>(false);
 
   // Fetch data from API
-  useEffect(() => {
-    const fetchData = async () => {
+  const fetchData = React.useCallback(async () => {
       try {
         setLoading(true);
-        
-        // Fetch employer's jobs
-        const jobsData: JobsResponse = await apiService.getEmployerJobs();
-        const jobPostings: JobPosting[] = (jobsData.jobs || []).map(job => ({
+        const jobsData: JobsResponse = await apiService.getEmployerDashboardJobs();
+        const jobPostings: JobPosting[] = (jobsData.jobs || []).map((job: any) => ({
           ...job,
-          applications: job.applicationsCount || 0
+          _id: job._id || job.jobId,
+          jobId: job._id || job.jobId,
+          title: job.title || job.jobTitle,
+          jobTitle: job.title || job.jobTitle,
+          description: job.description || job.jobDescription || '',
+          company: job.company || job.companyName || user?.companyName || 'Company',
+          companyName: job.companyName || job.company || user?.companyName || 'Company',
+          location: job.location || '',
+          status: job.status || job.approvalStatus || 'pending',
+          approvalStatus: job.approvalStatus || job.status || 'pending',
+          createdAt: job.createdAt || new Date().toISOString(),
+          salary: job.salaryRange || job.salary || job.payRange || 'N/A',
+          salaryRange: job.salaryRange || job.salary || job.payRange || 'N/A',
+          type: job.type || job.workType || 'N/A',
+          workType: job.workType || job.type || 'N/A',
+          applications: typeof job.applicationsCount === 'number' ? job.applicationsCount : (Array.isArray(job.applicants) ? job.applicants.length : 0),
+          applicationsCount: typeof job.applicationsCount === 'number' ? job.applicationsCount : (Array.isArray(job.applicants) ? job.applicants.length : 0),
+          applicants: Array.isArray(job.applicants) ? job.applicants : [],
+          requirements: Array.isArray(job.requirements) ? job.requirements : (Array.isArray(job.skillsRequired) ? job.skillsRequired : []),
+          skillsRequired: Array.isArray(job.skillsRequired) ? job.skillsRequired : (Array.isArray(job.requirements) ? job.requirements : []),
         }));
         setData(prev => ({
           ...prev,
           jobPostings
         }));
-        
-        // Fetch applications for employer's jobs
-        const applicationsData: ApplicationsResponse = await apiService.getEmployerApplications();
-        const employerApplications: EmployerApplication[] = (applicationsData.applications || []).map(app => ({
-          _id: app._id,
-          student: {
-            name: typeof app.student === 'object' ? app.student?.name || 'Unknown Student' : 'Unknown Student',
-            email: typeof app.student === 'object' ? app.student?.email || 'unknown@email.com' : 'unknown@email.com'
-          },
-          job: {
-            title: app.job.title,
-            company: app.job.company
-          },
-          status: app.status,
-          appliedDate: app.appliedDate,
-          coverLetter: app.coverLetter
-        }));
+
+        const jobIds = new Set(jobPostings.map(jp => jp._id));
+        const allApplicants = jobPostings.flatMap((jp) => (jp.applicants || []).map(a => ({
+          _id: a.applicationId,
+          student: { name: a.name, email: a.email, skills: a.skills || [] },
+          job: { _id: jp._id, title: jp.title || jp.jobTitle || 'Job Title', company: jp.company || jp.companyName || 'Company' },
+          status: a.status,
+          appliedDate: a.appliedAt,
+          coverLetter: a.coverLetter || ''
+        })));
+        const employerApplications: EmployerApplication[] = allApplicants;
         setData(prev => ({
           ...prev,
           applications: employerApplications
         }));
-        
-        // Calculate stats
-        const activeJobs = jobPostings.filter(job => job.status === 'active').length;
-        const totalApplications = applicationsData.applications?.length || 0;
-        const pendingApprovals = (applicationsData.applications || []).filter(app => app.status === 'pending').length;
-        
+
+        const activeJobs = jobPostings.filter(job => (job.status === 'active' || job.approvalStatus === 'approved')).length;
+        const totalApplications = employerApplications.length;
+        const pendingApprovals = jobPostings.filter(job => job.approvalStatus !== 'approved').length;
+
         setData(prev => ({
           ...prev,
           stats: {
             activeJobs,
             totalApplications,
             pendingApprovals,
-            hiredStudents: Math.floor(totalApplications * 0.3) // Mock calculation
+            hiredStudents: prev.stats.hiredStudents
           }
         }));
-        
-        // Initialize empty arrays for top candidates and notifications
-        // TODO: Implement real API calls for these features
+
         setData(prev => ({
           ...prev,
-          topCandidates: [],
-          notifications: []
+          topCandidates: prev.topCandidates,
+          notifications: prev.notifications
         }));
-        
+
       } catch (error) {
         console.error('Error fetching data:', error);
-        // Initialize with empty data instead of fallback mock data
         setData({
           stats: {
             activeJobs: 0,
@@ -190,9 +209,63 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
       } finally {
         setLoading(false);
       }
-    };
+  }, [user?.companyName]);
 
+  useEffect(() => {
     fetchData();
+  }, [fetchData]);
+
+  // Set up real-time updates for new applications
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    // Import socket service dynamically
+    import('../services/socketService').then(({ socketService }) => {
+      socketService.connect(token);
+      
+      // Listen for new application notifications using custom events
+      const handleNewApplication = (event: any) => {
+        console.log('🎉 New application received:', event.detail);
+        
+        // Refresh applications list to show new application
+        apiService.getEmployerApplications().then((applicationsData: ApplicationsResponse) => {
+          const employerApplications: EmployerApplication[] = (applicationsData.applications || []).map(app => ({
+            _id: app._id,
+            student: {
+              name: typeof app.student === 'object' ? app.student?.name || 'Unknown Student' : 'Unknown Student',
+              email: typeof app.student === 'object' ? app.student?.email || 'unknown@email.com' : 'unknown@email.com',
+              skills: typeof app.student === 'object' ? (app.student as any)?.skills || [] : []
+            },
+            job: {
+              title: app.job?.title || app.job?.jobTitle || 'Job Title',
+              company: app.job?.company || app.job?.companyName || 'Company'
+            },
+            status: app.status,
+            appliedDate: (app as any).appliedAt || (app as any).appliedDate || '',
+            coverLetter: (app as any).coverLetter
+          }));
+          
+          setData(prev => ({
+            ...prev,
+            applications: employerApplications,
+            stats: {
+              ...prev.stats,
+              totalApplications: applicationsData.applications?.length || 0,
+              pendingApprovals: (applicationsData.applications || []).filter(app => app.status === 'pending').length
+            }
+          }));
+        }).catch(console.error);
+      };
+      
+      window.addEventListener('newApplication', handleNewApplication);
+
+      // Cleanup on unmount
+      return () => {
+        window.removeEventListener('newApplication', handleNewApplication);
+        socketService.disconnect();
+      };
+    });
   }, []);
 
   useEffect(() => {
@@ -281,16 +354,27 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
     }
   };
 
+  const handleVerifyJob = async (jobId: string) => {
+    try {
+      const jobDetails = await apiService.getJob(jobId);
+      const readable = `Job ID: ${jobDetails._id}\nTitle: ${jobDetails.title}\nCompany: ${jobDetails.company}\nStatus: ${jobDetails.status}\nApplications: ${jobDetails.applicationsCount ?? 0}`;
+      alert(`✅ Job found in database:\n\n${readable}`);
+    } catch (error) {
+      console.error('Error verifying job:', error);
+      alert('Could not verify this job in the database. Please ensure it exists.');
+    }
+  };
+
   const handleLogout = () => {
     logout();
     router.push('/login');
   };
 
   const quickActions = [
-    { name: 'Post New Job', icon: Plus, href: '/employer/post-job', color: 'orange', description: 'Create a new job posting' },
-    { name: 'View Applications', icon: FileText, href: '/employer/applications', color: 'blue', description: 'Review job applications' },
-    { name: 'Manage Jobs', icon: Settings, href: '/employer/jobs', color: 'green', description: 'Edit existing job postings' },
-    { name: 'Analytics', icon: BarChart3, href: '/employer/analytics', color: 'purple', description: 'View hiring insights' }
+    { name: 'Post New Job', icon: Plus, href: '/employer/post-job', color: 'orange', description: 'Create a new job posting' as const },
+    { name: 'View Applications', icon: FileText, href: '/employer/applications', color: 'blue', description: 'Review job applications' as const, count: data.applications.length },
+    { name: 'Manage Jobs', icon: Settings, href: '/employer/jobs', color: 'green', description: 'Edit existing job postings' as const, count: data.jobPostings.length },
+    { name: 'Refresh Data', icon: RefreshCcw, onClick: fetchData, color: 'gray', description: 'Sync latest jobs and applications' as const },
   ];
 
   const jobTypes = ['All', 'Full-time', 'Part-time', 'Daily Labor', 'Contract'];
@@ -457,36 +541,56 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
       >
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {quickActions.map((action) => {
-            const isPost = action.href === '/employer/post-job';
-            const ActionContainer = (
-              <div className="group p-4 bg-gray-50 rounded-xl hover:bg-orange-50 hover:border-orange-200 border border-transparent transition-all duration-200 cursor-pointer">
+
+          {quickActions.map((action) => (
+            action.href ? (
+              <Link
+                key={action.name}
+                href={action.href}
+                className="group p-4 bg-gray-50 rounded-xl hover:bg-orange-50 hover:border-orange-200 border border-transparent transition-all duration-200"
+              >
+
                 <div className="flex items-center gap-3">
                   <div className={`p-3 bg-${action.color}-100 rounded-full group-hover:bg-${action.color}-200 transition-colors`}>
                     <action.icon className={`w-6 h-6 text-${action.color}-600`} />
                   </div>
-                  <div>
+
+                  <div className="flex-1">
                     <h3 className="font-medium text-gray-900 group-hover:text-orange-700">
-                      {isPost && !canPostJob ? 'Complete KYC to Post' : action.name}
+                      {action.name}
+                    </h3>
+                    <p className="text-sm text-gray-600">{action.description}</p>
+                  </div>
+                  {typeof (action as any).count === 'number' && (
+                    <span className="text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-700">
+                      {(action as any).count}
+                    </span>
+                  )}
+                </div>
+              </Link>
+            ) : (
+              <button
+                key={action.name}
+                onClick={(action as any).onClick}
+                className="text-left group p-4 bg-gray-50 rounded-xl hover:bg-orange-50 hover:border-orange-200 border border-transparent transition-all duration-200"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`p-3 bg-${action.color}-100 rounded-full group-hover:bg-${action.color}-200 transition-colors`}>
+                    <action.icon className={`w-6 h-6 text-${action.color}-600`} />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-medium text-gray-900 group-hover:text-orange-700">
+                      {action.name}
+
                     </h3>
                     <p className="text-sm text-gray-600">{action.description}</p>
                   </div>
                 </div>
-              </div>
-            );
-            if (isPost && !canPostJob) {
-              return (
-                <button key={action.name} onClick={() => router.push('/employer/kyc')} className="text-left">
-                  {ActionContainer}
-                </button>
-              );
-            }
-            return (
-              <Link key={action.name} href={action.href}>
-                {ActionContainer}
-              </Link>
-            );
-          })}
+
+              </button>
+            )
+          ))}
+
         </div>
       </motion.div>
 
@@ -626,10 +730,10 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
                       </div>
                       <div className="flex items-center gap-1">
                         <DollarSign className="w-4 h-4" />
-                        <span>{job.salary}</span>
+                        <span>{job.salaryRange || job.salary || 'N/A'}</span>
                       </div>
                       <span className="px-2 py-1 bg-blue-100 text-blue-600 rounded-full text-xs">
-                        {job.type}
+                        {job.type || job.workType || 'N/A'}
                       </span>
                       <div className="flex items-center gap-1">
                         <Users className="w-4 h-4" />
@@ -651,6 +755,27 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
                         </span>
                       )}
                     </div>
+
+                    {/* Applicants Preview */}
+                    {Array.isArray((job as any).applicants) && (job as any).applicants.length > 0 && (
+                      <div className="mt-2 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-sm font-semibold text-gray-900">Recent Applicants</h4>
+                          <Link href={`/employer/applications/${job._id}`} className="text-xs text-blue-600 hover:text-blue-700">View All</Link>
+                        </div>
+                        <div className="space-y-2">
+                          {(job as any).applicants.slice(0, 3).map((a: any) => (
+                            <div key={a.applicationId} className="flex items-center justify-between">
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">{a.name}</div>
+                                <div className="text-xs text-gray-600">{a.email}</div>
+                              </div>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full ${a.status === 'accepted' ? 'bg-green-100 text-green-600' : a.status === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-700'}`}>{a.status}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="flex flex-col gap-3 lg:w-48">
@@ -674,6 +799,14 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
                         <Settings className="w-4 h-4" />
                         Edit Job
                       </Link>
+
+                      <button
+                        onClick={() => handleVerifyJob(job._id)}
+                        className="flex items-center justify-center gap-2 px-4 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        Verify Job
+                      </button>
                       
                       {job.status === 'active' ? (
                         <button
@@ -727,6 +860,13 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
                 <div>
                   <h3 className="font-medium text-gray-900">{application.student.name}</h3>
                   <p className="text-sm text-gray-600">{application.job.title} • {application.job.company}</p>
+                  {Array.isArray(application.student.skills) && application.student.skills.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {application.student.skills.slice(0, 3).map((skill, idx) => (
+                        <span key={idx} className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">{skill}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="text-right">
                   <span className={`text-xs px-2 py-1 rounded-full ${

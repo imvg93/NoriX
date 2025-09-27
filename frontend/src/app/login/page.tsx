@@ -6,9 +6,9 @@ export default function Login() {
       heading="Sign in to your account"
       logo={{
         url: "/",
-        src: "",
-        alt: "MeWork",
-        title: "MeWork",
+        src: "/img/logowhite.png",
+        alt: "NoriX",
+        title: "NoriX",
       }}
       buttonText="Send OTP"
       signupText="Don't have an account?"

@@ -222,6 +222,76 @@ class ApiService {
     }
   }
 
+  // Helper to unwrap { data } when present
+  private unwrap<T = any>(resp: any): T {
+    return (resp && typeof resp === 'object' && 'data' in resp) ? resp.data as T : resp as T;
+  }
+
+  // Mapping helpers to normalize backend → frontend shapes
+  private mapEnhancedJobToFrontendJob(raw: any): Job {
+    const jobId = raw._id || raw.jobId || '';
+    const title = raw.jobTitle || raw.title || '';
+    const description = raw.description || raw.jobDescription || '';
+    const company = raw.companyName || raw.company || (raw.employerId && typeof raw.employerId === 'object' ? raw.employerId.companyName : '') || '';
+    const location = raw.location || raw.jobLocation || '';
+    const salaryRange = raw.salaryRange || raw.salary || raw.payRange || '';
+    const workType = raw.workType || raw.type || '';
+    const applicantsCount = raw.applicationsCount || (Array.isArray(raw.applicants) ? raw.applicants.length : (Array.isArray(raw.applications) ? raw.applications.length : 0));
+    const requirements = Array.isArray(raw.skillsRequired) ? raw.skillsRequired : Array.isArray(raw.requirements) ? raw.requirements : [];
+
+    const base: any = {
+      _id: jobId,
+      title,
+      description,
+      company,
+      location,
+      salary: typeof salaryRange === 'string' ? salaryRange : String(salaryRange || ''),
+      salaryRange: typeof salaryRange === 'string' ? salaryRange : String(salaryRange || ''),
+      type: workType,
+      workType,
+      category: raw.category || '',
+      status: raw.status || 'active',
+      approvalStatus: raw.approvalStatus || raw.status || 'pending',
+      employer: (typeof raw.employerId === 'object' ? raw.employerId?._id : raw.employerId) || raw.employer || '',
+      createdAt: raw.createdAt || new Date().toISOString(),
+      applicationsCount: applicantsCount,
+      requirements,
+      skillsRequired: requirements,
+      applicants: raw.applicants || raw.applications || [],
+      highlighted: raw.highlighted ?? false,
+    };
+
+    return base as Job;
+  }
+
+  private mapEnhancedApplicationToFrontend(app: any): Application {
+    const jobRaw = app.jobId || app.job || {};
+    const studentRaw = app.studentId || app.student || {};
+    const mappedJob = this.mapEnhancedJobToFrontendJob(jobRaw);
+    const jobId = mappedJob?._id || jobRaw?._id || jobRaw?.jobId || '';
+    return {
+      _id: app._id,
+      job: {
+        ...mappedJob,
+        _id: jobId,
+      },
+      student: typeof studentRaw === 'object' ? {
+        _id: studentRaw._id,
+        name: studentRaw.name,
+        email: studentRaw.email,
+        phone: studentRaw.phone,
+        college: studentRaw.college,
+        skills: studentRaw.skills,
+      } : studentRaw,
+      employer: app.employer || (jobRaw?.employerId?._id || jobRaw?.employerId) || '',
+      status: app.status,
+      appliedDate: app.appliedAt || app.createdAt || new Date().toISOString(),
+      coverLetter: app.coverLetter,
+      expectedPay: app.expectedPay,
+      availability: app.availability,
+    } as Application;
+  }
+
   // Authentication APIs
   async login(email: string, password: string, userType: string): Promise<AuthResponse> {
     console.log('🔐 Login API call:', { email, userType, apiUrl: API_BASE_URL });
@@ -434,13 +504,56 @@ class ApiService {
     });
   }
 
-  async getStudentDashboardJobs(showHighlighted = true) {
+  async getStudentDashboardJobs(showHighlighted = true): Promise<JobsResponse> {
     const queryParams = new URLSearchParams({ showHighlighted: showHighlighted.toString() });
-    return this.request(`/enhanced-jobs/student-dashboard?${queryParams}`);
+    const raw = await this.request<any>(`/enhanced-jobs/student-dashboard?${queryParams}`);
+    const payload = this.unwrap<any>(raw);
+    const jobs = Array.isArray(payload?.jobs) ? payload.jobs.map((j: any) => this.mapEnhancedJobToFrontendJob(j)) : [];
+    return {
+      jobs,
+      pagination: {
+        page: payload?.pagination?.current || 1,
+        limit: 10,
+        total: payload?.pagination?.total || jobs.length,
+        pages: payload?.pagination?.pages || 1,
+      }
+    } as unknown as JobsResponse;
   }
 
-  async getEmployerDashboardJobs() {
-    return this.request('/enhanced-jobs/employer-dashboard');
+  async getEmployerDashboardJobs(): Promise<JobsResponse> {
+    const raw = await this.request<any>('/enhanced-jobs/employer-dashboard');
+    const payload = this.unwrap<any>(raw);
+    // Employer dashboard returns structured jobs with applicants
+    const jobs = Array.isArray(payload?.jobs) ? payload.jobs : [];
+    // Normalize to frontend Job shape while preserving applicants on the object
+    const normalized = jobs.map((j: any) => ({
+      _id: j.jobId || j._id || '',
+      title: j.jobTitle || j.title || '',
+      description: j.jobDescription || j.description || '',
+      company: j.companyName || j.company || '',
+      location: j.location || '',
+      status: j.status || 'active',
+      approvalStatus: j.approvalStatus || j.status || 'pending',
+      createdAt: j.createdAt || new Date().toISOString(),
+      salary: j.salaryRange || j.salary || j.payRange || '',
+      salaryRange: j.salaryRange || j.salary || j.payRange || '',
+      type: j.workType || j.type || '',
+      workType: j.workType || j.type || '',
+      skillsRequired: Array.isArray(j.skillsRequired) ? j.skillsRequired : (Array.isArray(j.requirements) ? j.requirements : []),
+      requirements: Array.isArray(j.skillsRequired) ? j.skillsRequired : (Array.isArray(j.requirements) ? j.requirements : []),
+      applicationsCount: Array.isArray(j.applicants) ? j.applicants.length : (typeof j.applicationsCount === 'number' ? j.applicationsCount : 0),
+      // pass through additional fields for UI
+      applicants: j.applicants || [],
+    })) as any[];
+    return {
+      jobs: normalized as any,
+      pagination: {
+        page: payload?.pagination?.current || 1,
+        limit: 10,
+        total: payload?.pagination?.total || normalized.length,
+        pages: payload?.pagination?.pages || 1,
+      }
+    } as unknown as JobsResponse;
   }
 
   async applyToJobEnhanced(jobId: string, applicationData: any) {
@@ -451,10 +564,36 @@ class ApiService {
   }
 
 
-  async getStudentApplications(status?: string) {
-    const queryParams = status ? new URLSearchParams({ status }) : '';
+  // Also fix legacy applyToJob to call enhanced endpoint and correct payload
+  async applyToJob(jobId: string, applicationData: any) {
+    return this.applyToJobEnhanced(jobId, applicationData);
+  }
+
+  async approveApplication(applicationId: string, notes?: string) {
+    return this.request(`/enhanced-jobs/applications/${applicationId}/approve`, {
+      method: 'PATCH',
+      body: JSON.stringify({ notes }),
+    });
+  }
+
+  async rejectApplication(applicationId: string, reason: string) {
+    return this.request(`/enhanced-jobs/applications/${applicationId}/reject`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+
+  async getStudentApplications(status?: string): Promise<ApplicationsResponse> {
+    const queryParams = status ? new URLSearchParams({ status }) : '' as any;
     const endpoint = queryParams ? `/enhanced-jobs/applications/student?${queryParams}` : '/enhanced-jobs/applications/student';
-    return this.request(endpoint);
+    const raw = await this.request<any>(endpoint);
+    const payload = this.unwrap<any>(raw);
+    const applications = Array.isArray(payload?.applications) ? payload.applications.map((a: any) => this.mapEnhancedApplicationToFrontend(a)) : [];
+    return {
+      applications,
+      pagination: payload?.pagination || { current: 1, pages: 1, total: applications.length },
+    } as ApplicationsResponse;
   }
 
   async getEmployerApplications(status?: string, jobId?: string): Promise<ApplicationsResponse> {
@@ -462,18 +601,32 @@ class ApiService {
     if (status) queryParams.append('status', status);
     if (jobId) queryParams.append('jobId', jobId);
     const endpoint = queryParams.toString() ? `/enhanced-jobs/applications/employer?${queryParams}` : '/enhanced-jobs/applications/employer';
-    return this.request<ApplicationsResponse>(endpoint);
+    const raw = await this.request<any>(endpoint);
+    const payload = this.unwrap<any>(raw);
+    const applications = Array.isArray(payload?.applications) ? payload.applications.map((a: any) => this.mapEnhancedApplicationToFrontend(a)) : [];
+    return {
+      applications,
+      pagination: payload?.pagination || { current: 1, pages: 1, total: applications.length },
+    } as ApplicationsResponse;
   }
 
   // Legacy Job APIs (keeping for backward compatibility)
   async getJobs(filters?: any): Promise<JobsResponse> {
     const queryParams = filters ? new URLSearchParams(filters).toString() : '';
     const endpoint = queryParams ? `/jobs?${queryParams}` : '/jobs';
-    return this.request<JobsResponse>(endpoint);
+    const raw = await this.request<any>(endpoint);
+    const payload = this.unwrap<any>(raw);
+    const jobs = Array.isArray(payload?.jobs) ? payload.jobs.map((j: any) => this.mapEnhancedJobToFrontendJob(j)) : [];
+    return {
+      jobs,
+      pagination: payload?.pagination || { page: 1, limit: 10, total: jobs.length, pages: 1 },
+    } as unknown as JobsResponse;
   }
 
   async getJob(jobId: string) {
-    return this.request(`/jobs/${jobId}`);
+    const raw = await this.request<any>(`/jobs/${jobId}`);
+    const payload = this.unwrap<any>(raw);
+    return this.mapEnhancedJobToFrontendJob(payload);
   }
 
   async applyForJob(jobId: string) {
@@ -508,7 +661,10 @@ class ApiService {
   }
 
   async getEmployerJobs(): Promise<JobsResponse> {
-    return this.request<JobsResponse>('/jobs/employer/jobs');
+
+    // Route through enhanced dashboard endpoint to ensure we fetch the employer's own jobs
+    return this.getEmployerDashboardJobs();
+
   }
 
   async updateJobStatus(id: string, status: string) {
@@ -521,6 +677,7 @@ class ApiService {
 
 
   // Application APIs
+
   async applyToJob(jobId: string, applicationData: any) {
     try {
       console.log('📝 Applying to job:', jobId, applicationData);
@@ -539,8 +696,25 @@ class ApiService {
     }
   }
 
+
   async getUserApplications(): Promise<ApplicationsResponse> {
-    return this.request<ApplicationsResponse>('/applications/my-applications');
+    try {
+      const raw = await this.request<any>('/applications/my-applications');
+      const payload = this.unwrap<any>(raw);
+      // Normalize shape if backend uses sendSuccessResponse
+      if (payload && payload.applications) {
+        return payload as ApplicationsResponse;
+      }
+      // If backend returns raw array (legacy), wrap it
+      if (Array.isArray(payload)) {
+        return { applications: payload as any, pagination: { current: 1, pages: 1, total: (payload as any[]).length } } as ApplicationsResponse;
+      }
+      return { applications: [], pagination: { current: 1, pages: 1, total: 0 } } as ApplicationsResponse;
+    } catch (error) {
+      console.error('getUserApplications failed:', error);
+      // Surface a consistent error to caller
+      throw new Error(this.handleError(error));
+    }
   }
 
   async getJobApplications(jobId: string): Promise<ApplicationsResponse> {
@@ -700,6 +874,7 @@ class ApiService {
     });
   }
 
+
   // Employer Job Management APIs (Admin)
   async getAllJobsForAdmin(status?: string, approvalStatus?: string, page = 1, limit = 10) {
     try {
@@ -822,6 +997,7 @@ class ApiService {
       });
       throw error;
     }
+
   }
 
   // Utility methods

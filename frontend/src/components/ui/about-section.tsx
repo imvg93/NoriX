@@ -1,7 +1,8 @@
 "use client";
 import { TimelineContent } from "@/components/ui/timeline-animation";
 import {VerticalCutReveal} from "@/components/ui/vertical-cut-reveal";
-import { ArrowRight, ArrowLeft } from "lucide-react";
+import Image from "next/image";
+import { ArrowRight, ArrowLeft, Facebook, Instagram, Linkedin, Youtube } from "lucide-react";
 import { useRef } from "react";
 import Link from "next/link";
 
@@ -62,7 +63,7 @@ export default function AboutSection() {
           {/* Header with social icons */}
           <div className="flex justify-between items-center mb-8 w-[85%] absolute lg:top-4 md:top-0 sm:-top-2 -top-3 z-10">
             <div className="flex items-center gap-2  text-xl">
-              <span className="text-green-600 animate-spin">✱</span>
+              <span className="text-[#32A4A6] animate-spin">✱</span>
               <TimelineContent
                 as="span"
                 animationNum={0}
@@ -70,7 +71,7 @@ export default function AboutSection() {
                 customVariants={revealVariants}
                 className="text-sm font-medium text-gray-600"
               >
-                ABOUT <span className="text-green-600">MEWORK</span>
+                ABOUT <span className="text-[#32A4A6]">NORIX</span>
               </TimelineContent>
             </div>
             <div className="flex gap-4">
@@ -82,9 +83,9 @@ export default function AboutSection() {
                 href="https://www.facebook.com/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="md:w-8 md:h-8 sm:w-6 w-5 sm:h-6 h-5 border border-gray-200 bg-gray-100  rounded-lg flex items-center justify-center  cursor-pointer"
+                className="md:w-8 md:h-8 sm:w-6 w-5 sm:h-6 h-5 border border-gray-200 bg-gray-100 rounded-lg flex items-center justify-center cursor-pointer"
               >
-                <img src="https://pro-section.ui-layouts.com/facebook.svg" alt="fb" width={24} height={24} />
+                <Facebook className="w-4 h-4 sm:w-5 sm:h-5 text-[#32A4A6]" aria-label="Facebook" />
               </TimelineContent>
               <TimelineContent
                 as="a"
@@ -94,9 +95,9 @@ export default function AboutSection() {
                 href="https://www.instagram.com/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="md:w-8 md:h-8 sm:w-6 w-5 sm:h-6 h-5 border border-gray-200 bg-gray-100 rounded-lg flex items-center justify-center  cursor-pointer"
+                className="md:w-8 md:h-8 sm:w-6 w-5 sm:h-6 h-5 border border-gray-200 bg-gray-100 rounded-lg flex items-center justify-center cursor-pointer"
               >
-                <img src="https://pro-section.ui-layouts.com/instagram.svg" alt="insta" width={24} height={24} />
+                <Instagram className="w-4 h-4 sm:w-5 sm:h-5 text-[#32A4A6]" aria-label="Instagram" />
               </TimelineContent>
               <TimelineContent
                 as="a"
@@ -106,9 +107,9 @@ export default function AboutSection() {
                 href="https://www.linkedin.com/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="md:w-8 md:h-8 sm:w-6 w-5 sm:h-6 h-5 border border-gray-200 bg-gray-100 rounded-lg flex items-center justify-center  cursor-pointer"
+                className="md:w-8 md:h-8 sm:w-6 w-5 sm:h-6 h-5 border border-gray-200 bg-gray-100 rounded-lg flex items-center justify-center cursor-pointer"
               >
-                <img src="https://pro-section.ui-layouts.com/linkedin.svg" alt="linkedin" width={24} height={24} />
+                <Linkedin className="w-4 h-4 sm:w-5 sm:h-5 text-[#32A4A6]" aria-label="LinkedIn" />
               </TimelineContent>
               <TimelineContent
                 as="a"
@@ -118,9 +119,9 @@ export default function AboutSection() {
                 href="https://www.youtube.com/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="md:w-8 md:h-8 sm:w-6 w-5 sm:h-6 h-5 border border-gray-200 bg-gray-100 rounded-lg flex items-center justify-center  cursor-pointer"
+                className="md:w-8 md:h-8 sm:w-6 w-5 sm:h-6 h-5 border border-gray-200 bg-gray-100 rounded-lg flex items-center justify-center cursor-pointer"
               >
-                <img src="https://pro-section.ui-layouts.com/youtube.svg" alt="youtube" width={24} height={24} />
+                <Youtube className="w-4 h-4 sm:w-5 sm:h-5 text-[#32A4A6]" aria-label="YouTube" />
               </TimelineContent>
             </div>
           </div>
@@ -169,12 +170,12 @@ export default function AboutSection() {
               className="flex gap-4"
             >
               <div className="flex items-center gap-2 mb-2 sm:text-base text-xs">
-                <span className="text-green-600 font-bold">5+</span>
+                <span className="text-[#32A4A6] font-bold">5+</span>
                 <span className="text-gray-600">years of experience</span>
                 <span className="text-gray-300">|</span>
               </div>
               <div className="flex items-center gap-2 mb-2 sm:text-base text-xs">
-                <span className="text-green-600 font-bold">10,000+</span>
+                <span className="text-[#32A4A6] font-bold">10,000+</span>
                 <span className="text-gray-600">successful projects</span>
               </div>
             </TimelineContent>
@@ -186,7 +187,7 @@ export default function AboutSection() {
                 customVariants={revealVariants}
                 className="flex lg:text-4xl sm:text-3xl text-2xl items-center gap-2 mb-2"
               >
-                <span className="text-green-600 font-semibold">50+</span>
+                <span className="text-[#32A4A6] font-semibold">50+</span>
                 <span className="text-gray-600 uppercase">cities</span>
               </TimelineContent>
               <TimelineContent
@@ -196,7 +197,7 @@ export default function AboutSection() {
                 customVariants={revealVariants}
                 className="flex items-center gap-2 mb-2 sm:text-base text-xs"
               >
-                <span className="text-green-600 font-bold">98%</span>
+                <span className="text-[#32A4A6] font-bold">98%</span>
                 <span className="text-gray-600">customer satisfaction</span>
                 <span className="text-gray-300 lg:hidden block">|</span>
               </TimelineContent>
@@ -238,7 +239,7 @@ export default function AboutSection() {
                 className="sm:text-base text-xs"
               >
                 <p className="leading-relaxed text-justify">
-                  MeWork began as a vision to bridge the gap between skilled students and meaningful work opportunities. We believe every student deserves access to flexible, well-paying jobs that complement their studies.
+                  NoriX began as a vision to bridge the gap between skilled students and meaningful work opportunities. We believe every student deserves access to flexible, well-paying jobs that complement their studies.
                 </p>
               </TimelineContent>
               <TimelineContent
@@ -257,15 +258,16 @@ export default function AboutSection() {
 
           <div className="md:col-span-1">
             <div className="text-right">
-              <TimelineContent
-                as="div"
-                animationNum={12}
-                timelineRef={heroRef}
-                customVariants={revealVariants}
-                className="text-green-600 text-2xl font-bold mb-2"
-              >
-                MEWORK
-              </TimelineContent>
+            <div className="relative h-16 w-48 ml-auto">
+                    <Image
+                      src="/img/logowhite.png"
+                      alt="NoriX logo"
+                      fill
+                      sizes="192px"
+                      className="object-contain"
+                      priority
+                    />
+                  </div>
               <TimelineContent
                 as="div"
                 animationNum={13}
@@ -283,9 +285,12 @@ export default function AboutSection() {
                 customVariants={revealVariants}
                 className="mb-6"
               >
-                <p className="text-gray-900 font-medium mb-4">
-                  Ready to find your perfect student job or hire talented students?
-                </p>
+                <div className="text-gray-900 font-medium mb-4">
+                  
+                  <p className="mt-4">
+                    Ready to find your perfect student job or hire talented students?
+                  </p>
+                </div>
               </TimelineContent>
 
               <TimelineContent
@@ -297,7 +302,7 @@ export default function AboutSection() {
               >
                 <a 
                   href="/login"
-                  className="bg-green-600 hover:bg-green-700 shadow-lg shadow-green-600 border border-green-700 flex gap-2 hover:gap-4 transition-all duration-300 ease-in-out text-white px-5 py-3 rounded-lg cursor-pointer font-semibold"
+                  className="bg-[#32A4A6] hover:bg-[#32A4A6] shadow-lg shadow-[#32A4A6] border border-[#32A4A6] flex gap-2 hover:gap-4 transition-all duration-300 ease-in-out text-white px-5 py-3 rounded-lg cursor-pointer font-semibold"
                 >
                   GET STARTED <ArrowRight className="" />
                 </a>

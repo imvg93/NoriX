@@ -66,7 +66,13 @@ const JobDetailsPage = () => {
         
         // Check if user has applied to this job
         const applications = await apiService.getUserApplications() as any;
-        const hasAppliedToJob = applications.applications?.some((app: any) => app.job === jobId) || applications.some?.((app: any) => app.job === jobId) || false;
+        // Normalize app.job to id for comparison
+        const hasAppliedToJob = Array.isArray(applications.applications)
+          ? applications.applications.some((app: any) => {
+              const jobRef = (app.job && (app.job._id || app.job)) as string;
+              return jobRef?.toString() === jobId;
+            })
+          : false;
         setHasApplied(hasAppliedToJob);
         
       } catch (error) {
@@ -116,7 +122,13 @@ const JobDetailsPage = () => {
       alert('Application submitted successfully!');
     } catch (error) {
       console.error('Error applying to job:', error);
-      alert('Failed to apply to job. Please try again.');
+      const message = (error as any)?.message || '';
+      if (message.toLowerCase().includes('already applied')) {
+        alert('You have already applied for this job.');
+        setHasApplied(true);
+      } else {
+        alert('Failed to apply to job. Please try again.');
+      }
     } finally {
       setApplying(false);
     }

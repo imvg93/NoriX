@@ -76,6 +76,67 @@ interface StudentHomeProps {
   user: any;
 }
 
+const USD_TO_INR_RATE = 83;
+const INDIAN_CURRENCY_FORMATTER = new Intl.NumberFormat('en-IN', {
+  maximumFractionDigits: 0,
+});
+
+const convertNumberToINR = (value: number) => {
+  if (!Number.isFinite(value)) return '';
+  const converted = value * USD_TO_INR_RATE;
+  if (converted >= 1000) {
+    return INDIAN_CURRENCY_FORMATTER.format(Math.round(converted));
+  }
+  return Number(converted.toFixed(2)).toString();
+};
+
+const formatSalaryToINR = (salary?: Job['salary']) => {
+  if (salary === undefined || salary === null || salary === '') {
+    return 'Salary Not Available';
+  }
+
+  if (typeof salary === 'number') {
+    const converted = convertNumberToINR(salary);
+    return converted ? `₹${converted}` : 'Salary Not Available';
+  }
+
+  const normalized = salary.toString().trim();
+  if (!normalized) return 'Salary Not Available';
+
+  if (/₹|INR|Rs\.?/i.test(normalized)) {
+    return normalized
+      .replace(/Rs\.?/gi, '₹')
+      .replace(/INR/gi, '₹')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/^₹?/, '₹');
+  }
+
+  const containsUsdIndicator = /\$|USD/i.test(normalized);
+  const numberPattern = /\d{1,3}(?:,\d{3})*(?:\.\d+)?/g;
+  const matches = normalized.match(numberPattern);
+
+  if (!matches) {
+    return containsUsdIndicator
+      ? normalized.replace(/\$|USD/gi, '₹').trim()
+      : normalized;
+  }
+
+  const converted = normalized.replace(numberPattern, (match) => {
+    const numeric = parseFloat(match.replace(/,/g, ''));
+    if (Number.isNaN(numeric)) return match;
+    const inrValue = convertNumberToINR(numeric);
+    return inrValue ? `₹${inrValue}` : match;
+  });
+
+  const cleaned = converted
+    .replace(/\$|USD/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return cleaned || 'Salary Not Available';
+};
+
 const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
   const router = useRouter();
   const { logout } = useAuth();
@@ -85,6 +146,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
   const [selectedType, setSelectedType] = useState('');
@@ -92,22 +154,50 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
   const [filteredJobs, setFilteredJobs] = useState<Job[]>([]);
   const [kycStatus, setKycStatus] = useState<{isCompleted: boolean, status: string}>({isCompleted: false, status: 'not-submitted'});
 
+  const getJobIdFromRef = (jobRef: any): string | null => {
+    if (!jobRef) return null;
+    if (typeof jobRef === 'string') return jobRef;
+    if (typeof jobRef === 'object') {
+      if (jobRef._id) {
+        const val = jobRef._id;
+        return typeof val === 'string' ? val : val?.toString?.() ?? null;
+      }
+      if (jobRef.jobId) {
+        const val = jobRef.jobId;
+        return typeof val === 'string' ? val : val?.toString?.() ?? null;
+      }
+      if (typeof jobRef.toString === 'function') {
+        const str = jobRef.toString();
+        if (str && str !== '[object Object]') {
+          return str;
+        }
+      }
+    }
+    return null;
+  };
+
   // Fetch data from API
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        
-        // Fetch jobs
-        const jobsData: JobsResponse = await apiService.getJobs();
-        setJobs(jobsData.jobs || []);
+        setErrorMessage('');
+        // Fetch jobs for student dashboard
+        const jobsData: JobsResponse = await apiService.getStudentDashboardJobs();
+        setJobs(Array.isArray(jobsData.jobs) ? jobsData.jobs : []);
         
         // Fetch user applications
-        const applicationsData: ApplicationsResponse = await apiService.getUserApplications();
+        try {
+          const applicationsData: ApplicationsResponse = await apiService.getUserApplications();
         console.log('📊 Applications data:', applicationsData); // Debug log
         const applications = applicationsData.applications || [];
         console.log('📊 Processed applications:', applications); // Debug log
         setAppliedJobs(Array.isArray(applications) ? applications : []);
+        } catch (appsErr: any) {
+          console.error('Error fetching applications:', appsErr);
+          setAppliedJobs([]);
+          setErrorMessage(prev => prev || 'Unable to fetch your applications right now.');
+        }
         
         // Initialize empty arrays for saved jobs, interviews, and notifications
         // TODO: Implement real API calls for these features
@@ -127,8 +217,9 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
           // Keep default state if KYC check fails
         }
         
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching data:', error);
+        setErrorMessage(error?.message || 'Failed to load jobs, please try again.');
         // Initialize with empty data instead of fallback mock data
         setJobs([]);
         setAppliedJobs([]);
@@ -141,6 +232,34 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
     };
 
     fetchData();
+  }, []);
+
+  // Set up real-time updates for job approvals
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    // Import socket service dynamically
+    import('../services/socketService').then(({ socketService }) => {
+      socketService.connect(token);
+      
+      // Listen for job approval notifications using custom events
+      const handleJobApproved = (event: any) => {
+        console.log('🎉 New job approved:', event.detail);
+        // Refresh jobs list to show newly approved job
+        apiService.getStudentDashboardJobs().then((jobsData: JobsResponse) => {
+          setJobs(jobsData.jobs || []);
+        }).catch(console.error);
+      };
+      
+      window.addEventListener('jobApproved', handleJobApproved);
+
+      // Cleanup on unmount
+      return () => {
+        window.removeEventListener('jobApproved', handleJobApproved);
+        socketService.disconnect();
+      };
+    });
   }, []);
 
   // Filter jobs based on search and filters
@@ -170,9 +289,25 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
 
   const handleApplyJob = async (jobId: string) => {
     try {
+      // Prevent duplicate applications locally
+      const alreadyApplied = Array.isArray(appliedJobs) && appliedJobs.some(aj => {
+        const refId = getJobIdFromRef(aj?.job);
+        return refId === jobId;
+      });
+      if (alreadyApplied) {
+        // eslint-disable-next-line no-alert
+        alert('You have already applied for this job.');
+        return;
+      }
+
+      const allowedAvailability = ['weekdays', 'weekends', 'both', 'flexible'];
+      let availabilityPreference = typeof user?.availability === 'string' ? user.availability.toLowerCase() : undefined;
+      if (!availabilityPreference || !allowedAvailability.includes(availabilityPreference)) {
+        availabilityPreference = 'flexible';
+      }
+
       await apiService.applyToJob(jobId, {
-        coverLetter: 'I am interested in this position...',
-        resume: 'resume.pdf'
+        availability: availabilityPreference
       });
       
       // Update applied jobs list
@@ -181,15 +316,21 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
         setAppliedJobs(prev => [...prev, {
           _id: Date.now().toString(),
           job,
-          status: 'pending',
+          status: 'applied',
           appliedDate: new Date().toISOString().split('T')[0]
         }]);
       }
       
-      alert('Application submitted successfully!');
-    } catch (error) {
+      // Success toast fallback
+      if (typeof window !== 'undefined') {
+        // eslint-disable-next-line no-alert
+        alert('Application submitted successfully');
+      }
+    } catch (error: any) {
       console.error('Error applying to job:', error);
-      alert('Failed to apply to job. Please try again.');
+      const friendly = error?.message || 'Failed to submit application. Please try again.';
+      // eslint-disable-next-line no-alert
+      alert(friendly);
     }
   };
 
@@ -233,6 +374,14 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
 
   return (
     <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-8 space-y-4 sm:space-y-6">
+      {errorMessage && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 sm:p-4">
+          <div className="flex items-center gap-2">
+            <X className="w-4 h-4" />
+            <span className="text-sm sm:text-base">{errorMessage || 'Failed to load jobs, please try again.'}</span>
+          </div>
+        </div>
+      )}
       {/* Navigation Header - Mobile Optimized */}
       <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4">
         {/* Mobile Header */}
@@ -484,7 +633,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                     </div>
                     <div className="flex items-center gap-1">
                       <DollarSign className="w-3 h-3" />
-                      <span className="truncate">{job.salary}</span>
+                      <span className="truncate">{formatSalaryToINR(job.salary)}</span>
                     </div>
                   </div>
                   
@@ -621,8 +770,13 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
             </div>
           ) : (
             filteredJobs.map((job) => {
-              const isApplied = Array.isArray(appliedJobs) ? appliedJobs.some(aj => aj.job._id === job._id) : false;
-              const isSaved = Array.isArray(savedJobs) ? savedJobs.some(sj => sj.job._id === job._id) : false;
+              const isApplied = Array.isArray(appliedJobs)
+                ? appliedJobs.some(aj => getJobIdFromRef(aj?.job) === job._id)
+                : false;
+
+              const isSaved = Array.isArray(savedJobs)
+                ? savedJobs.some(sj => getJobIdFromRef(sj?.job) === job._id)
+                : false;
               
               return (
                 <motion.div
@@ -659,7 +813,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                         </div>
                         <div className="flex items-center gap-1">
                           <DollarSign className="w-4 h-4" />
-                          <span className="truncate">{job.salary}</span>
+                          <span className="truncate">{formatSalaryToINR(job.salary)}</span>
                         </div>
                         <span className="px-2 py-1 bg-blue-100 text-blue-600 rounded-full text-xs w-fit">
                           {job.type}
@@ -779,7 +933,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                     <p className="text-xs sm:text-sm text-gray-600 truncate">{savedJob.job?.company || 'Company Not Available'}</p>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mt-2">
                       <span className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded-full w-fit">
-                        {savedJob.job?.salary || 'Salary Not Available'}
+                        {formatSalaryToINR(savedJob.job?.salary)}
                       </span>
                       <span className="text-xs text-gray-500 truncate">{savedJob.job?.location || 'Location Not Available'}</span>
                     </div>

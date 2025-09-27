@@ -71,7 +71,9 @@ router.post('/', authenticateToken, requireEmployer, asyncHandler(async (req: Au
     
     // System fields
     status: 'active',
+
     highlighted: true, // Jobs stay highlighted until assigned
+
     createdAt: new Date()
   });
 
@@ -90,29 +92,72 @@ router.post('/', authenticateToken, requireEmployer, asyncHandler(async (req: Au
   sendSuccessResponse(res, { job }, 'Job posted successfully', 201);
 }));
 
+// @route   PATCH /api/enhanced-jobs/:id/status
+// @desc    Update job status (employer can close/reopen their job)
+// @access  Private (Employers only)
+router.patch('/:id/status', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { id } = req.params;
+  const { status } = req.body || {};
+
+  if (!mongoose.isValidObjectId(id)) {
+    throw new ValidationError('Invalid job ID');
+  }
+
+  if (!['active', 'paused', 'closed', 'expired'].includes(status)) {
+    throw new ValidationError('Invalid status value');
+  }
+
+  const job = await Job.findById(id);
+  if (!job) {
+    throw new ValidationError('Job not found');
+  }
+
+  if (job.employerId.toString() !== req.user!._id.toString()) {
+    throw new ValidationError('Access denied');
+  }
+
+  job.status = status as typeof job.status;
+  await job.save();
+
+  sendSuccessResponse(res, { job }, 'Job status updated successfully');
+}));
+
 // @route   GET /api/enhanced-jobs/student-dashboard
 // @desc    Get jobs for student dashboard with highlighted jobs
 // @access  Private (Students only)
 router.get('/student-dashboard', authenticateToken, requireStudent, asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { page = 1, limit = 10 } = req.query;
 
-  // Get active jobs
-  const jobs = await Job.find({ status: 'active' })
-    .populate('employerId', 'name companyName')
-    .sort({ highlighted: -1, createdAt: -1 }) // Highlighted jobs first, then by date
-    .limit(Number(limit) * 1)
-    .skip((Number(page) - 1) * Number(limit));
+  try {
+    const filter: any = {
+      status: 'active'
+    };
+    // Be tolerant if some legacy jobs lack approvalStatus; show only approved when present
+    filter.$or = [
+      { approvalStatus: 'approved' },
+      { approvalStatus: { $exists: false } }
+    ];
 
-  const total = await Job.countDocuments({ status: 'active' });
+    const jobs = await Job.find(filter)
+      .populate('employerId', 'name companyName email')
+      .sort({ highlighted: -1, createdAt: -1 })
+      .limit(Number(limit) * 1)
+      .skip((Number(page) - 1) * Number(limit));
 
-  sendSuccessResponse(res, {
-    jobs,
-    pagination: {
-      current: Number(page),
-      pages: Math.ceil(total / Number(limit)),
-      total
-    }
-  }, 'Jobs retrieved successfully');
+    const total = await Job.countDocuments(filter);
+
+    sendSuccessResponse(res, {
+      jobs,
+      pagination: {
+        current: Number(page),
+        pages: Math.ceil(total / Number(limit)),
+        total
+      }
+    }, 'Jobs retrieved successfully');
+  } catch (e: any) {
+    console.error('❌ Failed to fetch student dashboard jobs:', e?.message);
+    return sendErrorResponse(res, 500, 'Failed to fetch jobs', process.env.NODE_ENV !== 'production' ? e?.message : undefined);
+  }
 }));
 
 // @route   POST /api/enhanced-jobs/:jobId/apply
@@ -120,63 +165,137 @@ router.get('/student-dashboard', authenticateToken, requireStudent, asyncHandler
 // @access  Private (Students only)
 router.post('/:jobId/apply', authenticateToken, requireStudent, asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { jobId } = req.params;
+  const { coverLetter, resume, expectedPay, availability } = req.body || {};
 
-  // Check if job exists and is active
-  const job = await Job.findById(jobId);
-  if (!job) {
-    throw new ValidationError('Job not found');
-  }
-
-  if (job.status !== 'active') {
-    throw new ValidationError('Job is not active');
-  }
-
-  // Check if already applied
-  const existingApplication = await Application.findOne({
-    jobId: jobId,
-    studentId: req.user!._id
-  });
-
-  if (existingApplication) {
-    throw new ValidationError('You have already applied for this job');
-  }
-
-  // Create application
-  const application = await Application.create({
-    applicationId: new mongoose.Types.ObjectId(),
-    jobId: jobId,
-    studentId: req.user!._id,
-    employer: job.employerId,
-    status: 'applied',
-    appliedAt: new Date()
-  });
-
-  // Update job to remove highlighted status (student has seen it)
-  await Job.findByIdAndUpdate(jobId, { highlighted: false });
-
-  // Trigger employer notification
   try {
-    await fetch('http://localhost:5000/api/notifications/application-submitted', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${req.headers.authorization?.replace('Bearer ', '')}`
-      },
-      body: JSON.stringify({
-        jobId,
-        studentId: req.user!._id,
-        employerId: job.employerId
-      })
+    console.log(`[apply] jobId param=`, jobId, ' studentId=', req.user?._id, ' payload=', req.body);
+    if (!jobId) {
+      return sendErrorResponse(res, 400, 'Job ID is required');
+    }
+    if (!mongoose.isValidObjectId(jobId)) {
+      return sendErrorResponse(res, 400, 'Invalid job ID');
+    }
+
+    // Check if job exists and is active
+    const job = await Job.findById(new mongoose.Types.ObjectId(jobId));
+    if (!job) {
+      return sendErrorResponse(res, 404, 'Job not found');
+    }
+
+    if (job.status !== 'active') {
+      return sendErrorResponse(res, 400, 'Job is not active');
+    }
+
+    if (job.approvalStatus && job.approvalStatus !== 'approved') {
+      return sendErrorResponse(res, 400, 'Job is not approved for applications');
+    }
+
+    // Check if already applied (both legacy and new fields)
+    const existingApplication = await Application.findOne({
+      $or: [
+        { jobId: new mongoose.Types.ObjectId(jobId) as any, studentId: new mongoose.Types.ObjectId(req.user!._id) as any },
+        { job: new mongoose.Types.ObjectId(jobId) as any, student: new mongoose.Types.ObjectId(req.user!._id) as any }
+      ]
     });
-  } catch (error) {
-    console.error('Failed to send notification:', error);
+
+    if (existingApplication) {
+      return sendErrorResponse(res, 400, 'You have already applied for this job');
+    }
+
+    const allowedAvailability = new Set(['weekdays', 'weekends', 'both', 'flexible']);
+    const normalizeAvailability = (value?: any) => {
+      if (typeof value === 'string') {
+        const lower = value.toLowerCase().trim();
+        if (allowedAvailability.has(lower)) {
+          return lower;
+        }
+      }
+      return undefined;
+    };
+
+    const sanitizedAvailability =
+      normalizeAvailability(availability) ||
+      normalizeAvailability((req.user as any)?.availability) ||
+      'flexible';
+
+    // Create application
+    let application;
+    try {
+      application = await Application.create({
+        applicationId: new mongoose.Types.ObjectId(),
+        jobId: new mongoose.Types.ObjectId(jobId),
+        studentId: new mongoose.Types.ObjectId(req.user!._id),
+        // Also set legacy fields to satisfy any existing unique index on (job, student)
+        job: new mongoose.Types.ObjectId(jobId) as any,
+        student: new mongoose.Types.ObjectId(req.user!._id) as any,
+        employer: job.employerId,
+        status: 'applied',
+        appliedAt: new Date(),
+        coverLetter: coverLetter || undefined,
+        resume: resume || undefined,
+        expectedPay: expectedPay ? Number(expectedPay) : undefined,
+        availability: sanitizedAvailability
+      });
+    } catch (createErr: any) {
+      console.error('❌ Application.create failed:', createErr);
+      if (createErr && (createErr.code === 11000 || createErr.code === 11001)) {
+        return sendErrorResponse(res, 400, 'You have already applied for this job');
+      }
+      if (createErr && createErr.name === 'ValidationError') {
+        return sendErrorResponse(res, 400, 'Invalid application data', createErr.message);
+      }
+      throw createErr;
+    }
+
+    // Emit real-time notification to employer about new application
+    try {
+      const socketManager = (global as any).socketManager;
+      if (socketManager && job.employerId) {
+        socketManager.emitNewApplication(job.employerId.toString(), {
+          applicationId: application._id,
+          studentId: req.user!._id,
+          studentName: (req as any).user?.name || 'Student',
+          jobId: jobId,
+          jobTitle: job.jobTitle,
+          company: job.companyName,
+          status: 'applied',
+          appliedAt: new Date()
+        });
+      }
+    } catch (emitErr) {
+      console.error('Failed to emit socket event:', emitErr);
+    }
+
+    // Trigger employer notification (best-effort)
+    try {
+      if (typeof fetch !== 'undefined') {
+        await fetch('http://localhost:5000/api/notifications/application-submitted', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${req.headers.authorization?.replace('Bearer ', '')}`
+          },
+          body: JSON.stringify({
+            jobId,
+            studentId: req.user!._id,
+            employerId: job.employerId
+          })
+        });
+      }
+    } catch (notifyErr) {
+      console.error('Failed to send notification:', notifyErr);
+    }
+
+    // Populate job and employer info
+    await application.populate('jobId', 'jobTitle companyName location salaryRange');
+    await application.populate('employer', 'name companyName');
+
+    sendSuccessResponse(res, { application }, 'Application submitted successfully', 201);
+  } catch (e: any) {
+    console.error('❌ Failed to submit application:', e);
+    const errorDetails = process.env.NODE_ENV !== 'production' ? (e?.stack || e?.message || e) : undefined;
+    return sendErrorResponse(res, 500, 'Failed to submit application', errorDetails);
   }
-
-  // Populate job and employer info
-  await application.populate('jobId', 'jobTitle companyName location salaryRange');
-  await application.populate('employer', 'name companyName');
-
-  sendSuccessResponse(res, { application }, 'Application submitted successfully', 201);
 }));
 
 // @route   GET /api/enhanced-jobs/employer-dashboard
@@ -185,29 +304,79 @@ router.post('/:jobId/apply', authenticateToken, requireStudent, asyncHandler(asy
 router.get('/employer-dashboard', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { page = 1, limit = 10 } = req.query;
 
-  // Get employer's jobs
-  const jobs = await Job.find({ employerId: req.user!._id })
-    .sort({ createdAt: -1 })
-    .limit(Number(limit) * 1)
-    .skip((Number(page) - 1) * Number(limit));
+  try {
+    const employerId = req.user!._id;
+    const currentPage = Number(page);
+    const pageSize = Number(limit);
 
-  // Get applications for these jobs
-  const jobIds = jobs.map(job => job._id);
-  const applications = await Application.find({ jobId: { $in: jobIds } })
-    .populate('studentId', 'name email phone college')
-    .populate('jobId', 'jobTitle location salaryRange');
+    const jobs = await Job.find({ employerId })
+      .sort({ createdAt: -1 })
+      .skip((currentPage - 1) * pageSize)
+      .limit(pageSize)
+      .lean();
 
-  const total = await Job.countDocuments({ employerId: req.user!._id });
+    const jobIds = jobs.map(job => job._id);
 
-  sendSuccessResponse(res, {
-    jobs,
-    applications,
-    pagination: {
-      current: Number(page),
-      pages: Math.ceil(total / Number(limit)),
-      total
+    const applications = await Application.find({ jobId: { $in: jobIds } })
+      .populate('studentId', 'name email skills availability')
+      .sort({ appliedAt: -1 })
+      .lean();
+
+    const appsByJob: Record<string, any[]> = {};
+    for (const app of applications) {
+      const key = app.jobId?.toString();
+      if (!key) continue;
+      if (!appsByJob[key]) appsByJob[key] = [];
+      appsByJob[key].push({
+        applicationId: app._id,
+        studentId: (app.studentId as any)?._id,
+        name: (app.studentId as any)?.name || 'Candidate',
+        email: (app.studentId as any)?.email || 'N/A',
+        skills: (app.studentId as any)?.skills || [],
+        availability: (app.studentId as any)?.availability,
+        resumeUrl: app.resume || '',
+        coverLetter: app.coverLetter || '',
+        appliedAt: app.appliedAt,
+        status: app.status
+      });
     }
-  }, 'Employer dashboard data retrieved successfully');
+
+    const totalJobs = await Job.countDocuments({ employerId });
+
+    const structuredJobs = jobs.map(job => {
+      const jobKey = job._id.toString();
+      const applicants = appsByJob[jobKey] || [];
+      return {
+        jobId: job._id,
+        jobTitle: job.jobTitle || (job as any).title || '',
+        jobDescription: job.description || '',
+        companyName: job.companyName || '',
+        location: job.location || '',
+        status: job.status,
+        approvalStatus: job.approvalStatus || job.status || 'pending',
+        salaryRange: job.salaryRange || '',
+        workType: job.workType || (job as any).type || '',
+        skillsRequired: Array.isArray(job.skillsRequired) ? job.skillsRequired : [],
+        requirements: Array.isArray(job.skillsRequired) ? job.skillsRequired : (Array.isArray((job as any).requirements) ? (job as any).requirements : []),
+        createdAt: job.createdAt || job.updatedAt || new Date(),
+        highlighted: job.highlighted,
+        applicants,
+        applicationsCount: applicants.length
+      };
+    });
+
+    sendSuccessResponse(res, {
+      jobs: structuredJobs,
+      pagination: {
+        current: currentPage,
+        pages: Math.ceil(totalJobs / pageSize),
+        total: totalJobs
+      }
+    }, 'Employer dashboard data retrieved successfully');
+  } catch (e: any) {
+    console.error('❌ Failed to fetch employer dashboard:', e);
+    return sendErrorResponse(res, 500, 'Failed to fetch employer dashboard', process.env.NODE_ENV !== 'production' ? (e?.stack || e?.message || e) : undefined);
+  }
 }));
 
 // @route   PATCH /api/enhanced-jobs/applications/:applicationId/approve
@@ -328,32 +497,52 @@ router.get('/applications/student', authenticateToken, requireStudent, asyncHand
 router.get('/applications/employer', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { page = 1, limit = 10, status } = req.query;
 
-  // Get all jobs by this employer
-  const employerJobs = await Job.find({ employerId: req.user!._id }).select('_id');
-  const jobIds = employerJobs.map(job => job._id);
+  try {
+    // Get all jobs by this employer
+    const employerJobs = await Job.find({ employerId: req.user!._id }).select('_id');
+    const jobIds = employerJobs.map(job => job._id);
 
-  const query: any = { jobId: { $in: jobIds } };
-  if (status) {
-    query.status = status;
-  }
-
-  const applications = await Application.find(query)
-    .populate('jobId', 'jobTitle companyName location salaryRange')
-    .populate('studentId', 'name email phone college')
-    .sort({ appliedAt: -1 })
-    .limit(Number(limit) * 1)
-    .skip((Number(page) - 1) * Number(limit));
-
-  const total = await Application.countDocuments(query);
-
-  sendSuccessResponse(res, {
-    applications,
-    pagination: {
-      current: Number(page),
-      pages: Math.ceil(total / Number(limit)),
-      total
+    const query: any = { jobId: { $in: jobIds } };
+    if (status) {
+      query.status = status;
     }
-  }, 'Employer applications retrieved successfully');
+
+    const applications = await Application.find(query)
+      .populate('jobId', 'jobTitle companyName location salaryRange')
+      .populate('studentId', 'name email skills')
+      .sort({ appliedAt: -1 })
+      .limit(Number(limit) * 1)
+      .skip((Number(page) - 1) * Number(limit));
+
+    const total = await Application.countDocuments(query);
+
+    // Only highlighted student details + resume link from application
+    const safeApplications = applications.map(app => ({
+      _id: app._id,
+      status: app.status,
+      appliedAt: app.appliedAt,
+      job: app.jobId,
+      student: app.studentId ? {
+        _id: (app.studentId as any)._id,
+        name: (app.studentId as any).name,
+        email: (app.studentId as any).email,
+        skills: (app.studentId as any).skills || [],
+        resume: (app as any).resume || ''
+      } : null
+    }));
+
+    sendSuccessResponse(res, {
+      applications: safeApplications,
+      pagination: {
+        current: Number(page),
+        pages: Math.ceil(total / Number(limit)),
+        total
+      }
+    }, 'Employer applications retrieved successfully');
+  } catch (e: any) {
+    console.error('❌ Failed to fetch employer applications:', e?.message);
+    return sendErrorResponse(res, 500, 'Failed to fetch employer applications', process.env.NODE_ENV !== 'production' ? e?.message : undefined);
+  }
 }));
 
 // @route   GET /api/enhanced-jobs/:jobId/applications

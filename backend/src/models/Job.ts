@@ -23,11 +23,13 @@ export interface IJob extends Document {
   // System fields
   status: 'active' | 'paused' | 'closed' | 'expired';
   approvalStatus: 'pending' | 'approved' | 'rejected';
+
   rejectionReason?: string;
   approvedBy?: mongoose.Types.ObjectId;
   approvedAt?: Date;
   rejectedBy?: mongoose.Types.ObjectId;
   rejectedAt?: Date;
+
   highlighted: boolean;
   createdAt: Date;
   
@@ -140,6 +142,7 @@ const jobSchema = new Schema<IJob>({
   approvalStatus: {
     type: String,
     enum: ['pending', 'approved', 'rejected'],
+
     default: 'approved' // Auto-approve jobs for now
   },
   rejectionReason: {
@@ -160,6 +163,7 @@ const jobSchema = new Schema<IJob>({
   },
   rejectedAt: {
     type: Date
+
   },
   highlighted: {
     type: Boolean,
@@ -182,6 +186,7 @@ jobSchema.index({ createdAt: -1 });
 jobSchema.index({ applicationDeadline: 1 });
 jobSchema.index({ workType: 1 });
 jobSchema.index({ location: 1 });
+jobSchema.index({ approvalStatus: 1 });
 
 // Virtual for job duration
 jobSchema.virtual('duration').get(function(this: IJob) {

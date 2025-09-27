@@ -96,6 +96,7 @@ class SocketService {
         return;
       }
 
+
       console.log('🔌 Connecting to Socket.IO server...');
       
       // Get the correct server URL (remove /api from the API URL)
@@ -126,6 +127,7 @@ class SocketService {
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000
       });
+
 
       this.setupEventHandlers();
     } catch (error) {
@@ -203,6 +205,24 @@ class SocketService {
     this.socket.on('reconnect_failed', () => {
       console.error('❌ Reconnection failed after all attempts');
       this.isConnected = false;
+    });
+
+    // Job approval events
+    this.socket.on('job:approved', (data) => {
+      console.log('📡 Received job approval notification:', data);
+      // Emit custom event for components to listen to
+      window.dispatchEvent(new CustomEvent('jobApproved', {
+        detail: data
+      }));
+    });
+
+    // New application events
+    this.socket.on('application:new', (data) => {
+      console.log('📡 Received new application notification:', data);
+      // Emit custom event for components to listen to
+      window.dispatchEvent(new CustomEvent('newApplication', {
+        detail: data
+      }));
     });
   }
 

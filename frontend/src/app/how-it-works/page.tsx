@@ -59,7 +59,7 @@ export default function HowItWorksPage() {
     {
       icon: User,
       title: "Sign Up & Create Profile",
-      description: "Join MeWork in seconds with your student credentials. Build a compelling profile showcasing your skills, experience, and availability.",
+      description: "Join NoriX in seconds with your student credentials. Build a compelling profile showcasing your skills, experience, and availability.",
       color: "bg-gray-50 border-gray-200"
     },
     {
@@ -154,7 +154,7 @@ export default function HowItWorksPage() {
       answer: "Simply sign up with your student email, create your profile, and start browsing jobs. It takes less than 5 minutes to get started."
     },
     {
-      question: "Is MeWork safe and secure?",
+      question: "Is NoriX safe and secure?",
       answer: "Yes! We use bank-level encryption, verify all users, and provide secure payment processing. Your safety is our priority."
     },
     {
@@ -176,14 +176,14 @@ export default function HowItWorksPage() {
       name: "Sarah Chen",
       role: "Computer Science Student",
       location: "University of Toronto",
-      content: "MeWork helped me find flexible tech internships that fit my class schedule. I've earned over $3,000 this semester!",
+      content: "NoriX helped me find flexible tech internships that fit my class schedule. I've earned over ₹2,50,000 this semester!",
       avatar: "https://images.unsplash.com/photo-1494790108755-2616b612b786?w=100&h=100&fit=crop&crop=face"
     },
     {
       name: "Marcus Johnson",
       role: "Business Owner",
       location: "New York",
-      content: "The quality of students on MeWork is outstanding. We've hired 5 students who are now part of our core team.",
+      content: "The quality of students on NoriX is outstanding. We've hired 5 students who are now part of our core team.",
       avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face"
     },
     {
@@ -247,7 +247,7 @@ export default function HowItWorksPage() {
             transition={{ delay: 0.4, duration: 0.8 }}
             className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6"
           >
-            How <span className="text-green-600">MeWork</span> Works
+            How <span className="text-green-600">NoriX</span> Works
           </motion.h1>
           
           <motion.p 
@@ -316,7 +316,7 @@ export default function HowItWorksPage() {
               Student Journey
             </h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              From signup to getting paid - here's how students succeed on MeWork
+              From signup to getting paid - here's how students succeed on NoriX
             </p>
           </div>
 
@@ -369,7 +369,7 @@ export default function HowItWorksPage() {
               Employer Journey
             </h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              From posting jobs to hiring talent - here's how employers succeed on MeWork
+              From posting jobs to hiring talent - here's how employers succeed on NoriX
             </p>
           </div>
 
@@ -419,7 +419,7 @@ export default function HowItWorksPage() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
-              Why Choose MeWork?
+              Why Choose NoriX?
             </h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
               Built with students and employers in mind
@@ -465,7 +465,7 @@ export default function HowItWorksPage() {
               Frequently Asked Questions
             </h2>
             <p className="text-xl text-gray-600">
-              Everything you need to know about MeWork
+              Everything you need to know about NoriX
             </p>
           </div>
 
@@ -577,7 +577,7 @@ export default function HowItWorksPage() {
                 <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
                   <span className="text-white font-bold text-lg">M</span>
                 </div>
-                <span className="text-xl font-bold">MeWork</span>
+                <span className="text-xl font-bold">NoriX</span>
               </div>
               <p className="text-gray-400 text-sm leading-relaxed">
                 Connecting skilled students with opportunities worldwide. Find trusted help for your projects.
@@ -650,7 +650,7 @@ export default function HowItWorksPage() {
           <div className="border-t border-gray-800 mt-12 pt-8">
             <div className="flex flex-col md:flex-row justify-between items-center">
               <p className="text-gray-400 text-sm">
-                © 2024 MeWork. All rights reserved.
+                © 2024 NoriX. All rights reserved.
               </p>
               <div className="flex space-x-6 mt-4 md:mt-0">
                 <a href="#" className="text-gray-400 hover:text-white text-sm transition-colors">English</a>

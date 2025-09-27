@@ -23,7 +23,6 @@ export interface IApplication extends Document {
   employerNotes?: string;
   
   // Timestamps
-  appliedDate: Date;
   shortlistedDate?: Date;
   interviewedDate?: Date;
   hiredDate?: Date;
@@ -78,11 +77,15 @@ const applicationSchema = new Schema<IApplication>({
   // Additional fields for enhanced functionality
   job: {
     type: Schema.Types.ObjectId,
-    ref: 'Job'
+    ref: 'Job',
+    default: function(this: any) { return this.jobId; },
+    set: (v: any) => (v === null || v === undefined || v === '' ? undefined : v)
   },
   student: {
     type: Schema.Types.ObjectId,
-    ref: 'User'
+    ref: 'User',
+    default: function(this: any) { return this.studentId; },
+    set: (v: any) => (v === null || v === undefined || v === '' ? undefined : v)
   },
   employer: {
     type: Schema.Types.ObjectId,
@@ -122,10 +125,6 @@ const applicationSchema = new Schema<IApplication>({
   },
   
   // Timestamps
-  appliedDate: {
-    type: Date,
-    default: Date.now
-  },
   shortlistedDate: Date,
   interviewedDate: Date,
   hiredDate: Date,
@@ -157,8 +156,19 @@ const applicationSchema = new Schema<IApplication>({
   timestamps: true
 });
 
-// Indexes for better query performance
+// Indexes for better query performance and duplicate prevention
 applicationSchema.index({ jobId: 1, studentId: 1 }, { unique: true });
+// Ensure compatibility with legacy fields used in some collections; only enforce when both are valid
+applicationSchema.index(
+  { job: 1, student: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      job: { $exists: true, $type: 'objectId' },
+      student: { $exists: true, $type: 'objectId' }
+    }
+  }
+);
 applicationSchema.index({ studentId: 1, status: 1 });
 applicationSchema.index({ employer: 1, status: 1 });
 applicationSchema.index({ status: 1 });
@@ -166,6 +176,8 @@ applicationSchema.index({ appliedAt: -1 });
 
 // Virtual for application duration
 applicationSchema.virtual('duration').get(function() {
+  if (!this.appliedAt) return 'Unknown';
+  
   const now = new Date();
   const applied = this.appliedAt;
   const diffInMs = now.getTime() - applied.getTime();
@@ -229,6 +241,24 @@ applicationSchema.methods.addRating = function(
   
   return this.save();
 };
+
+// Ensure job/student legacy fields are kept in sync before validation (both directions)
+applicationSchema.pre('validate', function(next) {
+  const doc: any = this;
+  if (doc.jobId && !doc.job) {
+    doc.job = doc.jobId;
+  }
+  if (doc.job && !doc.jobId) {
+    doc.jobId = doc.job;
+  }
+  if (doc.studentId && !doc.student) {
+    doc.student = doc.studentId;
+  }
+  if (doc.student && !doc.studentId) {
+    doc.studentId = doc.student;
+  }
+  next();
+});
 
 // Pre-save middleware to validate application
 applicationSchema.pre('save', function(next) {

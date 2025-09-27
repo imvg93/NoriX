@@ -193,12 +193,25 @@ router.patch('/jobs/:id/approve', authenticateToken, requireRole(['admin']), asy
     throw new ValidationError('Job not found');
   }
 
-  if (job.status !== 'active') {
-    throw new ValidationError('Job is not active');
-  }
-
-  job.status = 'active'; // Ensure job is active
+  // Update job status and approval status
+  job.status = 'active';
+  job.approvalStatus = 'approved';
+  job.approvedAt = new Date();
+  job.approvedBy = req.user!._id;
   await job.save();
+
+  // Emit real-time update to notify students about new approved job
+  const socketManager = (global as any).socketManager;
+  if (socketManager) {
+    socketManager.emitJobApproval(job._id.toString(), {
+      jobId: job._id,
+      title: job.jobTitle,
+      company: job.companyName,
+      location: job.location,
+      status: 'approved',
+      timestamp: new Date()
+    });
+  }
 
   sendSuccessResponse(res, { job }, 'Job approved successfully');
 }));
@@ -219,11 +232,12 @@ router.patch('/jobs/:id/reject', authenticateToken, requireRole(['admin']), asyn
     throw new ValidationError('Job not found');
   }
 
-  if (job.status !== 'active') {
-    throw new ValidationError('Job is not active');
-  }
-
-  job.status = 'closed'; // Close rejected jobs
+  // Update job status and approval status
+  job.status = 'closed';
+  job.approvalStatus = 'rejected';
+  job.rejectedAt = new Date();
+  job.rejectedBy = req.user!._id;
+  job.rejectionReason = reason || 'Job rejected by admin';
   await job.save();
 
   sendSuccessResponse(res, { job }, 'Job rejected successfully');
@@ -961,6 +975,40 @@ router.get('/dashboard-data', authenticateToken, requireRole(['admin']), asyncHa
     console.error('Error fetching admin dashboard data:', error);
     throw new ValidationError('Failed to fetch admin dashboard data');
   }
+}));
+
+router.get('/employers/:employerId/details', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { employerId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(employerId)) {
+    throw new ValidationError('Invalid employer ID');
+  }
+
+  const employer = await User.findById(employerId)
+    .select('-password -refreshToken -resetToken')
+    .lean();
+
+  if (!employer || employer.userType !== 'employer') {
+    throw new ValidationError('Employer not found');
+  }
+
+  const [jobCount, latestKYC] = await Promise.all([
+    Job.countDocuments({ employerId }),
+    KYC.findOne({ userId: employerId, isActive: true })
+      .sort({ createdAt: -1 })
+      .lean()
+  ]);
+
+  const canonicalStatus = computeKycStatus(employer as any, latestKYC as any);
+
+  sendSuccessResponse(res, {
+    employer,
+    jobCount,
+    kyc: {
+      status: canonicalStatus,
+      record: latestKYC
+    }
+  }, 'Employer details retrieved successfully');
 }));
 
 export default router;

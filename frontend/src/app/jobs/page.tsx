@@ -1,15 +1,18 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { useRouter } from 'next/navigation';
+
+import { useState } from "react";
+import { motion } from "framer-motion";
+import Link from "next/link";
+import Image from "next/image";
+
 import { 
   Search, 
   MapPin, 
   Filter, 
   Building, 
   Clock, 
-  DollarSign,
+  IndianRupee,
   Star,
   Users,
   Calendar,
@@ -132,9 +135,57 @@ const JobsPage = () => {
       return;
     }
 
-    if (user?.userType !== 'student') {
-      alert('Only students can apply for jobs');
-      return;
+
+  const salaryRanges: Record<string, string> = {
+    "Catering boy / Catering staff": "₹180-260/hr",
+    "Waiter / Server": "₹150-230/hr",
+    "Barista (coffee shop staff)": "₹180-240/hr",
+    "Fast food crew (KFC, McDonald's, Domino's, etc.)": "₹12,000-17,000/mo",
+    "Delivery boy (food delivery like Zomato/Swiggy)": "₹22,000-32,000/mo",
+    "Dishwasher / Kitchen helper": "₹140-200/hr",
+    "Event staff (serving, cleaning, organizing)": "₹800-1,200/shift",
+    "Bartender assistant": "₹200-320/hr",
+    "Sales associate (mall, clothing store, electronics shop)": "₹14,000-20,000/mo",
+    "Cashier": "₹13,000-18,000/mo",
+    "Customer service helper": "₹15,000-22,000/mo",
+    "Store stocker / Shelf organizer": "₹700-1,000/shift",
+    "Promotional staff (handing flyers, samples, etc.)": "₹900-1,400/shift",
+    "Mall kiosk helper": "₹12,000-16,000/mo",
+    "Courier delivery (Amazon, Flipkart, DTDC, etc.)": "₹18,000-26,000/mo",
+    "Warehouse helper": "₹700-1,100/day",
+    "Loading/unloading staff": "₹750-1,200/day",
+    "Bike/Car driver (with license)": "₹20,000-28,000/mo",
+    "Office boy / Peon": "₹12,000-16,000/mo",
+    "Part-time tutor (school/college subjects)": "₹400-700/hr",
+    "Home tuition teacher": "₹500-900/hr",
+    "Library assistant": "₹10,000-14,000/mo",
+    "Teaching assistant (for coaching institutes)": "₹15,000-22,000/mo",
+    "Construction helper": "₹750-1,200/day",
+    "Painter's helper": "₹700-1,100/day",
+    "Security guard": "₹14,000-20,000/mo",
+    "Housekeeping staff (hotels, offices, apartments)": "₹12,000-17,000/mo",
+    "Cleaning boy / Janitor": "₹500-800/shift",
+    "Gardener": "₹600-900/day",
+    "Event coordinator assistant": "₹1,000-1,600/shift",
+    "Wedding helper (decoration, serving, setup)": "₹900-1,400/shift",
+    "Ticket checker (cinema, events, exhibitions)": "₹9,000-13,000/mo",
+    "Stage setup crew": "₹800-1,300/shift",
+    "Data entry (basic, offline)": "₹10,000-15,000/mo",
+    "Call center (voice/non-voice, non-tech support)": "₹16,000-24,000/mo",
+    "Babysitting / Caretaker": "₹300-500/hr",
+    "Pet walking / Pet care": "₹200-350/hr",
+    "Delivery of newspapers/milk": "₹6,000-10,000/mo",
+    "Packing staff (factories, small industries)": "₹700-1,000/shift"
+  };
+
+  const getSalaryRange = (job: string) => salaryRanges[job] ?? "₹500-900/shift";
+
+  const filteredCategories = jobCategories.filter(category => {
+    if (selectedCategory && category.id !== selectedCategory) return false;
+    if (searchQuery) {
+      return category.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+             category.jobs.some(job => job.toLowerCase().includes(searchQuery.toLowerCase()));
+
     }
 
     try {
@@ -168,12 +219,31 @@ const JobsPage = () => {
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
+
+            <Link 
+              href="/"
+              className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors font-medium"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Home
+            </Link>
+            <div className="relative h-10 w-32">
+              <Image
+                src="/img/logogreen.png"
+                alt="NoriX logo"
+                fill
+                sizes="128px"
+                className="object-contain"
+                priority
+              />
+
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Available Jobs</h1>
               <p className="text-gray-600">Find your next opportunity</p>
               </div>
             <div className="flex items-center gap-4">
               <span className="text-sm text-gray-500">{filteredJobs.length} jobs found</span>
+
             </div>
           </div>
         </div>
@@ -261,22 +331,27 @@ const JobsPage = () => {
               <div className="space-y-3 mb-4">
                 <div className="flex items-center gap-2 text-gray-600">
                                   <MapPin className="w-4 h-4" />
-                  <span>{job.location}</span>
-                </div>
-                <div className="flex items-center gap-2 text-gray-600">
-                  <DollarSign className="w-4 h-4" />
-                  <span>{job.salary ? `₹${job.salary}` : 'Salary not specified'}</span>
-                </div>
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Clock className="w-4 h-4" />
-                  <span>{job.type}</span>
-                </div>
-                {job.category && (
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Briefcase className="w-4 h-4" />
-                    <span>{job.category}</span>
-                  </div>
-                )}
+
+                                  <span>Remote/On-site</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Clock className="w-4 h-4" />
+                                  <span>Flexible</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="ml-4">
+                              <div className="flex items-center gap-1 text-green-600">
+                                <IndianRupee className="w-4 h-4" />
+                                <span className="font-semibold">{getSalaryRange(job)}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-3 flex items-center justify-between">
+                            <div className="flex items-center gap-1 text-yellow-500">
+                              <Star className="w-4 h-4 fill-current" />
+                              <span className="text-sm font-medium">4.5+</span>
+
                             </div>
 
               {/* Description */}
@@ -340,15 +415,91 @@ const JobsPage = () => {
             ))}
           </div>
 
-        {/* No Jobs Found */}
-        {filteredJobs.length === 0 && (
-          <div className="text-center py-12">
-            <Briefcase className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No jobs found</h3>
-            <p className="text-gray-500">Try adjusting your search criteria</p>
+      {/* CTA Section */}
+      <section className="py-16 bg-gradient-to-r from-green-600 to-blue-600">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            viewport={{ once: true }}
+          >
+            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6">
+              Ready to Start Your Journey?
+            </h2>
+            <p className="text-xl text-green-100 mb-8 max-w-2xl mx-auto">
+              Join thousands of students who are already earning while studying. 
+              Find flexible work that fits your schedule.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link
+                href="/login"
+                className="bg-white text-green-600 px-8 py-4 rounded-xl font-semibold hover:bg-gray-100 transition-colors"
+              >
+                Find Jobs
+              </Link>
+              <Link
+                href="/login"
+                className="bg-green-700 text-white px-8 py-4 rounded-xl font-semibold hover:bg-green-800 transition-colors border border-green-500"
+              >
+                Post Jobs
+              </Link>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 text-white py-12">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">M</span>
+                </div>
+                <span className="text-xl font-bold">NoriX</span>
+              </div>
+              <p className="text-gray-400 text-sm">
+                Connecting students with flexible work opportunities worldwide.
+              </p>
+            </div>
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">For Students</h3>
+              <ul className="space-y-2 text-sm text-gray-400">
+                <li><a href="#" className="hover:text-white transition-colors">Find Jobs</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Student Resources</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Success Stories</a></li>
+              </ul>
+            </div>
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">For Employers</h3>
+              <ul className="space-y-2 text-sm text-gray-400">
+                <li><a href="#" className="hover:text-white transition-colors">Post Jobs</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Find Talent</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Employer Resources</a></li>
+              </ul>
+            </div>
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Support</h3>
+              <ul className="space-y-2 text-sm text-gray-400">
+                <li><a href="#" className="hover:text-white transition-colors">Help Center</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Contact Us</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Safety</a></li>
+              </ul>
+
             </div>
         )}
           </div>
+
+          <div className="border-t border-gray-800 mt-8 pt-8 text-center">
+            <p className="text-gray-400 text-sm">
+              © 2024 NoriX. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </footer>
+
     </div>
   );
 };

@@ -29,7 +29,7 @@ const Login1 = ({
     url: "/",
     src: "https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=200&h=60&fit=crop&crop=center",
     alt: "StudentJobs Logo",
-    title: "MeWork",
+    title: "NoriX",
   },
   buttonText = "Send OTP",
   googleText = "Sign up with Google",
@@ -349,6 +349,10 @@ const Login1 = ({
             {step === 'login' && (
               <form className="flex flex-col gap-6" onSubmit={handlePasswordLogin}>
                 <div className="flex flex-col gap-4">
+
+                  {/* User Type Selection */}
+                  
+
                   <div className="relative group">
                     <Input 
                       type="email" 
