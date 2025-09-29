@@ -747,8 +747,9 @@ class ApiService {
     });
   }
 
-  async getEmployerDetails(employerId: string) {
-    return this.request(`/admin/employers/${employerId}/details`);
+  async getEmployerDetails<T = any>(employerId: string): Promise<T> {
+    const raw = await this.request<any>(`/admin/employers/${employerId}/details`);
+    return this.unwrap<T>(raw);
   }
 
   // Utility methods
