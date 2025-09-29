@@ -49,8 +49,8 @@ const EmployerDetailsPage: React.FC = () => {
       try {
         setLoading(true);
         setError(null);
-        const response = await apiService.getEmployerDetails(id);
-        setData(response.data as EmployerDetailResponse);
+        const payload = await apiService.getEmployerDetails<EmployerDetailResponse>(id);
+        setData(payload);
       } catch (err: any) {
         console.error('Failed to fetch employer details:', err);
         setError(err?.message || 'Failed to load employer details.');

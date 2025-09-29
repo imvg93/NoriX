@@ -861,19 +861,10 @@ class ApiService {
     return this.request(`/admin/kyc/${kycId}`);
   }
 
-  async approveKYC(kycId: string) {
-    return this.request(`/admin/kyc/${kycId}/approve`, {
-      method: 'PUT',
-    });
+  async getEmployerDetails<T = any>(employerId: string): Promise<T> {
+    const raw = await this.request<any>(`/admin/employers/${employerId}/details`);
+    return this.unwrap<T>(raw);
   }
-
-  async rejectKYC(kycId: string, reason: string) {
-    return this.request(`/admin/kyc/${kycId}/reject`, {
-      method: 'PUT',
-      body: JSON.stringify({ reason }),
-    });
-  }
-
 
   // Employer Job Management APIs (Admin)
   async getAllJobsForAdmin(status?: string, approvalStatus?: string, page = 1, limit = 10) {
@@ -997,7 +988,6 @@ class ApiService {
       });
       throw error;
     }
-
   }
 
   // Utility methods

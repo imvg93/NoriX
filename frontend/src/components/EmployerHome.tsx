@@ -40,6 +40,11 @@ import { useNotifications } from '../contexts/NotificationContext';
 import NotificationDropdown from './NotificationDropdown';
 
 interface JobPosting extends Job {
+  jobTitle?: string;
+  companyName?: string;
+  approvalStatus?: string;
+  salaryRange?: string;
+  workType?: string;
   applications: number;
   applicants?: Array<{
     applicationId: string;
@@ -161,10 +166,10 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
         const allApplicants = jobPostings.flatMap((jp) => (jp.applicants || []).map(a => ({
           _id: a.applicationId,
           student: { name: a.name, email: a.email, skills: a.skills || [] },
-          job: { _id: jp._id, title: jp.title || jp.jobTitle || 'Job Title', company: jp.company || jp.companyName || 'Company' },
+          job: { _id: jp._id, title: jp.title || 'Job Title', company: jp.company || jp.companyName || 'Company' },
           status: a.status,
           appliedDate: a.appliedAt,
-          coverLetter: a.coverLetter || ''
+          coverLetter: (a as any).coverLetter || ''
         })));
         const employerApplications: EmployerApplication[] = allApplicants;
         setData(prev => ({
@@ -238,8 +243,11 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
               skills: typeof app.student === 'object' ? (app.student as any)?.skills || [] : []
             },
             job: {
-              title: app.job?.title || app.job?.jobTitle || 'Job Title',
-              company: app.job?.company || app.job?.companyName || 'Company'
+              _id: typeof app.job === 'object' ? (app.job as any)?._id || (app.job as any)?.jobId || '' : '',
+              title: app.job?.title || 'Job Title',
+              company: app.job && typeof app.job === 'object'
+                ? ((app.job as any)?.company || (app.job as any)?.companyName || 'Company')
+                : 'Company'
             },
             status: app.status,
             appliedDate: (app as any).appliedAt || (app as any).appliedDate || '',

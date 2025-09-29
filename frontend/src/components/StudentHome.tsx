@@ -90,8 +90,8 @@ const convertNumberToINR = (value: number) => {
   return Number(converted.toFixed(2)).toString();
 };
 
-const formatSalaryToINR = (salary?: Job['salary']) => {
-  if (salary === undefined || salary === null || salary === '') {
+const formatSalaryToINR = (salary?: Job['salary'] | string | null) => {
+  if (salary === undefined || salary === null || (typeof salary === 'number' && Number.isNaN(salary))) {
     return 'Salary Not Available';
   }
 

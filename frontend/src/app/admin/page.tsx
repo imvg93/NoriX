@@ -49,6 +49,15 @@ interface Student {
   rejectionReason?: string;
 }
 
+const isStudentApprovalStatus = (status: unknown): status is Student['approvalStatus'] =>
+  status === 'pending' || status === 'approved' || status === 'rejected';
+
+const normalizeStudent = (student: any): Student => ({
+  ...student,
+  approvalStatus: isStudentApprovalStatus(student?.approvalStatus) ? student.approvalStatus : 'pending',
+  rejectionReason: student?.rejectionReason ?? undefined,
+});
+
 interface Employer {
   _id: string;
   name: string;
@@ -63,6 +72,15 @@ interface Employer {
   rejectionReason?: string;
   postedJobs: number;
 }
+
+const isEmployerApprovalStatus = (status: unknown): status is Employer['approvalStatus'] =>
+  status === 'pending' || status === 'approved' || status === 'rejected';
+
+const normalizeEmployer = (employer: any): Employer => ({
+  ...employer,
+  approvalStatus: isEmployerApprovalStatus(employer?.approvalStatus) ? employer.approvalStatus : 'pending',
+  rejectionReason: employer?.rejectionReason ?? undefined,
+});
 
 interface Job {
   _id: string;
@@ -81,6 +99,15 @@ interface Job {
   rejectionReason?: string;
   applications: number;
 }
+
+const isJobApprovalStatus = (status: unknown): status is Job['approvalStatus'] =>
+  status === 'pending' || status === 'approved' || status === 'rejected';
+
+const normalizeJob = (job: any): Job => ({
+  ...job,
+  approvalStatus: isJobApprovalStatus(job?.approvalStatus) ? job.approvalStatus : 'pending',
+  rejectionReason: job?.rejectionReason ?? undefined,
+});
 
 interface Application {
   _id: string;
@@ -139,6 +166,71 @@ interface KYCSubmission {
   collegeIdCard?: string;
 }
 
+const isKYCVerificationStatus = (status: unknown): status is KYCSubmission['verificationStatus'] =>
+  status === 'pending' || status === 'in-review' || status === 'approved' || status === 'rejected';
+
+const normalizeKYCSubmission = (submission: any): KYCSubmission => ({
+  ...submission,
+  verificationStatus: isKYCVerificationStatus(submission?.verificationStatus) ? submission.verificationStatus : 'pending',
+  rejectionReason: submission?.rejectionReason ?? undefined,
+});
+
+type RecentActivity = {
+  id: string;
+  message: string;
+  timestamp: string;
+};
+
+interface AdminOverview {
+  totalStudents: number;
+  totalEmployers: number;
+  totalJobs: number;
+  totalApplications: number;
+  pendingStudentApprovals: number;
+  pendingEmployerApprovals: number;
+  pendingJobApprovals: number;
+  recentActivity: RecentActivity[];
+}
+
+interface AdminData {
+  overview: AdminOverview;
+  students: Student[];
+  employers: Employer[];
+  jobs: Job[];
+  applications: Application[];
+  kycSubmissions: KYCSubmission[];
+  kycStats: {
+    total: number;
+    pending: number;
+    approved: number;
+    rejected: number;
+  };
+}
+
+const defaultAdminData: AdminData = {
+  overview: {
+    totalStudents: 0,
+    totalEmployers: 0,
+    totalJobs: 0,
+    totalApplications: 0,
+    pendingStudentApprovals: 0,
+    pendingEmployerApprovals: 0,
+    pendingJobApprovals: 0,
+    recentActivity: [],
+  },
+  students: [],
+  employers: [],
+  jobs: [],
+  applications: [],
+  kycSubmissions: [],
+  kycStats: {
+    total: 0,
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+  },
+};
+
 export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -152,29 +244,7 @@ export default function AdminDashboard() {
   const [showKYCModal, setShowKYCModal] = useState(false);
   const [selectedKYC, setSelectedKYC] = useState<KYCSubmission | null>(null);
 
-  const [data, setData] = useState({
-    overview: {
-      totalStudents: 0,
-      totalEmployers: 0,
-      totalJobs: 0,
-      totalApplications: 0,
-      pendingStudentApprovals: 0,
-      pendingEmployerApprovals: 0,
-      pendingJobApprovals: 0,
-      recentActivity: []
-    },
-    students: [] as Student[],
-    employers: [] as Employer[],
-    jobs: [] as Job[],
-    applications: [] as Application[],
-    kycSubmissions: [] as KYCSubmission[],
-    kycStats: {
-      total: 0,
-      pending: 0,
-      approved: 0,
-      rejected: 0
-    }
-  });
+  const [data, setData] = useState<AdminData>(defaultAdminData);
 
   // Force mobile view on small screens
   useEffect(() => {
@@ -209,10 +279,14 @@ export default function AdminDashboard() {
           apiService.getKYCStats()
         ]);
         
-        const students = (studentsResponse as any).data?.users || (studentsResponse as any).users || [];
-        const employers = (employersResponse as any).data?.users || (employersResponse as any).users || [];
-        const jobs = (jobsResponse as any).data?.jobs || (jobsResponse as any).jobs || [];
-        const kycSubmissions = (kycResponse as any).data?.kycSubmissions || (kycResponse as any).kycSubmissions || [];
+        const studentsRaw = (studentsResponse as any).data?.users || (studentsResponse as any).users || [];
+        const students = studentsRaw.map(normalizeStudent);
+        const employersRaw = (employersResponse as any).data?.users || (employersResponse as any).users || [];
+        const jobsRaw = (jobsResponse as any).data?.jobs || (jobsResponse as any).jobs || [];
+        const kycSubmissionsRaw = (kycResponse as any).data?.kycSubmissions || (kycResponse as any).kycSubmissions || [];
+        const employers = employersRaw.map(normalizeEmployer);
+        const jobs = jobsRaw.map(normalizeJob);
+        const kycSubmissions = kycSubmissionsRaw.map(normalizeKYCSubmission);
         const kycStats = (kycStatsResponse as any).data || kycStatsResponse;
         
         setData({
@@ -222,16 +296,21 @@ export default function AdminDashboard() {
             totalJobs: stats.jobs?.total || 0,
             totalApplications: stats.applications?.total || 0,
             pendingStudentApprovals: stats.users?.pendingApprovals || 0,
-            pendingEmployerApprovals: employers.filter((e: any) => e.approvalStatus === 'pending').length,
+            pendingEmployerApprovals: employers.filter((e: Employer) => e.approvalStatus === 'pending').length,
             pendingJobApprovals: stats.jobs?.pendingApprovals || 0,
-            recentActivity: []
+            recentActivity: [],
           },
           students,
           employers,
           jobs,
           applications: [],
           kycSubmissions,
-          kycStats
+          kycStats: {
+            total: kycStats.total || 0,
+            pending: kycStats.pending || 0,
+            approved: kycStats.approved || 0,
+            rejected: kycStats.rejected || 0,
+          },
         });
         
       } catch (error) {
@@ -264,7 +343,7 @@ export default function AdminDashboard() {
           const prevStatus = previous?.approvalStatus;
           const nextStatus = action === 'approve' ? 'approved' : 'rejected';
 
-          const updatedStudents = prev.students.map(student =>
+          const updatedStudents = prev.students.map((student): Student =>
             student._id === itemId
               ? {
                   ...student,
@@ -277,7 +356,6 @@ export default function AdminDashboard() {
           let pendingStudentApprovals = prev.overview.pendingStudentApprovals;
           if (prevStatus !== nextStatus) {
             if (prevStatus === 'pending') pendingStudentApprovals = Math.max(0, pendingStudentApprovals - 1);
-            if (nextStatus === 'pending') pendingStudentApprovals += 1;
           }
 
           return {
@@ -300,7 +378,7 @@ export default function AdminDashboard() {
           const prevStatus = previous?.approvalStatus;
           const nextStatus = action === 'approve' ? 'approved' : 'rejected';
 
-          const updatedEmployers = prev.employers.map(employer =>
+          const updatedEmployers = prev.employers.map((employer): Employer =>
             employer._id === itemId
               ? {
                   ...employer,
@@ -313,7 +391,6 @@ export default function AdminDashboard() {
           let pendingEmployerApprovals = prev.overview.pendingEmployerApprovals;
           if (prevStatus !== nextStatus) {
             if (prevStatus === 'pending') pendingEmployerApprovals = Math.max(0, pendingEmployerApprovals - 1);
-            if (nextStatus === 'pending') pendingEmployerApprovals += 1;
           }
 
           return {
@@ -336,7 +413,7 @@ export default function AdminDashboard() {
           const prevStatus = previous?.approvalStatus;
           const nextStatus = action === 'approve' ? 'approved' : 'rejected';
 
-          const updatedJobs = prev.jobs.map(job =>
+          const updatedJobs = prev.jobs.map((job): Job =>
             job._id === itemId
               ? {
                   ...job,
@@ -349,7 +426,6 @@ export default function AdminDashboard() {
           let pendingJobApprovals = prev.overview.pendingJobApprovals;
           if (prevStatus !== nextStatus) {
             if (prevStatus === 'pending') pendingJobApprovals = Math.max(0, pendingJobApprovals - 1);
-            if (nextStatus === 'pending') pendingJobApprovals += 1;
           }
 
           return {
@@ -371,7 +447,7 @@ export default function AdminDashboard() {
           const previous = prev.kycSubmissions.find(kyc => kyc._id === itemId);
           const prevStatus = previous?.verificationStatus;
 
-          const updatedSubmissions = prev.kycSubmissions.map(kyc =>
+          const updatedSubmissions = prev.kycSubmissions.map((kyc): KYCSubmission =>
             kyc._id === itemId
               ? {
                   ...kyc,
@@ -389,7 +465,6 @@ export default function AdminDashboard() {
             if (prevStatus === 'approved') approved = Math.max(0, approved - 1);
             if (prevStatus === 'rejected') rejected = Math.max(0, rejected - 1);
 
-            if (nextStatus === 'pending') pending += 1;
             if (nextStatus === 'approved') approved += 1;
             if (nextStatus === 'rejected') rejected += 1;
           }
