@@ -6,6 +6,7 @@ import User from '../models/User';
 interface AuthenticatedSocket extends Socket {
   userId?: string;
   userType?: string;
+  userEmail?: string;
 }
 
 class SocketManager {
@@ -13,21 +14,30 @@ class SocketManager {
   private connectedUsers: Map<string, string> = new Map(); // userId -> socketId
 
   constructor(server: HTTPServer) {
-    const allowAll = process.env.ALLOW_ALL_CORS === 'true' || process.env.ALLOW_ALL_CORS === '1';
+    // Environment-aware CORS configuration
+    const isProduction = process.env.NODE_ENV === 'production';
+    const allowedOrigins = isProduction 
+      ? ['https://me-work.vercel.app']
+      : ['http://localhost:3000'];
+    
     this.io = new SocketIOServer(server, {
-      cors: allowAll ? {
-        origin: (origin, callback) => callback(null, true),
+      cors: {
+        origin: allowedOrigins,
         methods: ["GET", "POST"],
         credentials: true
-      } : {
-        origin: process.env.FRONTEND_URL || "http://localhost:3000",
-        methods: ["GET", "POST"],
-        credentials: true
+      },
+      // Enable connection state recovery
+      connectionStateRecovery: {
+        maxDisconnectionDuration: 2 * 60 * 1000, // 2 minutes
+        skipMiddlewares: true,
       }
     });
 
     this.setupMiddleware();
     this.setupEventHandlers();
+    
+    console.log('🔌 Socket.IO server initialized with CORS:', 'environment-aware');
+    console.log(`   Allowed origins: ${allowedOrigins.join(', ')}`);
   }
 
   private setupMiddleware() {
@@ -35,24 +45,48 @@ class SocketManager {
     this.io.use(async (socket: Socket, next) => {
       try {
         const authSocket = socket as AuthenticatedSocket;
-        const token = authSocket.handshake.auth.token || authSocket.handshake.headers.authorization?.replace('Bearer ', '');
+        
+        // Get token from auth object or headers
+        const token = authSocket.handshake.auth?.token || 
+                     authSocket.handshake.headers?.authorization?.replace('Bearer ', '');
+        
+        console.log('🔐 Socket authentication attempt:', {
+          hasToken: !!token,
+          socketId: authSocket.id,
+          userAgent: authSocket.handshake.headers['user-agent']
+        });
         
         if (!token) {
+          console.log('❌ No token provided for socket connection');
           return next(new Error('Authentication error: No token provided'));
         }
 
+        // Verify JWT token
         const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
-        const user = await User.findById(decoded.userId);
+        console.log('🔐 Token decoded successfully:', { userId: decoded.userId });
+        
+        // Find user in database
+        const user = await User.findById(decoded.userId).select('_id email userType name') as any;
         
         if (!user) {
+          console.log('❌ User not found for socket connection:', decoded.userId);
           return next(new Error('Authentication error: User not found'));
         }
 
-        authSocket.userId = (user._id as any).toString();
+        // Attach user info to socket
+        authSocket.userId = user._id.toString();
         authSocket.userType = user.userType;
+        authSocket.userEmail = user.email;
+        
+        console.log('✅ Socket authenticated successfully:', {
+          userId: authSocket.userId,
+          userType: authSocket.userType,
+          userEmail: authSocket.userEmail
+        });
+        
         next();
       } catch (error) {
-        console.error('Socket authentication error:', error);
+        console.error('❌ Socket authentication error:', error);
         next(new Error('Authentication error: Invalid token'));
       }
     });
@@ -61,29 +95,60 @@ class SocketManager {
   private setupEventHandlers() {
     this.io.on('connection', (socket: Socket) => {
       const authSocket = socket as AuthenticatedSocket;
-      console.log(`🔌 Socket connected: ${authSocket.userId} (${authSocket.userType})`);
+      console.log(`🔌 Socket connected: ${authSocket.userEmail} (${authSocket.userType}) - Socket ID: ${authSocket.id}`);
       
       // Store user connection
       if (authSocket.userId) {
         this.connectedUsers.set(authSocket.userId, authSocket.id);
+        console.log(`📊 Total connected users: ${this.connectedUsers.size}`);
       }
 
       // Join user to their personal room
       if (authSocket.userId) {
         authSocket.join(`user:${authSocket.userId}`);
+        console.log(`🔌 User joined personal room: user:${authSocket.userId}`);
+      }
+
+      // Join role-specific rooms
+      if (authSocket.userType) {
+        authSocket.join(authSocket.userType);
+        console.log(`🔌 User joined role room: ${authSocket.userType}`);
       }
 
       // Join admin to admin room
       if (authSocket.userType === 'admin') {
         authSocket.join('admin');
+        console.log(`🔌 Admin joined admin room`);
       }
 
+      // Send connection confirmation
+      authSocket.emit('connected', {
+        message: 'Successfully connected to server',
+        userId: authSocket.userId,
+        userType: authSocket.userType,
+        socketId: authSocket.id,
+        timestamp: new Date().toISOString()
+      });
+
       // Handle disconnect
-      authSocket.on('disconnect', () => {
-        console.log(`🔌 Socket disconnected: ${authSocket.userId}`);
+      authSocket.on('disconnect', (reason) => {
+        console.log(`🔌 Socket disconnected: ${authSocket.userEmail} - Reason: ${reason}`);
         if (authSocket.userId) {
           this.connectedUsers.delete(authSocket.userId);
+          console.log(`📊 Total connected users: ${this.connectedUsers.size}`);
         }
+      });
+
+      // Handle joining job-specific room
+      authSocket.on('join_job_room', (jobId: string) => {
+        authSocket.join(`job:${jobId}`);
+        console.log(`🔌 User ${authSocket.userEmail} joined job room: ${jobId}`);
+      });
+
+      // Handle leaving job-specific room
+      authSocket.on('leave_job_room', (jobId: string) => {
+        authSocket.leave(`job:${jobId}`);
+        console.log(`🔌 User ${authSocket.userEmail} left job room: ${jobId}`);
       });
 
       // Handle KYC status requests
@@ -94,6 +159,11 @@ class SocketManager {
             timestamp: new Date()
           });
         }
+      });
+
+      // Handle ping/pong for connection health
+      authSocket.on('ping', () => {
+        authSocket.emit('pong', { timestamp: new Date().toISOString() });
       });
     });
   }
@@ -169,6 +239,64 @@ class SocketManager {
   // Check if user is connected
   public isUserConnected(userId: string): boolean {
     return this.connectedUsers.has(userId);
+  }
+
+  // ===== JOB-RELATED NOTIFICATIONS =====
+
+  // Emit job approval notification to all students
+  public notifyJobApproved(jobData: any) {
+    console.log(`📢 Broadcasting job approval: ${jobData.jobTitle} at ${jobData.companyName}`);
+    
+    this.io.to('student').emit('job_approved', {
+      type: 'job_approved',
+      job: jobData,
+      timestamp: new Date().toISOString(),
+      message: `New job approved: ${jobData.jobTitle} at ${jobData.companyName}`
+    });
+  }
+
+  // Emit job rejection notification to employer
+  public notifyJobRejected(jobData: any, employerId: string) {
+    console.log(`📢 Notifying job rejection to employer: ${employerId}`);
+    
+    this.io.to(`user:${employerId}`).emit('job_rejected', {
+      type: 'job_rejected',
+      job: jobData,
+      timestamp: new Date().toISOString(),
+      message: `Your job "${jobData.jobTitle}" was rejected`
+    });
+  }
+
+  // Emit new application notification to employer
+  public notifyNewApplication(applicationData: any, employerId: string) {
+    console.log(`📢 Notifying new application to employer: ${employerId}`);
+    
+    this.io.to(`user:${employerId}`).emit('new_application', {
+      type: 'new_application',
+      application: applicationData,
+      timestamp: new Date().toISOString(),
+      message: `New application received for "${applicationData.jobTitle}"`
+    });
+
+    // Also notify in job-specific room
+    this.io.to(`job:${applicationData.jobId}`).emit('new_application', {
+      type: 'new_application',
+      application: applicationData,
+      timestamp: new Date().toISOString(),
+      message: `New application received for "${applicationData.jobTitle}"`
+    });
+  }
+
+  // Emit application status update to student
+  public notifyApplicationStatusUpdate(applicationData: any, studentId: string) {
+    console.log(`📢 Notifying application status update to student: ${studentId}`);
+    
+    this.io.to(`user:${studentId}`).emit('application_status_update', {
+      type: 'application_status_update',
+      application: applicationData,
+      timestamp: new Date().toISOString(),
+      message: `Your application status updated: ${applicationData.status}`
+    });
   }
 
   // Get socket instance

@@ -1,10 +1,60 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useAuth } from '../../contexts/AuthContext';
+import { apiService } from '../../services/api';
 
 export default function EmployerDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
+  const { user } = useAuth();
+  const [kycStatus, setKycStatus] = useState<'not-submitted' | 'pending' | 'approved' | 'rejected' | null>(null);
+  const [submittingKyc, setSubmittingKyc] = useState(false);
+  const [kycForm, setKycForm] = useState<{ companyName: string; GSTNumber: string; PAN: string }>({
+    companyName: '',
+    GSTNumber: '',
+    PAN: ''
+  });
+  const [showKycModal, setShowKycModal] = useState(false);
+
+  useEffect(() => {
+    const init = async () => {
+      if (!user || user.userType !== 'employer') return;
+      try {
+        const res = await apiService.getEmployerKYCStatus(user._id);
+        setKycStatus((res?.status as 'not-submitted' | 'pending' | 'approved' | 'rejected' | null) || 'not-submitted');
+      } catch (e) {
+        console.error('❌ Error loading KYC status:', e);
+        setKycStatus('not-submitted');
+      }
+      setKycForm(prev => ({ ...prev, companyName: (user as any).companyName || '' }));
+    };
+    init();
+  }, [user]);
+
+  const handleKycInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setKycForm(prev => ({ ...prev, [name]: value } as any));
+  };
+
+  const submitEmployerKYC = async () => {
+    if (!user) return;
+    try {
+      setSubmittingKyc(true);
+      await apiService.submitEmployerKYC({
+        companyName: kycForm.companyName,
+        GSTNumber: kycForm.GSTNumber || undefined,
+        PAN: kycForm.PAN || undefined,
+      });
+      alert('KYC submitted. Status set to Pending.');
+      setKycStatus('pending');
+      setShowKycModal(false);
+    } catch (e: any) {
+      alert(e?.message || 'Failed to submit KYC');
+    } finally {
+      setSubmittingKyc(false);
+    }
+  };
 
   // Mock data for demonstration
   const mockData = {
@@ -91,9 +141,26 @@ export default function EmployerDashboard() {
       <div className="bg-white rounded-lg shadow p-4">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
         <div className="space-y-3">
-          <Link href="/post-job" className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 text-center block">
-            Post New Job
-          </Link>
+          {kycStatus === 'approved' ? (
+            <Link href="/employer/post-job" className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 text-center block">
+              Post New Job
+            </Link>
+          ) : (
+            <button
+              className="w-full bg-gray-300 text-gray-700 py-2 px-4 rounded-md cursor-not-allowed text-center block"
+              onClick={() => alert('Your employer KYC must be Approved before posting jobs.')}
+            >
+              Post New Job (KYC Required)
+            </button>
+          )}
+          {kycStatus !== 'approved' && (
+            <button
+              className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 text-center block"
+              onClick={() => setShowKycModal(true)}
+            >
+              Complete KYC
+            </button>
+          )}
           <Link href="/employer?tab=applications" className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 text-center block">
             Review Applications
           </Link>
@@ -219,10 +286,27 @@ export default function EmployerDashboard() {
             <p className="mt-1 text-sm text-gray-900">+91 98765 43210</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Verification Status</label>
-            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-              ✓ Verified
-            </span>
+            <label className="block text-sm font-medium text-gray-700">KYC Status</label>
+            {kycStatus === 'approved' && (
+              <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                ✓ Approved
+              </span>
+            )}
+            {kycStatus === 'pending' && (
+              <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                ⏳ Pending
+              </span>
+            )}
+            {kycStatus === 'rejected' && (
+              <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                ✗ Rejected
+              </span>
+            )}
+            {(kycStatus === 'not-submitted' || kycStatus === null) && (
+              <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                Not Submitted
+              </span>
+            )}
           </div>
         </div>
 
@@ -288,6 +372,45 @@ export default function EmployerDashboard() {
 
       {/* Content */}
       <div className="px-4 py-6">
+        {/* Employer KYC Banner */}
+        {user && user.userType === 'employer' && kycStatus !== 'approved' && (
+          <div className="mb-6 bg-white rounded-lg shadow p-4 border border-gray-200">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">Employer KYC Required</h3>
+                <p className="text-sm text-gray-600">
+                  {kycStatus === 'pending' && 'Your KYC is under review. You will be able to post jobs once approved.'}
+                  {kycStatus === 'rejected' && 'Your KYC was rejected. Please resubmit with correct details.'}
+                  {(kycStatus === 'not-submitted' || kycStatus === null) && 'Please submit your company KYC to start posting jobs.'}
+                </p>
+              </div>
+              <div>
+                {(kycStatus as string) === 'approved' && (
+                  <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Approved</span>
+                )}
+                {kycStatus === 'pending' && (
+                  <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Pending</span>
+                )}
+                {kycStatus === 'rejected' && (
+                  <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Rejected</span>
+                )}
+                {(kycStatus === 'not-submitted' || kycStatus === null) && (
+                  <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">Not Submitted</span>
+                )}
+              </div>
+            </div>
+            {(kycStatus === 'not-submitted' || kycStatus === 'rejected') && (
+              <div className="mt-4">
+                <button
+                  onClick={() => setShowKycModal(true)}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                >
+                  Open KYC Form
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {activeTab === 'overview' && renderOverview()}
         {activeTab === 'myJobs' && renderMyJobs()}
         {activeTab === 'applications' && renderApplications()}
@@ -309,12 +432,76 @@ export default function EmployerDashboard() {
             <span className="text-lg">📊</span>
             <span className="text-xs">Dashboard</span>
           </Link>
-          <Link href="/post-job" className="flex flex-col items-center py-2 px-3 text-gray-600 hover:text-indigo-600">
+          <Link
+            href={kycStatus === 'approved' ? '/employer/post-job' : '/employer'}
+            onClick={(e) => { if (kycStatus !== 'approved') { e.preventDefault(); alert('Complete employer KYC (Approved) to post jobs.'); } }}
+            className="flex flex-col items-center py-2 px-3 text-gray-600 hover:text-indigo-600"
+          >
             <span className="text-lg">➕</span>
             <span className="text-xs">Post Job</span>
           </Link>
         </div>
       </div>
+      {showKycModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-lg shadow w-full max-w-xl">
+            <div className="p-4 border-b">
+              <h3 className="text-lg font-semibold text-gray-900">Employer KYC</h3>
+              <p className="text-sm text-gray-600">Provide your company details for verification</p>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Company Name *</label>
+                <input
+                  name="companyName"
+                  value={kycForm.companyName}
+                  onChange={handleKycInput}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  placeholder="Your legal company name"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">GST Number</label>
+                  <input
+                    name="GSTNumber"
+                    value={kycForm.GSTNumber}
+                    onChange={handleKycInput}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">PAN</label>
+                  <input
+                    name="PAN"
+                    value={kycForm.PAN}
+                    onChange={handleKycInput}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="Optional"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="p-4 border-t flex items-center justify-end gap-2">
+              <button
+                onClick={() => setShowKycModal(false)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitEmployerKYC}
+                disabled={submittingKyc || !kycForm.companyName}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {submittingKyc ? 'Submitting...' : 'Submit KYC'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

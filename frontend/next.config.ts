@@ -10,6 +10,11 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Railway-specific configuration
+  // Ensure proper port handling
+  env: {
+    PORT: process.env.PORT || '3000',
+  },
   turbopack: {
     rules: {
       '*.svg': {
@@ -23,7 +28,7 @@ const nextConfig: NextConfig = {
       return [
         {
           source: "/api/:path*",
-          destination: "http://localhost:5001/api/:path*",
+          destination: "http://localhost:5000/api/:path*",
         },
       ];
     }

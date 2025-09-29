@@ -37,11 +37,20 @@ const upload = multer({
 // @desc    Get user profile
 // @access  Private
 router.get('/profile', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
-  const user = await User.findById(req.user!._id);
+  // User data is already available from authentication middleware
+  const user = req.user;
   
   if (!user) {
+    console.error('❌ No user data found in req.user');
     throw new ValidationError('User not found');
   }
+
+  console.log('✅ Profile endpoint - user data:', {
+    id: user._id,
+    email: user.email,
+    userType: user.userType,
+    name: user.name
+  });
 
   sendSuccessResponse(res, { user }, 'Profile retrieved successfully');
 }));

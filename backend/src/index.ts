@@ -6,13 +6,15 @@ import { connectDB } from './config/database';
 import nodemailer from 'nodemailer';
 import path from 'path';
 import SocketManager from './utils/socketManager';
+import EmailNotificationService from './services/emailNotificationService';
 
 // Import routes
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
-import jobRoutes from './routes/jobs';
-import applicationRoutes from './routes/applications';
+import jobRoutes, { setJobServices } from './routes/jobs';
+import applicationRoutes, { setApplicationServices } from './routes/applications';
 import adminRoutes from './routes/admin';
+import adminReportsRoutes from './routes/admin-reports';
 import kycRoutes from './routes/kyc';
 import uploadRoutes from './routes/upload';
 import testUploadRoutes from './routes/test-upload';
@@ -30,19 +32,30 @@ dotenv.config();
 const app = express();
 const server = createServer(app);
 const PORT = process.env.PORT || 5001;
-const ALLOW_ALL_CORS = process.env.ALLOW_ALL_CORS === 'true' || process.env.ALLOW_ALL_CORS === '1';
-
 // Initialize Socket.IO
 const socketManager = new SocketManager(server);
 
 // Make socketManager available globally for use in routes
 (global as any).socketManager = socketManager;
 
-// CORS configuration (allow only Vercel frontend; keep ALLOW_ALL_CORS for debugging)
+// Initialize services
+const emailService = new EmailNotificationService();
+
+// Inject services into routes
+setJobServices(socketManager, emailService);
+setApplicationServices(socketManager, emailService);
+
+// Environment-aware CORS configuration
+const isProduction = process.env.NODE_ENV === 'production';
+const allowedOrigins = isProduction 
+  ? ['https://me-work.vercel.app']
+  : ['http://localhost:3000'];
+
 const corsOptions = {
-  origin: ALLOW_ALL_CORS ? true : 'https://me-work.vercel.app',
+  origin: allowedOrigins,
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   optionsSuccessStatus: 200
 };
 
@@ -58,6 +71,16 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Static files
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
+// Root endpoint for Railway health checks
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    message: 'StudentJobs API is running',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV
+  });
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
@@ -65,14 +88,8 @@ app.get('/health', (req, res) => {
     message: 'StudentJobs API is running',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
-    cors: ALLOW_ALL_CORS ? 'allow-all' : 'enabled',
-    allowedOrigins: [
-      'http://localhost:3000',
-      'https://me-work.vercel.app',
-      '*.vercel.app',
-      '*.railway.app',
-      '*.onrender.com'
-    ],
+    cors: 'enabled',
+    allowedOrigins: allowedOrigins,
     origin: req.headers.origin || 'no-origin'
   });
 });
@@ -97,12 +114,27 @@ app.use('/api/users', userRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/reports', adminReportsRoutes);
 app.use('/api/kyc', kycRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/test-upload', testUploadRoutes);
 app.use('/api/debug-upload', debugUploadRoutes);
 app.use('/api/enhanced-jobs', enhancedJobRoutes);
 app.use('/api/notifications', notificationRoutes);
+
+// Debug: Print all registered routes
+console.log('🔍 Registered Routes:');
+app._router.stack.forEach((middleware: any) => {
+  if (middleware.route) {
+    console.log(`  ${Object.keys(middleware.route.methods).join(',').toUpperCase()} ${middleware.route.path}`);
+  } else if (middleware.name === 'router') {
+    middleware.handle.stack.forEach((handler: any) => {
+      if (handler.route) {
+        console.log(`  ${Object.keys(handler.route.methods).join(',').toUpperCase()} ${middleware.regexp.source.replace(/\\/g, '').replace(/\^|\$/, '')}${handler.route.path}`);
+      }
+    });
+  }
+});
 
 // Error handling middleware
 app.use(notFound);
@@ -119,11 +151,8 @@ const startServer = async (): Promise<void> => {
       console.log(`🔗 Health check: http://localhost:${PORT}/health`);
       console.log(`📚 API Documentation: http://localhost:${PORT}/api`);
       console.log(`🔌 Socket.IO enabled for real-time updates`);
-      if (ALLOW_ALL_CORS) {
-        console.log(`🔒 CORS: ALLOW_ALL_CORS=true -> Permissive mode (TEMPORARY)`);
-      } else {
-        console.log(`🔒 CORS: ENABLED - Supports Vercel, Railway, Render`);
-      }
+      console.log(`🔒 CORS: ENABLED - Environment-aware configuration`);
+      console.log(`   Allowed origins: ${allowedOrigins.join(', ')}`);
     });
 
     // Verify email configuration
