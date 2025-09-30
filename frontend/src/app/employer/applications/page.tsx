@@ -75,16 +75,65 @@ const EmployerApplicationsPage = () => {
     const fetchApplications = async () => {
       try {
         setLoading(true);
-        
-        // Fetch employer dashboard data which includes jobs and applications
-        const response = await apiService.getEmployerDashboardJobs() as EmployerDashboardResponse;
-        
-        if (response.jobs && response.applications) {
-          setJobs(response.jobs);
-          setApplications(response.applications);
-        }
+
+        const response = await apiService.getEmployerDashboardJobs();
+        const rawJobs = Array.isArray(response?.jobs) ? (response.jobs as any[]) : [];
+
+        const jobsWithApplications: Job[] = [];
+        const aggregatedApplications: Application[] = [];
+
+        rawJobs.forEach((job: any) => {
+          const jobSummary = {
+            _id: job._id || job.jobId || '',
+            jobTitle: job.title || job.jobTitle || 'Untitled Job',
+            location: job.location || 'Not specified',
+            salaryRange: job.salaryRange || job.salary || '—',
+          };
+
+          const jobApplications: Application[] = Array.isArray(job.applicants)
+            ? job.applicants.map((applicant: any) => {
+                const studentInfo = applicant.student || applicant.studentDetails || {};
+
+                return {
+                  _id: applicant.applicationId || applicant._id || `${jobSummary._id}-${applicant.studentId || 'unknown'}`,
+                  jobId: {
+                    _id: jobSummary._id,
+                    jobTitle: jobSummary.jobTitle,
+                    location: jobSummary.location,
+                    salaryRange: jobSummary.salaryRange,
+                  },
+                  studentId: {
+                    _id: (studentInfo._id || applicant.studentId || '').toString(),
+                    name: studentInfo.name || applicant.name || 'Candidate',
+                    email: studentInfo.email || applicant.email || 'N/A',
+                    phone: studentInfo.phone || applicant.phone || 'N/A',
+                    college: studentInfo.college || applicant.college || 'N/A',
+                    skills: Array.isArray(studentInfo.skills) ? studentInfo.skills : Array.isArray(applicant.skills) ? applicant.skills : [],
+                    rating: studentInfo.rating || applicant.rating || 0,
+                    completedJobs: studentInfo.completedJobs || applicant.completedJobs || 0,
+                  },
+                  status: applicant.status || 'applied',
+                  appliedAt: applicant.appliedAt || applicant.createdAt || new Date().toISOString(),
+                  coverLetter: applicant.coverLetter || applicant.summary || '',
+                  expectedPay: applicant.expectedPay,
+                  availability: applicant.availability,
+                };
+              })
+            : [];
+
+          jobsWithApplications.push({
+            ...jobSummary,
+            applications: jobApplications,
+          });
+
+          aggregatedApplications.push(...jobApplications);
+        });
+
+        setJobs(jobsWithApplications);
+        setApplications(aggregatedApplications);
       } catch (error) {
         console.error('Error fetching applications:', error);
+        setJobs([]);
         setApplications([]);
       } finally {
         setLoading(false);

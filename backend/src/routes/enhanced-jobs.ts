@@ -358,7 +358,7 @@ router.get('/employer-dashboard', authenticateToken, requireEmployer, asyncHandl
         workType: job.workType || (job as any).type || '',
         skillsRequired: Array.isArray(job.skillsRequired) ? job.skillsRequired : [],
         requirements: Array.isArray(job.skillsRequired) ? job.skillsRequired : (Array.isArray((job as any).requirements) ? (job as any).requirements : []),
-        createdAt: job.createdAt || job.updatedAt || new Date(),
+        createdAt: job.createdAt || (job as any).updatedAt || new Date(),
         highlighted: job.highlighted,
         applicants,
         applicationsCount: applicants.length

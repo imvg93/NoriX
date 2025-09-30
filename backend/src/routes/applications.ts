@@ -5,7 +5,7 @@ import Job from '../models/Job';
 import User from '../models/User';
 import { authenticateToken, requireStudent, requireEmployer, AuthRequest } from '../middleware/auth';
 
-import { asyncHandler, sendSuccessResponse, ValidationError } from '../middleware/errorHandler';
+import { asyncHandler, sendSuccessResponse, sendErrorResponse, ValidationError } from '../middleware/errorHandler';
 import SocketManager from '../utils/socketManager';
 import EmailNotificationService from '../services/emailNotificationService';
 

@@ -71,6 +71,11 @@ const cleanupDuplicateIndexes = async (): Promise<void> => {
     const db = mongoose.connection.db;
     if (!db) return;
 
+    const getErrorMessage = (error: unknown): string => {
+      if (error instanceof Error) return error.message;
+      return typeof error === 'string' ? error : JSON.stringify(error);
+    };
+
     // List of problematic indexes to specifically target
     const problematicIndexes = [
       { collection: 'users', field: 'companyName' },
@@ -85,22 +90,25 @@ const cleanupDuplicateIndexes = async (): Promise<void> => {
         const coll = db.collection(collection);
         const indexes = await coll.indexes();
         
-        // Find indexes that include the problematic field
-        const indexesToDrop = indexes.filter(index => 
-          index.name !== '_id_' && // Never drop the _id index
-          (index.name.includes(field) || Object.keys(index.key).includes(field))
-        );
+        const indexesToDrop = indexes.filter(index => {
+          const indexName = typeof index.name === 'string' ? index.name : '';
+          if (indexName === '_id_') return false;
+          const key = index.key ?? {};
+          return indexName.includes(field) || Object.prototype.hasOwnProperty.call(key, field);
+        });
         
         for (const index of indexesToDrop) {
+          const indexName = typeof index.name === 'string' ? index.name : undefined;
+          if (!indexName) continue;
           try {
-            await coll.dropIndex(index.name);
-            console.log(`🗑️ Dropped problematic index: ${collection}.${index.name}`);
+            await coll.dropIndex(indexName);
+            console.log(`🗑️ Dropped problematic index: ${collection}.${indexName}`);
           } catch (err) {
-            console.log(`⚠️ Could not drop index ${index.name}: ${err.message}`);
+            console.log(`⚠️ Could not drop index ${indexName}: ${getErrorMessage(err)}`);
           }
         }
       } catch (err) {
-        console.log(`⚠️ Collection ${collection} might not exist yet: ${err.message}`);
+        console.log(`⚠️ Collection ${collection} might not exist yet: ${getErrorMessage(err)}`);
       }
     }
 
@@ -114,17 +122,18 @@ const cleanupDuplicateIndexes = async (): Promise<void> => {
       const indexes = await coll.indexes();
       
       // Check for duplicate indexes (same key pattern)
-      const indexKeys = new Map();
-      const duplicates = [];
+      const indexKeys = new Map<string, string>();
+      const duplicates: string[] = [];
       
       for (const index of indexes) {
-        if (index.name === '_id_') continue; // Skip the default _id index
+        const indexName = typeof index.name === 'string' ? index.name : undefined;
+        if (!indexName || indexName === '_id_') continue;
         
-        const keyStr = JSON.stringify(index.key);
+        const keyStr = JSON.stringify(index.key ?? {});
         if (indexKeys.has(keyStr)) {
-          duplicates.push(index.name);
+          duplicates.push(indexName);
         } else {
-          indexKeys.set(keyStr, index.name);
+          indexKeys.set(keyStr, indexName);
         }
       }
       
@@ -134,7 +143,7 @@ const cleanupDuplicateIndexes = async (): Promise<void> => {
           await coll.dropIndex(duplicateIndex);
           console.log(`🗑️ Dropped duplicate index: ${collection.name}.${duplicateIndex}`);
         } catch (err) {
-          console.log(`⚠️ Could not drop index ${duplicateIndex}: ${err.message}`);
+          console.log(`⚠️ Could not drop index ${duplicateIndex}: ${getErrorMessage(err)}`);
         }
       }
     }

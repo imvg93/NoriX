@@ -563,23 +563,19 @@ class ApiService {
     });
   }
 
-
-  // Also fix legacy applyToJob to call enhanced endpoint and correct payload
-  async applyToJob(jobId: string, applicationData: any) {
-    return this.applyToJobEnhanced(jobId, applicationData);
-  }
-
   async approveApplication(applicationId: string, notes?: string) {
+    const body = notes ? JSON.stringify({ notes }) : undefined;
     return this.request(`/enhanced-jobs/applications/${applicationId}/approve`, {
       method: 'PATCH',
-      body: JSON.stringify({ notes }),
+      ...(body ? { body } : {}),
     });
   }
 
-  async rejectApplication(applicationId: string, reason: string) {
+  async rejectApplication(applicationId: string, reason?: string) {
+    const payload = { reason: reason || 'Application rejected' };
     return this.request(`/enhanced-jobs/applications/${applicationId}/reject`, {
       method: 'PATCH',
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify(payload),
     });
   }
 
@@ -632,18 +628,6 @@ class ApiService {
   async applyForJob(jobId: string) {
     return this.request(`/enhanced-jobs/${jobId}/apply`, {
       method: 'POST',
-    });
-  }
-
-  async approveApplication(applicationId: string) {
-    return this.request(`/enhanced-jobs/applications/${applicationId}/approve`, {
-      method: 'PATCH',
-    });
-  }
-
-  async rejectApplication(applicationId: string) {
-    return this.request(`/enhanced-jobs/applications/${applicationId}/reject`, {
-      method: 'PATCH',
     });
   }
 
@@ -938,6 +922,14 @@ class ApiService {
       console.error('❌ Error rejecting employer KYC:', error);
       throw error;
     }
+  }
+
+  async approveKYC(kycId: string) {
+    return this.approveEmployerKYC(kycId);
+  }
+
+  async rejectKYC(kycId: string, rejectionReason: string) {
+    return this.rejectEmployerKYC(kycId, rejectionReason);
   }
 
   // Job Management APIs (Admin)
