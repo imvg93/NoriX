@@ -190,9 +190,10 @@ export const sendSuccessResponse = (
   statusCode: number = 200
 ): void => {
   res.status(statusCode).json({
-    success: false,
-    message: statusCode === 500 && process.env.NODE_ENV === 'production' ? 'Internal Server Error' : message,
+    success: true,
+    message,
     statusCode,
-    ...(process.env.NODE_ENV !== 'production' ? { error: { name: err.name, message: err.message } } : {})
+    data,
+    ...(process.env.NODE_ENV !== 'production' ? { meta: { timestamp: new Date().toISOString() } } : {})
   });
 };

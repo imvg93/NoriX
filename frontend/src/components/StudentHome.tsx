@@ -240,23 +240,23 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
     if (!token) return;
 
     // Import socket service dynamically
-    import('../services/socketService').then(({ socketService }) => {
-      socketService.connect(token);
-      
-      // Listen for job approval notifications using custom events
-      const handleJobApproved = (event: any) => {
-        console.log('🎉 New job approved:', event.detail);
-        // Refresh jobs list to show newly approved job
+    import('../services/socketService').then((module) => {
+      const socketService = module.default;
+      socketService.ensureConnected(token);
+
+      const handleJobApproved = (event: Event) => {
+        const customEvent = event as CustomEvent<{ jobId?: string }>;
+        console.log('🎉 New job approved:', customEvent.detail);
         apiService.getStudentDashboardJobs().then((jobsData: JobsResponse) => {
           setJobs(jobsData.jobs || []);
         }).catch(console.error);
       };
-      
-      window.addEventListener('jobApproved', handleJobApproved);
 
-      // Cleanup on unmount
+      const listener: EventListener = handleJobApproved;
+      window.addEventListener('jobApproved', listener);
+
       return () => {
-        window.removeEventListener('jobApproved', handleJobApproved);
+        window.removeEventListener('jobApproved', listener);
         socketService.disconnect();
       };
     });

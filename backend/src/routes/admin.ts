@@ -8,6 +8,7 @@ import { AdminLogin } from '../models/AdminLogin';
 import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth';
 import { asyncHandler, sendSuccessResponse, sendErrorResponse, ValidationError } from '../middleware/errorHandler';
 import { computeKycStatus } from '../utils/kycStatusHelper';
+import SocketManager from '../utils/socketManager';
 
 const router = express.Router();
 
@@ -200,10 +201,11 @@ router.patch('/jobs/:id/approve', authenticateToken, requireRole(['admin']), asy
   job.approvedBy = req.user!._id;
   await job.save();
 
-  // Emit real-time update to notify students about new approved job
-  const socketManager = (global as any).socketManager;
+  const jobId = job._id instanceof mongoose.Types.ObjectId ? job._id.toString() : String(job._id);
+
+  const socketManager = (global as any).socketManager as SocketManager | undefined;
   if (socketManager) {
-    socketManager.emitJobApproval(job._id.toString(), {
+    socketManager.emitJobApproval(jobId, {
       jobId: job._id,
       title: job.jobTitle,
       company: job.companyName,

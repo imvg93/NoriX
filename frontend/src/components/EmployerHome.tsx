@@ -226,14 +226,14 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
     if (!token) return;
 
     // Import socket service dynamically
-    import('../services/socketService').then(({ socketService }) => {
-      socketService.connect(token);
-      
-      // Listen for new application notifications using custom events
-      const handleNewApplication = (event: any) => {
-        console.log('🎉 New application received:', event.detail);
-        
-        // Refresh applications list to show new application
+    import('../services/socketService').then((module) => {
+      const socketService = module.default;
+      socketService.ensureConnected(token);
+
+      const handleNewApplication = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        console.log('🎉 New application received:', customEvent.detail);
+
         apiService.getEmployerApplications().then((applicationsData: ApplicationsResponse) => {
           const employerApplications: EmployerApplication[] = (applicationsData.applications || []).map(app => ({
             _id: app._id,
@@ -253,7 +253,7 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
             appliedDate: (app as any).appliedAt || (app as any).appliedDate || '',
             coverLetter: (app as any).coverLetter
           }));
-          
+
           setData(prev => ({
             ...prev,
             applications: employerApplications,
@@ -265,12 +265,11 @@ const EmployerHome: React.FC<EmployerHomeProps> = ({ user }) => {
           }));
         }).catch(console.error);
       };
-      
-      window.addEventListener('newApplication', handleNewApplication);
 
-      // Cleanup on unmount
+      window.addEventListener('newApplication', handleNewApplication as EventListener);
+
       return () => {
-        window.removeEventListener('newApplication', handleNewApplication);
+        window.removeEventListener('newApplication', handleNewApplication as EventListener);
         socketService.disconnect();
       };
     });

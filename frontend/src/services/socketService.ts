@@ -79,10 +79,15 @@ class SocketService {
   private reconnectDelay = 1000;
 
   constructor() {
-    this.connect();
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token');
+      if (token) {
+        this.connect(token);
+      }
+    }
   }
 
-  private connect() {
+  private connect(token?: string) {
     try {
       // Check if we're in a browser environment
       if (typeof window === 'undefined') {
@@ -90,8 +95,8 @@ class SocketService {
         return;
       }
 
-      const token = localStorage.getItem('token');
-      if (!token) {
+      const providedToken = token ?? localStorage.getItem('token');
+      if (!providedToken) {
         console.log('🔌 No token found, skipping socket connection');
         return;
       }
@@ -117,7 +122,7 @@ class SocketService {
       
       this.socket = io(serverUrl, {
         auth: {
-          token: token
+          token: providedToken
         },
         transports: ['websocket', 'polling'],
         timeout: 20000,
@@ -210,7 +215,6 @@ class SocketService {
     // Job approval events
     this.socket.on('job:approved', (data) => {
       console.log('📡 Received job approval notification:', data);
-      // Emit custom event for components to listen to
       window.dispatchEvent(new CustomEvent('jobApproved', {
         detail: data
       }));
@@ -219,7 +223,6 @@ class SocketService {
     // New application events
     this.socket.on('application:new', (data) => {
       console.log('📡 Received new application notification:', data);
-      // Emit custom event for components to listen to
       window.dispatchEvent(new CustomEvent('newApplication', {
         detail: data
       }));
@@ -347,7 +350,14 @@ class SocketService {
     localStorage.setItem('token', token);
     this.disconnect();
     this.reconnectAttempts = 0;
-    this.connect();
+    this.connect(token);
+  }
+
+  // Allow consumers to initiate a connection with a token
+  public ensureConnected(token?: string) {
+    if (this.isConnected && this.socket?.connected) return;
+    const effectiveToken = token ?? (typeof window !== 'undefined' ? localStorage.getItem('token') : undefined);
+    this.connect(effectiveToken ?? undefined);
   }
 
   // Clean up all listeners
