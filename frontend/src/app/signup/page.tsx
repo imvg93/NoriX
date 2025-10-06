@@ -507,8 +507,24 @@ export default function Signup() {
                 Verify your email
               </h2>
               <p className="mt-2 text-center text-sm text-gray-600">
-                We sent a verification code to {otpData.email}. Enter it below to complete your registration.
+                We sent a verification code to <strong>{otpData.email}</strong>. Enter it below to complete your registration.
               </p>
+
+              {/* Display entered information for review */}
+              <div className="mt-4 bg-gray-50 rounded-lg p-4">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Your Details:</h3>
+                <div className="space-y-1 text-sm text-gray-600">
+                  <p><strong>Name:</strong> {formData.name}</p>
+                  <p><strong>Email:</strong> {formData.email}</p>
+                  <p><strong>Phone:</strong> {formData.phone}</p>
+                  {userType === 'student' && formData.college && (
+                    <p><strong>College:</strong> {formData.college}</p>
+                  )}
+                  {userType === 'employer' && formData.companyName && (
+                    <p><strong>Company:</strong> {formData.companyName}</p>
+                  )}
+                </div>
+              </div>
 
               <form className="space-y-6" onSubmit={handleVerifyOTP}>
                 <div>
@@ -524,18 +540,54 @@ export default function Signup() {
                       value={formData.otp}
                       onChange={(e) => setFormData(prev => ({ ...prev, otp: e.target.value }))}
                       className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      placeholder="Enter the code"
+                      placeholder="Enter the 6-digit code"
                     />
                   </div>
                 </div>
 
-                <div>
+                <div className="space-y-3">
                   <button
                     type="submit"
                     className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     disabled={loading}
                   >
                     {loading ? 'Verifying...' : 'Verify OTP'}
+                  </button>
+
+                  {/* Edit Details Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep('form');
+                      setFormData(prev => ({ ...prev, otp: '' }));
+                      setError('');
+                      setSuccess('');
+                    }}
+                    className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    disabled={loading}
+                  >
+                    ← Edit Details
+                  </button>
+
+                  {/* Resend OTP Button */}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        setLoading(true);
+                        setError('');
+                        await apiService.sendOTP(formData.email.trim(), 'signup');
+                        setSuccess('OTP resent to your email!');
+                      } catch (error: any) {
+                        setError(apiService.handleError(error));
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    className="w-full flex justify-center py-2 px-4 text-sm font-medium text-indigo-600 hover:text-indigo-800"
+                    disabled={loading}
+                  >
+                    Didn't receive code? Resend OTP
                   </button>
                 </div>
               </form>

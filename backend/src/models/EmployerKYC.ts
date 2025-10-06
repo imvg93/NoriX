@@ -59,8 +59,7 @@ const employerKYCSchema = new Schema<IEmployerKYCDocument>(
       type: String,
       required: true,
       trim: true,
-      maxlength: 200,
-      index: true
+      maxlength: 200
     },
     companyEmail: {
       type: String,
@@ -108,8 +107,7 @@ const employerKYCSchema = new Schema<IEmployerKYCDocument>(
     city: {
       type: String,
       trim: true,
-      maxlength: 100,
-      index: true
+      maxlength: 100
     },
     latitude: {
       type: String,

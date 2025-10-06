@@ -15,7 +15,8 @@ import {
   MapPin,
   Building,
   Star,
-  User
+  User,
+  ArrowLeft
 } from 'lucide-react';
 import { apiService } from '../../../services/api';
 
@@ -232,6 +233,13 @@ const EmployerApplicationsPage = () => {
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <button
+            onClick={() => router.back()}
+            className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors mb-4"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </button>
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Job Applications</h1>

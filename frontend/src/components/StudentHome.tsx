@@ -137,14 +137,28 @@ const formatSalaryToINR = (salary?: Job['salary'] | string | null) => {
   return cleaned || 'Salary Not Available';
 };
 
+interface RecentApplication {
+  _id: string;
+  jobTitle: string;
+  companyName: string;
+  location: string;
+  salaryRange: string;
+  status: string;
+  approvedDate: string;
+  appliedDate: string;
+  jobId: string;
+}
+
 const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
   const router = useRouter();
   const { logout } = useAuth();
+  const { addNotification } = useNotifications();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [appliedJobs, setAppliedJobs] = useState<AppliedJob[]>([]);
   const [savedJobs, setSavedJobs] = useState<SavedJob[]>([]);
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [recentApprovedApplications, setRecentApprovedApplications] = useState<RecentApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -184,7 +198,20 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
         setErrorMessage('');
         // Fetch jobs for student dashboard
         const jobsData: JobsResponse = await apiService.getStudentDashboardJobs();
-        setJobs(Array.isArray(jobsData.jobs) ? jobsData.jobs : []);
+        
+        // Check if KYC is required (backend will return kycRequired flag)
+        const responseData = jobsData as any;
+        if (responseData.kycRequired) {
+          console.log('⚠️ KYC approval required to view jobs');
+          setJobs([]);
+          // Update KYC status based on backend response
+          setKycStatus({
+            isCompleted: false,
+            status: responseData.kycStatus || 'not-submitted'
+          });
+        } else {
+          setJobs(Array.isArray(jobsData.jobs) ? jobsData.jobs : []);
+        }
         
         // Fetch user applications
         try {
@@ -197,6 +224,16 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
           console.error('Error fetching applications:', appsErr);
           setAppliedJobs([]);
           setErrorMessage(prev => prev || 'Unable to fetch your applications right now.');
+        }
+        
+        // Fetch recent approved applications
+        try {
+          const recentApprovedData = await apiService.getRecentApprovedApplications(5);
+          console.log('📊 Recent approved applications:', recentApprovedData);
+          setRecentApprovedApplications(Array.isArray(recentApprovedData.applications) ? recentApprovedData.applications : []);
+        } catch (error) {
+          console.error('Error fetching recent approved applications:', error);
+          setRecentApprovedApplications([]);
         }
         
         // Initialize empty arrays for saved jobs, interviews, and notifications
@@ -226,6 +263,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
         setSavedJobs([]);
         setInterviews([]);
         setNotifications([]);
+        setRecentApprovedApplications([]);
       } finally {
         setLoading(false);
       }
@@ -234,7 +272,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
     fetchData();
   }, []);
 
-  // Set up real-time updates for job approvals
+  // Set up real-time updates for job approvals, application status updates, and KYC approvals
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) return;
@@ -248,19 +286,81 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
         const customEvent = event as CustomEvent<{ jobId?: string }>;
         console.log('🎉 New job approved:', customEvent.detail);
         apiService.getStudentDashboardJobs().then((jobsData: JobsResponse) => {
-          setJobs(jobsData.jobs || []);
+          const responseData = jobsData as any;
+          if (!responseData.kycRequired) {
+            setJobs(jobsData.jobs || []);
+          }
         }).catch(console.error);
       };
 
-      const listener: EventListener = handleJobApproved;
-      window.addEventListener('jobApproved', listener);
+      const handleApplicationStatusUpdate = (event: Event) => {
+        const customEvent = event as CustomEvent<{ application?: any }>;
+        const application = customEvent.detail?.application;
+        
+        if (application && application.status === 'accepted') {
+          console.log('🎉 Application approved:', application);
+          
+          // Add notification
+          addNotification({
+            type: 'application_status_update',
+            title: 'Application Approved! 🎉',
+            message: application.message || `Your application for ${application.jobTitle} at ${application.companyName} has been approved!`,
+            timestamp: new Date().toISOString(),
+            data: application
+          });
+          
+          // Refresh recent approved applications
+          apiService.getRecentApprovedApplications(5).then((data) => {
+            setRecentApprovedApplications(Array.isArray(data.applications) ? data.applications : []);
+          }).catch(console.error);
+        }
+      };
+
+      const handleKYCStatusUpdate = (event: Event) => {
+        const customEvent = event as CustomEvent<{ status?: any; verificationStatus?: string }>;
+        const statusData = customEvent.detail;
+        
+        console.log('🎉 KYC status updated:', statusData);
+        
+        // Update KYC status
+        if (statusData?.verificationStatus === 'approved') {
+          setKycStatus({
+            isCompleted: true,
+            status: 'approved'
+          });
+          
+          // Show notification
+          addNotification({
+            type: 'kyc_approved',
+            title: 'KYC Approved! 🎉',
+            message: 'Your KYC has been approved! You can now view and apply for jobs.',
+            timestamp: new Date().toISOString(),
+            data: statusData
+          });
+          
+          // Refresh jobs immediately
+          apiService.getStudentDashboardJobs().then((jobsData: JobsResponse) => {
+            setJobs(Array.isArray(jobsData.jobs) ? jobsData.jobs : []);
+          }).catch(console.error);
+        }
+      };
+
+      const jobListener: EventListener = handleJobApproved;
+      const appListener: EventListener = handleApplicationStatusUpdate;
+      const kycListener: EventListener = handleKYCStatusUpdate;
+      
+      window.addEventListener('jobApproved', jobListener);
+      window.addEventListener('application_status_update', appListener);
+      window.addEventListener('kyc:status:update', kycListener);
 
       return () => {
-        window.removeEventListener('jobApproved', listener);
+        window.removeEventListener('jobApproved', jobListener);
+        window.removeEventListener('application_status_update', appListener);
+        window.removeEventListener('kyc:status:update', kycListener);
         socketService.disconnect();
       };
     });
-  }, []);
+  }, [addNotification]);
 
   // Filter jobs based on search and filters
   useEffect(() => {
@@ -576,27 +676,28 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
       </div>
 
       {/* Featured Non-IT Jobs Section - Mobile Optimized */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.15 }}
-        className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-orange-200"
-      >
-        <div className="flex items-center gap-2 mb-4">
-          <div className="p-2 bg-orange-600 rounded-full">
-            <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+      {kycStatus.isCompleted ? (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.15 }}
+          className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-orange-200"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-2 bg-orange-600 rounded-full">
+              <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Featured Non-IT & Daily Labor Jobs</h2>
+              <p className="text-xs sm:text-sm text-gray-600">Perfect opportunities for students looking for flexible work</p>
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900">Featured Non-IT & Daily Labor Jobs</h2>
-            <p className="text-xs sm:text-sm text-gray-600">Perfect opportunities for students looking for flexible work</p>
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-          {filteredJobs
-            .filter(job => job.type === 'Daily Labor' || job.type === 'Part-time')
-            .slice(0, 3)
-            .map((job) => {
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+            {filteredJobs
+              .filter(job => job.type === 'Daily Labor' || job.type === 'Part-time')
+              .slice(0, 3)
+              .map((job) => {
               const isApplied = Array.isArray(appliedJobs) ? appliedJobs.some(aj => aj.job._id === job._id) : false;
               const isSaved = Array.isArray(savedJobs) ? savedJobs.some(sj => sj.job._id === job._id) : false;
               
@@ -678,14 +779,15 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
             })}
         </div>
         
-        {filteredJobs.filter(job => job.type === 'Daily Labor' || job.type === 'Part-time').length === 0 && (
-          <div className="text-center py-6 sm:py-8">
-            <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 text-orange-400 mx-auto mb-3 sm:mb-4" />
-            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No featured jobs available</h3>
-            <p className="text-gray-600 text-sm sm:text-base">Check back later for new opportunities!</p>
-          </div>
-        )}
-      </motion.div>
+          {filteredJobs.filter(job => job.type === 'Daily Labor' || job.type === 'Part-time').length === 0 && (
+            <div className="text-center py-6 sm:py-8">
+              <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 text-orange-400 mx-auto mb-3 sm:mb-4" />
+              <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No featured jobs available</h3>
+              <p className="text-gray-600 text-sm sm:text-base">Check back later for new opportunities!</p>
+            </div>
+          )}
+        </motion.div>
+      ) : null}
 
       {/* Job Search Section - Mobile Optimized */}
       <motion.div
@@ -762,7 +864,32 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
 
         {/* Job Listings - Mobile Optimized */}
         <div className="space-y-3 sm:space-y-4">
-          {filteredJobs.length === 0 ? (
+          {!kycStatus.isCompleted ? (
+            <div className="text-center py-8 sm:py-12">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Shield className="w-8 h-8 sm:w-10 sm:h-10 text-orange-600" />
+              </div>
+              <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Complete KYC to get your first job</h3>
+              <p className="text-gray-600 text-sm sm:text-base mb-6 max-w-md mx-auto">
+                To access job listings and apply for opportunities, please complete your KYC verification. This helps us ensure safety and trust for all users.
+              </p>
+              <Link 
+                href="/kyc-profile"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium text-sm sm:text-base"
+              >
+                <Shield className="w-5 h-5" />
+                Complete KYC Now
+              </Link>
+              {kycStatus.status === 'pending' && (
+                <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
+                  <div className="flex items-center gap-2 justify-center text-blue-700">
+                    <Clock className="w-5 h-5" />
+                    <span className="text-sm font-medium">Your KYC is under review. Jobs will appear once approved.</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : filteredJobs.length === 0 ? (
             <div className="text-center py-6 sm:py-8">
               <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-3 sm:mb-4" />
               <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No jobs found</h3>
@@ -875,7 +1002,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        {/* Recent Applications - Mobile Optimized */}
+        {/* Recent Approved Applications - Mobile Optimized */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -883,31 +1010,36 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
           className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6"
         >
           <div className="flex items-center gap-2 mb-4">
-            <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900">Recent Applications</h2>
+            <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900">Recent Approved Applications</h2>
           </div>
           <div className="space-y-3">
-            {Array.isArray(appliedJobs) ? appliedJobs.slice(0, 3).map((application) => (
-              <div key={application._id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 bg-gray-50 rounded-lg">
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-gray-900 text-sm sm:text-base truncate">{application.job.title}</h3>
-                  <p className="text-xs sm:text-sm text-gray-600 truncate">{application.job.company} • {application.job.location}</p>
-                </div>
-                <div className="flex items-center justify-between sm:flex-col sm:items-end gap-2">
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    application.status === 'accepted' ? 'bg-green-100 text-green-600' :
-                    application.status === 'reviewing' ? 'bg-blue-100 text-blue-600' :
-                    'bg-yellow-100 text-yellow-600'
-                  }`}>
-                    {application.status}
-                  </span>
-                  <p className="text-xs text-gray-500">{application.appliedDate}</p>
+            {Array.isArray(recentApprovedApplications) && recentApprovedApplications.length > 0 ? recentApprovedApplications.slice(0, 3).map((application) => (
+              <div key={application._id} className="p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium text-gray-900 text-sm sm:text-base truncate">{application.jobTitle}</h3>
+                    <p className="text-xs sm:text-sm text-gray-600 truncate">{application.companyName} • {application.location}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">
+                        ✓ Approved
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {new Date(application.approvedDate).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => router.push(`/jobs/${application.jobId}`)}
+                    className="text-green-600 hover:text-green-700 flex-shrink-0"
+                  >
+                    <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </button>
                 </div>
               </div>
-            )) : null}
-            {Array.isArray(appliedJobs) && appliedJobs.length === 0 && (
+            )) : (
               <div className="text-center py-4 text-gray-500 text-sm sm:text-base">
-                No applications yet. Start applying to jobs!
+                No approved applications yet. Keep applying!
               </div>
             )}
           </div>

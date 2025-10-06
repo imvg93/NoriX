@@ -592,6 +592,14 @@ class ApiService {
     } as ApplicationsResponse;
   }
 
+  async getRecentApprovedApplications(limit = 10): Promise<any> {
+    const raw = await this.request<any>(`/enhanced-jobs/applications/recent-approved?limit=${limit}`);
+    const payload = this.unwrap<any>(raw);
+    return {
+      applications: Array.isArray(payload?.applications) ? payload.applications : [],
+    };
+  }
+
   async getEmployerApplications(status?: string, jobId?: string): Promise<ApplicationsResponse> {
     const queryParams = new URLSearchParams();
     if (status) queryParams.append('status', status);

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
+import Footer from "@/components/Footer";
 
 import {
   Search,
@@ -186,33 +187,35 @@ const JobsPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200">
+        
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+       
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <Link
-              href="/"
-              className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors font-medium"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back to Home
-            </Link>
-
-            <div className="flex items-center gap-4">
-              <div className="relative h-10 w-32">
+          <div className="relative h-10 w-32">
+            <Link  href="/">
+              
                 <Image
-                  src="/img/logogreen.png"
+                  src="/img/logowhite.png"
                   alt="StudentJobs logo"
                   fill
                   sizes="128px"
                   className="object-contain"
                   priority
                 />
+                  </Link>
               </div>
+            
+              
+          
+
+            <div className="flex items-center gap-4">
+              
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Available Jobs</h1>
+                <h1 className="text-2xl font-bold text-black-900">Currently Available Works</h1>
                 <p className="text-gray-600">Find your next opportunity</p>
               </div>
               <span className="text-sm text-gray-500 hidden sm:inline">
-                {filteredJobs.length} jobs found
+                {filteredJobs.length} works found
               </span>
             </div>
           </div>
@@ -361,7 +364,7 @@ const JobsPage = () => {
           ))}
         </section>
 
-        <section className="py-16 bg-gradient-to-r from-green-600 to-blue-600 rounded-3xl">
+        <section className="py-16 rounded-3xl">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -370,23 +373,23 @@ const JobsPage = () => {
               viewport={{ once: true }}
               className="space-y-6"
             >
-              <h2 className="text-3xl sm:text-4xl font-bold text-white">
+              <h2 className="text-3xl sm:text-4xl font-bold text-black">
                 Ready to Start Your Journey?
               </h2>
-              <p className="text-xl text-green-100 max-w-2xl mx-auto">
+              <p className="text-xl text-[#32A4A6] max-w-2xl mx-auto">
                 Join thousands of students who are already earning while studying.
                 Find flexible work that fits your schedule.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link
                   href="/login"
-                  className="bg-white text-green-600 px-8 py-4 rounded-xl font-semibold hover:bg-gray-100 transition-colors"
+                  className="bg-white text-black-600 px-8 py-4 rounded-xl font-semibold hover:bg-gray-100 transition-colors"
                 >
                   Find Jobs
                 </Link>
                 <Link
                   href="/login"
-                  className="bg-green-700 text-white px-8 py-4 rounded-xl font-semibold hover:bg-green-800 transition-colors border border-green-500"
+                  className=" text-black px-8 py-4 rounded-xl font-semibold hover:bg-green-100 transition-colors border "
                 >
                   Post Jobs
                 </Link>
@@ -396,51 +399,7 @@ const JobsPage = () => {
         </section>
       </main>
 
-      <footer className="bg-gray-900 text-white py-12">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">M</span>
-                </div>
-                <span className="text-xl font-bold">NoriX</span>
-              </div>
-              <p className="text-gray-400 text-sm">
-                Connecting students with flexible work opportunities worldwide.
-              </p>
-            </div>
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">For Students</h3>
-              <ul className="space-y-2 text-sm text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">Find Jobs</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Student Resources</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Success Stories</a></li>
-              </ul>
-            </div>
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">For Employers</h3>
-              <ul className="space-y-2 text-sm text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">Post Jobs</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Find Talent</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Employer Resources</a></li>
-              </ul>
-            </div>
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Support</h3>
-              <ul className="space-y-2 text-sm text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">Help Center</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Contact Us</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Safety</a></li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="border-t border-gray-800 mt-8 pt-8 text-center">
-            <p className="text-gray-400 text-sm">© 2024 NoriX. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 };

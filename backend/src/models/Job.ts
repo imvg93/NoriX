@@ -116,7 +116,14 @@ const jobSchema = new Schema<IJob>({
   phone: {
     type: String,
     trim: true,
-    match: [/^(\+91|0)?[789]\d{9}$/, 'Please enter a valid Indian phone number']
+    validate: {
+      validator: function(v: string) {
+        if (!v) return true; // Phone is optional in Job model
+        // Accept any phone number - just need at least 6 characters
+        return !!(v && v.length >= 6);
+      },
+      message: 'Phone number must be at least 6 characters'
+    }
   },
   companyLogo: {
     type: String,

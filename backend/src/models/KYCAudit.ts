@@ -16,14 +16,12 @@ const KYCAuditSchema = new Schema<IKYCAudit>({
   userId: {
     type: Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
-    index: true
+    required: true
   },
   adminId: {
     type: Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
-    index: true
+    required: true
   },
   action: {
     type: String,
@@ -48,8 +46,7 @@ const KYCAuditSchema = new Schema<IKYCAudit>({
   },
   timestamp: {
     type: Date,
-    default: Date.now,
-    index: true
+    default: Date.now
   },
   ipAddress: String,
   userAgent: String

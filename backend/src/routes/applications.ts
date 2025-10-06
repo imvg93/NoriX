@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import Application from '../models/Application';
 import Job from '../models/Job';
 import User from '../models/User';
+import KYC from '../models/KYC';
 import { authenticateToken, requireStudent, requireEmployer, AuthRequest } from '../middleware/auth';
 
 import { asyncHandler, sendSuccessResponse, sendErrorResponse, ValidationError } from '../middleware/errorHandler';
@@ -27,105 +28,222 @@ export const setApplicationServices = (socket: SocketManager, email: EmailNotifi
 router.post('/', authenticateToken, requireStudent, asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { jobId, coverLetter, expectedPay, availability, resume } = req.body;
 
-  if (!jobId) {
-    throw new ValidationError('Job ID is required');
-  }
+  try {
+    // Validate input
+    if (!jobId) {
+      return sendErrorResponse(res, 400, 'Job ID is required');
+    }
 
-  // Check if job exists and is active
-  const job = await Job.findById(new mongoose.Types.ObjectId(jobId));
-  if (!job) {
-    throw new ValidationError('Job not found');
-  }
+    // Validate ObjectId format
+    if (!mongoose.isValidObjectId(jobId)) {
+      return sendErrorResponse(res, 400, 'Invalid job ID format');
+    }
 
-  if (job.status !== 'active') {
-    throw new ValidationError('Job is not active');
-  }
+    // Validate student ID from authentication
+    if (!req.user || !req.user._id) {
+      return sendErrorResponse(res, 401, 'User authentication failed');
+    }
 
-  // Check if already applied (support both legacy and new fields)
-  const existingApplication = await Application.findOne({
-    $or: [
-      { jobId: new mongoose.Types.ObjectId(jobId) as any, studentId: new mongoose.Types.ObjectId(req.user!._id) as any },
-      { job: new mongoose.Types.ObjectId(jobId) as any, student: new mongoose.Types.ObjectId(req.user!._id) as any }
-    ]
-  });
+    if (!mongoose.isValidObjectId(req.user._id)) {
+      return sendErrorResponse(res, 400, 'Invalid student ID format');
+    }
 
-  if (existingApplication) {
-    throw new ValidationError('You have already applied for this job');
-  }
+    // Check if student exists in database
+    const studentExists = await User.findById(req.user._id).select('_id name email availability kycStatus isVerified');
+    if (!studentExists) {
+      return sendErrorResponse(res, 404, 'Student account not found');
+    }
 
+    // Check if student's KYC is approved
+    const kyc = await KYC.findOne({ userId: req.user._id, isActive: true });
+    const kycStatus = kyc?.verificationStatus || studentExists.kycStatus || 'not_submitted';
+    const isKYCApproved = kycStatus === 'approved' || studentExists.isVerified;
+    
+    if (!isKYCApproved) {
+      console.log(`⚠️ Student ${req.user._id} attempted to apply without KYC approval`);
+      return sendErrorResponse(res, 403, 'Please complete and get your KYC approved before applying to jobs');
+    }
 
-  // Create application
-  const application = await Application.create({
-    jobId: jobId,
-    job: jobId, // Ensure job field is also set for proper linkage
-    studentId: req.user!._id,
-    student: req.user!._id, // Ensure student field is also set
-    employer: job.employerId,
-    coverLetter,
-    expectedPay: expectedPay ? Number(expectedPay) : undefined,
-    availability: availability || req.user!.availability
-  });
+    // Check if job exists and is active
+    const job = await Job.findById(new mongoose.Types.ObjectId(jobId));
+    if (!job) {
+      return sendErrorResponse(res, 404, 'Job not found');
+    }
 
+    if (job.status !== 'active') {
+      return sendErrorResponse(res, 400, 'Job is not currently accepting applications');
+    }
 
- // Populate job and employer info
-  await application.populate([
-    { path: 'jobId', select: 'jobTitle companyName location salaryRange' },
-    { path: 'employer', select: 'name companyName' }
-  ]);
+    // Check if job is approved (if approval system is in place)
+    if (job.approvalStatus && job.approvalStatus !== 'approved') {
+      return sendErrorResponse(res, 400, 'Job is not approved for applications');
+    }
 
+    // Check if already applied (prevent duplicates)
+    const existingApplication = await Application.findOne({
+      $or: [
+        { jobId: new mongoose.Types.ObjectId(jobId) as any, studentId: new mongoose.Types.ObjectId(req.user._id) as any },
+        { job: new mongoose.Types.ObjectId(jobId) as any, student: new mongoose.Types.ObjectId(req.user._id) as any }
+      ]
+    });
 
-  // Get student info for notifications
-  const student = await User.findById(req.user!._id).select('name email phone');
+    if (existingApplication) {
+      return sendErrorResponse(res, 400, 'You have already applied for this job');
+    }
 
-  // Real-time notification to employer
-  if (socketManager) {
-    socketManager.notifyNewApplication({
-      id: application._id,
-      jobId: jobId,
-      jobTitle: job.jobTitle,
-      companyName: job.companyName,
-      studentId: req.user!._id,
-      studentName: student?.name || student?.email,
-      studentEmail: student?.email,
-      studentPhone: student?.phone,
-      coverLetter: coverLetter,
-      expectedPay: expectedPay,
-      status: 'pending',
-      appliedAt: application.createdAt
-    }, job.employerId.toString());
-  }
-
-  // Email notification to employer
-  if (emailService && student) {
-    await emailService.sendNewApplicationNotification(
-      job.employerId.toString(),
-      {
-        id: application._id,
-        jobId: jobId,
-        jobTitle: job.jobTitle,
-        companyName: job.companyName,
-        status: 'pending',
-        appliedAt: application.createdAt
-      },
-      {
-        name: student.name || student.email,
-        email: student.email,
-        phone: student.phone
-      },
-      {
-        id: job._id,
-        jobTitle: job.jobTitle,
-        companyName: job.companyName,
-        location: job.location,
-        jobType: job.workType
+    // Sanitize and validate availability
+    const allowedAvailability = ['weekdays', 'weekends', 'both', 'flexible'];
+    let sanitizedAvailability = 'flexible'; // default
+    
+    if (availability) {
+      const normalizedAvailability = String(availability).toLowerCase().trim();
+      if (allowedAvailability.includes(normalizedAvailability)) {
+        sanitizedAvailability = normalizedAvailability;
       }
+    } else if (studentExists.availability && allowedAvailability.includes(String(studentExists.availability).toLowerCase())) {
+      sanitizedAvailability = String(studentExists.availability).toLowerCase();
+    }
+
+    // Validate expectedPay if provided
+    if (expectedPay !== undefined && expectedPay !== null) {
+      const payAmount = Number(expectedPay);
+      if (isNaN(payAmount) || payAmount < 0) {
+        return sendErrorResponse(res, 400, 'Invalid expected pay amount');
+      }
+    }
+
+    // Create application with validated data
+    let application;
+    try {
+      application = await Application.create({
+        applicationId: new mongoose.Types.ObjectId(),
+        jobId: new mongoose.Types.ObjectId(jobId),
+        job: new mongoose.Types.ObjectId(jobId), // Ensure job field is also set for proper linkage
+        studentId: new mongoose.Types.ObjectId(req.user._id),
+        student: new mongoose.Types.ObjectId(req.user._id), // Ensure student field is also set
+        employer: job.employerId,
+        status: 'applied',
+        appliedAt: new Date(),
+        coverLetter: coverLetter ? String(coverLetter).trim() : undefined,
+        resume: resume ? String(resume).trim() : undefined,
+        expectedPay: expectedPay ? Number(expectedPay) : undefined,
+        availability: sanitizedAvailability
+      });
+    } catch (createErr: any) {
+      console.error('❌ Application creation failed:', createErr);
+      
+      // Handle duplicate key error
+      if (createErr.code === 11000 || createErr.code === 11001) {
+        return sendErrorResponse(res, 400, 'You have already applied for this job');
+      }
+      
+      // Handle validation errors
+      if (createErr.name === 'ValidationError') {
+        const validationErrors = Object.values(createErr.errors || {})
+          .map((err: any) => err.message)
+          .join(', ');
+        return sendErrorResponse(res, 400, 'Invalid application data', validationErrors);
+      }
+      
+      // Re-throw for asyncHandler to catch
+      throw createErr;
+    }
+
+
+    // Populate job and employer info
+    await application.populate([
+      { path: 'jobId', select: 'jobTitle companyName location salaryRange' },
+      { path: 'employer', select: 'name companyName' }
+    ]);
+
+    // Get student info for notifications
+    const student = await User.findById(req.user._id).select('name email phone');
+
+    // Real-time notification to employer (best-effort, don't fail on error)
+    try {
+      if (socketManager && student) {
+        socketManager.notifyNewApplication({
+          id: application._id,
+          jobId: jobId,
+          jobTitle: job.jobTitle,
+          companyName: job.companyName,
+          studentId: req.user._id,
+          studentName: student.name || student.email,
+          studentEmail: student.email,
+          studentPhone: student.phone,
+          coverLetter: coverLetter,
+          expectedPay: expectedPay,
+          status: 'applied',
+          appliedAt: application.appliedAt || application.createdAt
+        }, job.employerId.toString());
+      }
+    } catch (socketErr) {
+      console.error('⚠️ Failed to send socket notification:', socketErr);
+      // Don't fail the application, just log the error
+    }
+
+    // Email notification to employer (best-effort, don't fail on error)
+    try {
+      if (emailService && student) {
+        await emailService.sendNewApplicationNotification(
+          job.employerId.toString(),
+          {
+            id: application._id,
+            jobId: jobId,
+            jobTitle: job.jobTitle,
+            companyName: job.companyName,
+            status: 'applied',
+            appliedAt: application.appliedAt || application.createdAt
+          },
+          {
+            name: student.name || student.email,
+            email: student.email,
+            phone: student.phone
+          },
+          {
+            id: job._id,
+            jobTitle: job.jobTitle,
+            companyName: job.companyName,
+            location: job.location,
+            jobType: job.workType
+          }
+        );
+      }
+    } catch (emailErr) {
+      console.error('⚠️ Failed to send email notification:', emailErr);
+      // Don't fail the application, just log the error
+    }
+
+    console.log(`✅ Application submitted successfully: ${student?.name || student?.email} for ${job.jobTitle}`);
+
+    // Return success response with application data
+    return sendSuccessResponse(res, { 
+      application: {
+        _id: application._id,
+        jobId: application.jobId,
+        studentId: application.studentId,
+        status: application.status,
+        appliedAt: application.appliedAt,
+        coverLetter: application.coverLetter,
+        expectedPay: application.expectedPay,
+        availability: application.availability
+      }
+    }, 'Application submitted successfully', 201);
+    
+  } catch (error: any) {
+    console.error('❌ Error in job application:', error);
+    
+    // Return user-friendly error message
+    const errorMessage = error.message || 'Failed to submit application';
+    const statusCode = error.statusCode || 500;
+    
+    return sendErrorResponse(
+      res, 
+      statusCode, 
+      errorMessage,
+      process.env.NODE_ENV !== 'production' ? error.stack : undefined
     );
   }
-
-  console.log(`📝 New application submitted: ${student?.name || student?.email} for ${job.jobTitle} - Notifications sent`);
-
-
-  sendSuccessResponse(res, { application }, 'Application submitted successfully', 201);
 }));
 
 // @route   GET /api/applications/my-applications
