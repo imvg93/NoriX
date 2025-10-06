@@ -2,10 +2,73 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import Footer from '@/components/Footer';
 import { useState } from 'react';
+
+// Job statistics data with Indian prices
+const jobStats = {
+  'Shop Keeping': {
+    dailyEarning: '₹300 - ₹500',
+    monthlyEarning: '₹8,000 - ₹12,000',
+    workersCount: '2,450'
+  },
+  'Sales associate': {
+    dailyEarning: '₹400 - ₹600',
+    monthlyEarning: '₹10,000 - ₹15,000',
+    workersCount: '3,200'
+  },
+  'Restaurant staff': {
+    dailyEarning: '₹350 - ₹500',
+    monthlyEarning: '₹8,500 - ₹12,500',
+    workersCount: '4,100'
+  },
+  'Food delivery boy': {
+    dailyEarning: '₹400 - ₹700',
+    monthlyEarning: '₹10,000 - ₹18,000',
+    workersCount: '5,800'
+  },
+  'Office assistant': {
+    dailyEarning: '₹500 - ₹800',
+    monthlyEarning: '₹12,000 - ₹20,000',
+    workersCount: '1,900'
+  },
+  'Event coordinator': {
+    dailyEarning: '₹600 - ₹1,000',
+    monthlyEarning: '₹15,000 - ₹25,000',
+    workersCount: '850'
+  },
+  'Event staff': {
+    dailyEarning: '₹400 - ₹600',
+    monthlyEarning: '₹10,000 - ₹15,000',
+    workersCount: '2,100'
+  },
+  'Event helper': {
+    dailyEarning: '₹300 - ₹500',
+    monthlyEarning: '₹7,500 - ₹12,000',
+    workersCount: '3,400'
+  },
+  'Library assistant': {
+    dailyEarning: '₹400 - ₹600',
+    monthlyEarning: '₹10,000 - ₹15,000',
+    workersCount: '1,200'
+  }
+};
 
 export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [selectedJob, setSelectedJob] = useState<string | null>(null);
+  const [showPopup, setShowPopup] = useState(false);
+
+  const handleJobClick = (jobName: string) => {
+    setSelectedJob(jobName);
+    setShowPopup(true);
+  };
+
+  const closePopup = () => {
+    setShowPopup(false);
+    setSelectedJob(null);
+  };
+
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
@@ -31,11 +94,17 @@ export default function Home() {
               <Link href="/jobs" className="text-gray-700 hover:text-gray-900 font-medium">
                 Jobs
               </Link>
+              <Link href="/services" className="text-gray-700 hover:text-gray-900 font-medium">
+                Services
+              </Link>
               <Link href="/about" className="text-gray-700 hover:text-gray-900 font-medium">
                 AboutUs
               </Link>
               <Link href="/how-it-works" className="text-gray-700 hover:text-gray-900 font-medium">
                 How It Works
+              </Link>
+              <Link href="/careers" className="text-gray-700 hover:text-gray-900 font-medium">
+                Careers
               </Link>
               <Link href="/signup" className="text-gray-700 hover:text-gray-900 font-medium">
                 Sign up
@@ -43,12 +112,8 @@ export default function Home() {
               <Link href="/login" className="text-gray-700 hover:text-gray-900 font-medium">
                 Log in
               </Link>
-              <Link href="/admin-dashboard" className="text-gray-700 hover:text-gray-900 font-medium">
-                Admin Dashboard
-              </Link>
-              <Link href="/employer-home" className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors">
-                Post Jobs
-              </Link>
+             
+              
             </nav>
 
             {/* Mobile Navigation */}
@@ -58,9 +123,9 @@ export default function Home() {
                 className="p-2 text-gray-600 hover:text-gray-900"
               >
                 <div className="w-6 h-6 flex flex-col justify-center space-y-1">
-                  <div className="w-full h-0.5 bg-gray-600"></div>
-                  <div className="w-full h-0.5 bg-gray-600"></div>
-                  <div className="w-full h-0.5 bg-gray-600"></div>
+                  <div className="w-full h-0.5 bg-[#32A4A6]"></div>
+                  <div className="w-full h-0.5 bg-[#32A4A6]"></div>
+                  <div className="w-full h-0.5 bg-[#32A4A6]"></div>
                 </div>
               </button>
             </div>
@@ -75,11 +140,17 @@ export default function Home() {
             <Link href="/jobs" className="block text-gray-700 hover:text-gray-900 font-medium py-2">
               Jobs
             </Link>
+            <Link href="/services" className="block text-gray-700 hover:text-gray-900 font-medium py-2">
+              Services
+            </Link>
             <Link href="/about" className="block text-gray-700 hover:text-gray-900 font-medium py-2">
               About
             </Link>
             <Link href="/how-it-works" className="block text-gray-700 hover:text-gray-900 font-medium py-2">
               How It Works
+            </Link>
+            <Link href="/careers" className="block text-gray-700 hover:text-gray-900 font-medium py-2">
+              Careers
             </Link>
             <Link href="/signup" className="block text-gray-700 hover:text-gray-900 font-medium py-2">
               Sign up
@@ -87,9 +158,7 @@ export default function Home() {
             <Link href="/login" className="block text-gray-700 hover:text-gray-900 font-medium py-2">
               Log in
             </Link>
-            <Link href="/admin-dashboard" className="block text-gray-700 hover:text-gray-900 font-medium py-2">
-              Admin Dashboard
-            </Link>
+            
             <Link href="/login" className="block bg-[#32A4A6] text-white px-4 py-2 rounded-lg font-medium hover:bg-[#32A4A6] transition-colors text-center">
               Post Jobs
             </Link>
@@ -269,7 +338,11 @@ export default function Home() {
               'Event helper',
               'Library assistant'
             ].map((subcategory) => (
-              <button key={subcategory} className="px-3 sm:px-6 py-2 sm:py-3 border-2 border-gray-300 rounded-lg text-gray-700 font-medium hover:border-gray-400 hover:bg-gray-50 transition-colors text-sm sm:text-base">
+              <button 
+                key={subcategory} 
+                onClick={() => handleJobClick(subcategory)}
+                className="px-3 sm:px-6 py-2 sm:py-3 border-2 border-gray-300 rounded-lg text-gray-700 font-medium hover:border-gray-400 hover:bg-gray-50 transition-colors text-sm sm:text-base cursor-pointer"
+              >
                 {subcategory}
               </button>
             ))}
@@ -370,181 +443,181 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Popular Projects */}
-      <section className="py-16 sm:py-20 bg-gray-50">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12 sm:mb-16">
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
-              Popular Projects
-            </h2>
-            <p className="text-lg sm:text-xl text-gray-600 max-w-3xl mx-auto">
-              Services provided by skilled students for your home and business needs
-            </p>
-          </div>
-          
-          <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 overflow-x-auto sm:overflow-x-visible pb-4 sm:pb-0">
-            <style jsx>{`
-              .flex::-webkit-scrollbar {
-                height: 4px;
-              }
-              .flex::-webkit-scrollbar-track {
-                background: #f1f5f9;
-                border-radius: 2px;
-              }
-              .flex::-webkit-scrollbar-thumb {
-                background: #cbd5e1;
-                border-radius: 2px;
-              }
-              .flex::-webkit-scrollbar-thumb:hover {
-                background: #94a3b8;
-              }
-            `}</style>
-            {/* Furniture Assembly */}
-            <div className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow flex-shrink-0 w-72 sm:w-auto border border-gray-200">
-              <div className="h-48 bg-gray-50 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                  </div>
-                  <p className="text-sm text-gray-500">Furniture Assembly</p>
-                </div>
-              </div>
-              <div className="p-4">
-                <h3 className="font-semibold text-gray-900 mb-2">Furniture Assembly</h3>
-                <p className="text-sm text-gray-600">Projects starting at $49</p>
-              </div>
-            </div>
+       {/* Popular Projects */}
+       <section className="py-16 sm:py-20 bg-gradient-to-br from-[#32A4A6]/5 to-[#32A4A6]/10">
+         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+           <div className="text-center mb-12 sm:mb-16">
+             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-[#32A4A6] mb-4">
+               Popular Projects
+             </h2>
+             <p className="text-lg sm:text-xl text-gray-700 max-w-3xl mx-auto">
+               Services provided by skilled students for your home and business needs
+             </p>
+           </div>
+           
+           <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 overflow-x-auto sm:overflow-x-visible pb-4 sm:pb-0">
+             <style jsx>{`
+               .flex::-webkit-scrollbar {
+                 height: 6px;
+               }
+               .flex::-webkit-scrollbar-track {
+                 background: #e5f7f7;
+                 border-radius: 3px;
+               }
+               .flex::-webkit-scrollbar-thumb {
+                 background: #32A4A6;
+                 border-radius: 3px;
+               }
+               .flex::-webkit-scrollbar-thumb:hover {
+                 background: #2a8a8c;
+               }
+             `}</style>
+             {/* Furniture Assembly */}
+             <div className="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 flex-shrink-0 w-72 sm:w-auto border-2 border-transparent hover:border-[#32A4A6]/30 transform hover:-translate-y-1">
+               <div className="h-48 bg-gradient-to-br from-[#32A4A6]/10 to-[#32A4A6]/5 flex items-center justify-center">
+                 <div className="text-center">
+                   <div className="w-16 h-16 bg-[#32A4A6] rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+                     <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                     </svg>
+                   </div>
+                   <p className="text-sm text-[#32A4A6] font-medium">Furniture Assembly</p>
+                 </div>
+               </div>
+               <div className="p-4">
+                 <h3 className="font-bold text-gray-900 mb-2">Furniture Assembly</h3>
+                 <p className="text-sm text-[#32A4A6] font-semibold">Projects starting at ₹3,500</p>
+               </div>
+             </div>
 
-            {/* Mount Art or Shelves */}
-            <div className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow flex-shrink-0 w-72 sm:w-auto border border-gray-200">
-              <div className="h-48 bg-gray-50 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                  <p className="text-sm text-gray-500">Mount Art or Shelves</p>
-                </div>
-              </div>
-              <div className="p-4">
-                <h3 className="font-semibold text-gray-900 mb-2">Mount Art or Shelves</h3>
-                <p className="text-sm text-gray-600">Projects starting at $65</p>
-              </div>
-            </div>
+             {/* Mount Art or Shelves */}
+             <div className="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 flex-shrink-0 w-72 sm:w-auto border-2 border-transparent hover:border-[#32A4A6]/30 transform hover:-translate-y-1">
+               <div className="h-48 bg-gradient-to-br from-[#32A4A6]/10 to-[#32A4A6]/5 flex items-center justify-center">
+                 <div className="text-center">
+                   <div className="w-16 h-16 bg-[#32A4A6] rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+                     <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                     </svg>
+                   </div>
+                   <p className="text-sm text-[#32A4A6] font-medium">Mount Art or Shelves</p>
+                 </div>
+               </div>
+               <div className="p-4">
+                 <h3 className="font-bold text-gray-900 mb-2">Mount Art or Shelves</h3>
+                 <p className="text-sm text-[#32A4A6] font-semibold">Projects starting at ₹4,500</p>
+               </div>
+             </div>
 
-            {/* Mount a TV */}
-            <div className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow flex-shrink-0 w-72 sm:w-auto border border-gray-200">
-              <div className="h-48 bg-gray-50 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                  <p className="text-sm text-gray-500">Mount a TV</p>
-                </div>
-              </div>
-              <div className="p-4">
-                <h3 className="font-semibold text-gray-900 mb-2">Mount a TV</h3>
-                <p className="text-sm text-gray-600">Projects starting at $69</p>
-              </div>
-            </div>
+             {/* Mount a TV */}
+             <div className="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 flex-shrink-0 w-72 sm:w-auto border-2 border-transparent hover:border-[#32A4A6]/30 transform hover:-translate-y-1">
+               <div className="h-48 bg-gradient-to-br from-[#32A4A6]/10 to-[#32A4A6]/5 flex items-center justify-center">
+                 <div className="text-center">
+                   <div className="w-16 h-16 bg-[#32A4A6] rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+                     <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                     </svg>
+                   </div>
+                   <p className="text-sm text-[#32A4A6] font-medium">Mount a TV</p>
+                 </div>
+               </div>
+               <div className="p-4">
+                 <h3 className="font-bold text-gray-900 mb-2">Mount a TV</h3>
+                 <p className="text-sm text-[#32A4A6] font-semibold">Projects starting at ₹4,800</p>
+               </div>
+             </div>
 
-            {/* Help Moving */}
-            <div className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow flex-shrink-0 w-72 sm:w-auto border border-gray-200">
-              <div className="h-48 bg-gray-50 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                    </svg>
-                  </div>
-                  <p className="text-sm text-gray-500">Help Moving</p>
-                </div>
-              </div>
-              <div className="p-4">
-                <h3 className="font-semibold text-gray-900 mb-2">Help Moving</h3>
-                <p className="text-sm text-gray-600">Projects starting at $67</p>
-              </div>
-            </div>
+             {/* Help Moving */}
+             <div className="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 flex-shrink-0 w-72 sm:w-auto border-2 border-transparent hover:border-[#32A4A6]/30 transform hover:-translate-y-1">
+               <div className="h-48 bg-gradient-to-br from-[#32A4A6]/10 to-[#32A4A6]/5 flex items-center justify-center">
+                 <div className="text-center">
+                   <div className="w-16 h-16 bg-[#32A4A6] rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+                     <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                     </svg>
+                   </div>
+                   <p className="text-sm text-[#32A4A6] font-medium">Help Moving</p>
+                 </div>
+               </div>
+               <div className="p-4">
+                 <h3 className="font-bold text-gray-900 mb-2">Help Moving</h3>
+                 <p className="text-sm text-[#32A4A6] font-semibold">Projects starting at ₹4,700</p>
+               </div>
+             </div>
 
-            {/* Home & Apartment Cleaning */}
-            <div className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow flex-shrink-0 w-72 sm:w-auto border border-gray-200">
-              <div className="h-48 bg-gray-50 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <p className="text-sm text-gray-500">Home & Apartment Cleaning</p>
-                </div>
-              </div>
-              <div className="p-4">
-                <h3 className="font-semibold text-gray-900 mb-2">Home & Apartment Cleaning</h3>
-                <p className="text-sm text-gray-600">Projects starting at $49</p>
-              </div>
-            </div>
+             {/* Home & Apartment Cleaning */}
+             <div className="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 flex-shrink-0 w-72 sm:w-auto border-2 border-transparent hover:border-[#32A4A6]/30 transform hover:-translate-y-1">
+               <div className="h-48 bg-gradient-to-br from-[#32A4A6]/10 to-[#32A4A6]/5 flex items-center justify-center">
+                 <div className="text-center">
+                   <div className="w-16 h-16 bg-[#32A4A6] rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+                     <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                     </svg>
+                   </div>
+                   <p className="text-sm text-[#32A4A6] font-medium">Home & Apartment Cleaning</p>
+                 </div>
+               </div>
+               <div className="p-4">
+                 <h3 className="font-bold text-gray-900 mb-2">Home & Apartment Cleaning</h3>
+                 <p className="text-sm text-[#32A4A6] font-semibold">Projects starting at ₹3,500</p>
+               </div>
+             </div>
 
-            {/* Minor Plumbing Repairs */}
-            <div className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow flex-shrink-0 w-72 sm:w-auto border border-gray-200">
-              <div className="h-48 bg-gray-50 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                    </svg>
-                  </div>
-                  <p className="text-sm text-gray-500">Minor Plumbing Repairs</p>
-                </div>
-              </div>
-              <div className="p-4">
-                <h3 className="font-semibold text-gray-900 mb-2">Minor Plumbing Repairs</h3>
-                <p className="text-sm text-gray-600">Projects starting at $74</p>
-              </div>
-            </div>
+             {/* Minor Plumbing Repairs */}
+             <div className="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 flex-shrink-0 w-72 sm:w-auto border-2 border-transparent hover:border-[#32A4A6]/30 transform hover:-translate-y-1">
+               <div className="h-48 bg-gradient-to-br from-[#32A4A6]/10 to-[#32A4A6]/5 flex items-center justify-center">
+                 <div className="text-center">
+                   <div className="w-16 h-16 bg-[#32A4A6] rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+                     <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                     </svg>
+                   </div>
+                   <p className="text-sm text-[#32A4A6] font-medium">Minor Plumbing Repairs</p>
+                 </div>
+               </div>
+               <div className="p-4">
+                 <h3 className="font-bold text-gray-900 mb-2">Minor Plumbing Repairs</h3>
+                 <p className="text-sm text-[#32A4A6] font-semibold">Projects starting at ₹5,200</p>
+               </div>
+             </div>
 
-            {/* Electrical Help */}
-            <div className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow flex-shrink-0 w-72 sm:w-auto border border-gray-200">
-              <div className="h-48 bg-gray-50 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  </div>
-                  <p className="text-sm text-gray-500">Electrical Help</p>
-                </div>
-              </div>
-              <div className="p-4">
-                <h3 className="font-semibold text-gray-900 mb-2">Electrical Help</h3>
-                <p className="text-sm text-gray-600">Projects starting at $69</p>
-              </div>
-            </div>
+             {/* Electrical Help */}
+             <div className="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 flex-shrink-0 w-72 sm:w-auto border-2 border-transparent hover:border-[#32A4A6]/30 transform hover:-translate-y-1">
+               <div className="h-48 bg-gradient-to-br from-[#32A4A6]/10 to-[#32A4A6]/5 flex items-center justify-center">
+                 <div className="text-center">
+                   <div className="w-16 h-16 bg-[#32A4A6] rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+                     <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                     </svg>
+                   </div>
+                   <p className="text-sm text-[#32A4A6] font-medium">Electrical Help</p>
+                 </div>
+               </div>
+               <div className="p-4">
+                 <h3 className="font-bold text-gray-900 mb-2">Electrical Help</h3>
+                 <p className="text-sm text-[#32A4A6] font-semibold">Projects starting at ₹4,800</p>
+               </div>
+             </div>
 
-            {/* Heavy Lifting */}
-            <div className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow flex-shrink-0 w-72 sm:w-auto border border-gray-200">
-              <div className="h-48 bg-gray-50 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                  </div>
-                  <p className="text-sm text-gray-500">Heavy Lifting</p>
-                </div>
-              </div>
-              <div className="p-4">
-                <h3 className="font-semibold text-gray-900 mb-2">Heavy Lifting</h3>
-                <p className="text-sm text-gray-600">Projects starting at $61</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+             {/* Heavy Lifting */}
+             <div className="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 flex-shrink-0 w-72 sm:w-auto border-2 border-transparent hover:border-[#32A4A6]/30 transform hover:-translate-y-1">
+               <div className="h-48 bg-gradient-to-br from-[#32A4A6]/10 to-[#32A4A6]/5 flex items-center justify-center">
+                 <div className="text-center">
+                   <div className="w-16 h-16 bg-[#32A4A6] rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+                     <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                     </svg>
+                   </div>
+                   <p className="text-sm text-[#32A4A6] font-medium">Heavy Lifting</p>
+                 </div>
+               </div>
+               <div className="p-4">
+                 <h3 className="font-bold text-gray-900 mb-2">Heavy Lifting</h3>
+                 <p className="text-sm text-[#32A4A6] font-semibold">Projects starting at ₹4,300</p>
+               </div>
+             </div>
+           </div>
+         </div>
+       </section>
 
       {/* How it works */}
       <section className="py-16 sm:py-20 bg-white">
@@ -594,85 +667,95 @@ export default function Home() {
         
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-green-700 mb-6">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-[#32A4A6] mb-6">
               Get help Today
             </h2>
           </div>
           
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-            {/* General Mounting */}
+            {/* Retail and Sales */}
             <button className="bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors">
-              General Mounting
+              Sales Associate
             </button>
 
-            {/* TV Mounting */}
+            {/* Brand Ambassador */}
             <button className="bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors">
-              TV Mounting
+              Brand Ambassador
             </button>
 
-            {/* Furniture Assembly */}
+            {/* Cashier */}
             <button className="bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors">
-              Furniture Assembly
+              Cashier
             </button>
 
-            {/* IKEA Furniture Assembly */}
+            {/* Teaching and Tutoring */}
             <button className="bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors">
-              IKEA Furniture Assembly
+              School Tutor
             </button>
 
-            {/* Help Moving */}
+            {/* Language Teacher */}
             <button className="bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors">
-              Help Moving
+              Language Teacher
             </button>
 
-            {/* House Cleaning */}
+            {/* Freelance Tutor */}
             <button className="bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors">
-              House Cleaning
+              Freelance Tutor
             </button>
 
-            {/* Yardwork */}
+            {/* Delivery and Logistics */}
             <button className="bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors">
-              Yardwork
+              Food Delivery
             </button>
 
-            {/* Furniture Removal */}
+            {/* Warehouse Helper */}
             <button className="bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors">
-              Furniture Removal
+              Warehouse Helper
             </button>
 
-            {/* Lawn Care */}
+            {/* Online Delivery */}
             <button className="bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors">
-              Lawn Care
+              Online Delivery
             </button>
 
-            {/* Hang Pictures */}
+            {/* Administrative Support */}
             <button className="bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors">
-              Hang Pictures
+              Receptionist
             </button>
 
-            {/* In Home Furniture Movers */}
+            {/* Data Entry */}
             <button className="bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors">
-              In Home Furniture Movers
+              Data Entry
             </button>
 
-            {/* Shelf Mounting */}
+            {/* Admin Assistant */}
             <button className="bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors">
-              Shelf Mounting
+              Admin Assistant
             </button>
 
-            {/* Light Installation */}
+            {/* Library Assistant */}
             <button className="bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors">
-              Light Installation
+              Library Assistant
             </button>
 
-            {/* Plumbing */}
+            {/* Customer Service */}
             <button className="bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors">
-              Plumbing
+              Customer Service
+            </button>
+
+            {/* Child and Pet Care */}
+            <button className="bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors">
+              Babysitter
+            </button>
+
+            {/* Dog Walker */}
+            <button className="bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors">
+              Dog Walker
             </button>
           </div>
 
           <div className="text-left">
-            <a href="/jobs" className="inline-flex items-center text-green-700 font-medium hover:text-green-800 transition-colors">
+            <a href="/services" className="inline-flex items-center text-[#32A4A6] font-medium hover:text-green-800 transition-colors">
               See All Services
               <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -682,110 +765,78 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {/* Company Info */}
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">NX</span>
+      {/* Job Statistics Popup */}
+      {showPopup && selectedJob && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 relative">
+            {/* Close Button */}
+            <button
+              onClick={closePopup}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            
+            {/* Popup Content */}
+            <div className="p-6">
+              <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">
+                {selectedJob}
+              </h3>
+              
+              <div className="space-y-4">
+                {/* Daily Earning */}
+                <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Daily Earning</p>
+                      <p className="text-lg font-semibold text-green-700">{jobStats[selectedJob as keyof typeof jobStats]?.dailyEarning}</p>
+                    </div>
+                  </div>
                 </div>
-                <span className="text-xl font-bold">NoriX</span>
-              </div>
-              <p className="text-gray-400 text-sm leading-relaxed">
-                Connecting skilled students with opportunities worldwide. Find trusted help for your projects.
-              </p>
-              <div className="flex space-x-4">
-                <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"/>
-                  </svg>
-                </a>
-                <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M22.46 6c-.77.35-1.6.58-2.46.69.88-.53 1.56-1.37 1.88-2.38-.83.5-1.75.85-2.72 1.05C18.37 4.5 17.26 4 16 4c-2.35 0-4.27 1.92-4.27 4.29 0 .34.04.67.11.98C8.28 9.09 5.11 7.38 3 4.79c-.37.63-.58 1.37-.58 2.15 0 1.49.75 2.81 1.91 3.56-.71 0-1.37-.2-1.95-.5v.03c0 2.08 1.48 3.82 3.44 4.21a4.22 4.22 0 0 1-1.93.07 4.28 4.28 0 0 0 4 2.98 8.521 8.521 0 0 1-5.33 1.84c-.34 0-.68-.02-1.02-.06C3.44 20.29 5.7 21 8.12 21 16 21 20.33 14.46 20.33 8.79c0-.19 0-.37-.01-.56.84-.6 1.56-1.36 2.14-2.23z"/>
-                  </svg>
-                </a>
-                <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                  </svg>
-                </a>
-                <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.174-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.72-.359-1.781c0-1.663.967-2.911 2.168-2.911 1.024 0 1.518.769 1.518 1.688 0 1.029-.653 2.567-.992 3.992-.285 1.193.6 2.165 1.775 2.165 2.128 0 3.768-2.245 3.768-5.487 0-2.861-2.063-4.869-5.008-4.869-3.41 0-5.409 2.562-5.409 5.199 0 1.033.394 2.143.889 2.741.099.12.112.225.085.345-.09.375-.293 1.199-.334 1.363-.053.225-.172.271-.402.165-1.495-.69-2.433-2.878-2.433-4.646 0-3.776 2.748-7.252 7.92-7.252 4.158 0 7.392 2.967 7.392 6.923 0 4.135-2.607 7.462-6.233 7.462-1.214 0-2.357-.629-2.746-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24.009 12.017 24.009c6.624 0 11.99-5.367 11.99-11.988C24.007 5.367 18.641.001.012.001z"/>
-                  </svg>
-                </a>
-              </div>
-            </div>
 
-            {/* Services */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Services</h3>
-              <ul className="space-y-2 text-sm">
-                <li><a href="/jobs#labor-ground-work" className="text-gray-400 hover:text-white transition-colors">Furniture Assembly</a></li>
-                <li><a href="/jobs#labor-ground-work" className="text-gray-400 hover:text-white transition-colors">TV Mounting</a></li>
-                <li><a href="/jobs#labor-ground-work" className="text-gray-400 hover:text-white transition-colors">House Cleaning</a></li>
-                <li><a href="/jobs#logistics-delivery" className="text-gray-400 hover:text-white transition-colors">Help Moving</a></li>
-                <li><a href="/jobs#labor-ground-work" className="text-gray-400 hover:text-white transition-colors">Plumbing</a></li>
-                <li><a href="/jobs#labor-ground-work" className="text-gray-400 hover:text-white transition-colors">Electrical Help</a></li>
-              </ul>
-            </div>
+                {/* Monthly Earning */}
+                <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Monthly Earning</p>
+                      <p className="text-lg font-semibold text-blue-700">{jobStats[selectedJob as keyof typeof jobStats]?.monthlyEarning}</p>
+                    </div>
+                  </div>
+                </div>
 
-            {/* Company */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Company</h3>
-              <ul className="space-y-2 text-sm">
-                <li><a href="/about" className="text-gray-400 hover:text-white transition-colors">About Us</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">How It Works</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Careers</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Press</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Blog</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Contact</a></li>
-              </ul>
-            </div>
-
-            {/* Support */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Support</h3>
-              <ul className="space-y-2 text-sm">
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Help Center</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Safety</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Terms of Service</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Privacy Policy</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Cookie Policy</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Accessibility</a></li>
-              </ul>
-            </div>
-          </div>
-
-          {/* Bottom Section */}
-          <div className="border-t border-gray-800 mt-12 pt-8">
-            <div className="flex flex-col md:flex-row justify-between items-center">
-              <p className="text-gray-400 text-sm">
-              © 2024 NoriX. All rights reserved.
-              </p>
-              <div className="flex space-x-6 mt-4 md:mt-0">
-                <a href="#" className="text-gray-400 hover:text-white text-sm transition-colors">English</a>
-                <a href="#" className="text-gray-400 hover:text-white text-sm transition-colors">Español</a>
-                <a href="#" className="text-gray-400 hover:text-white text-sm transition-colors">Français</a>
-                <a href="#" className="text-gray-400 hover:text-white text-sm transition-colors">Deutsch</a>
+                {/* Workers Count */}
+                <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mr-3">
+                      <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Active Workers</p>
+                      <p className="text-lg font-semibold text-purple-700">{jobStats[selectedJob as keyof typeof jobStats]?.workersCount}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </footer>
+      )}
 
-      {/* Help Button - Fixed Position */}
-      <div className="fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-50">
-        <button className="w-12 h-12 sm:w-14 sm:h-14 bg-green-600 text-white rounded-full shadow-lg hover:bg-green-700 transition-colors flex items-center justify-center">
-          <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </button>
-      </div>
+      <Footer />
     </div>
   );
 }

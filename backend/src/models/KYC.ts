@@ -103,7 +103,13 @@ const kycSchema = new Schema<IKYCDocument>({
     type: String,
     required: [true, 'Phone number is required'],
     trim: true,
-    match: [/^(\+91|0)?[789]\d{9}$/, 'Please enter a valid Indian phone number']
+    validate: {
+      validator: function(v: string) {
+        // Accept any phone number - just need at least 6 characters
+        return !!(v && v.length >= 6);
+      },
+      message: 'Phone number must be at least 6 characters'
+    }
   },
   email: {
     type: String,
@@ -158,7 +164,14 @@ const kycSchema = new Schema<IKYCDocument>({
     contact: {
       type: String,
       trim: true,
-      match: [/^(\+91|0)?[789]\d{9}$/, 'Please enter a valid Indian phone number']
+      validate: {
+        validator: function(v: string) {
+          if (!v) return true; // Contact is optional
+          // Accept any phone number - just need at least 6 characters
+          return !!(v && v.length >= 6);
+        },
+        message: 'Phone number must be at least 6 characters'
+      }
     }
   },
   hoursPerWeek: {
@@ -195,7 +208,13 @@ const kycSchema = new Schema<IKYCDocument>({
       type: String,
       required: [true, 'Emergency contact phone is required'],
       trim: true,
-      match: [/^(\+91|0)?[789]\d{9}$/, 'Please enter a valid Indian phone number']
+      validate: {
+        validator: function(v: string) {
+          // Accept any phone number - just need at least 6 characters
+          return !!(v && v.length >= 6);
+        },
+        message: 'Phone number must be at least 6 characters'
+      }
     }
   },
   bloodGroup: {

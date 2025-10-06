@@ -227,6 +227,22 @@ class SocketService {
         detail: data
       }));
     });
+
+    // Application status update events
+    this.socket.on('application_status_update', (data) => {
+      console.log('📡 Received application status update:', data);
+      window.dispatchEvent(new CustomEvent('application_status_update', {
+        detail: data
+      }));
+    });
+
+    // KYC status update events
+    this.socket.on('kyc:status:update', (data) => {
+      console.log('📡 Received KYC status update:', data);
+      window.dispatchEvent(new CustomEvent('kyc:status:update', {
+        detail: data
+      }));
+    });
   }
 
   private handleReconnect() {

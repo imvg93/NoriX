@@ -170,17 +170,33 @@ router.get('/employers', authenticateToken, requireStudent, asyncHandler(async (
 // @access  Public
 router.get('/:id', asyncHandler(async (req: express.Request, res: express.Response) => {
   const user = await User.findById(req.params.id)
-    .select('name userType college skills availability companyName businessType address isVerified rating completedJobs totalEarnings');
+    .select('name email phone userType college skills availability companyName businessType address isVerified isActive rating completedJobs totalEarnings');
 
   if (!user) {
     throw new ValidationError('User not found');
   }
 
-  if (!user.isActive) {
+  // Allow viewing deactivated accounts for authenticated users (employers viewing applicants)
+  // but block for public access
+  const authHeader = req.headers.authorization;
+  const isAuthenticated = authHeader && authHeader.startsWith('Bearer ');
+  
+  // Determine if account is deactivated
+  const isDeactivated = !user.isActive;
+  
+  // Block public access to deactivated accounts
+  if (isDeactivated && !isAuthenticated) {
     throw new ValidationError('User account is deactivated');
   }
 
-  sendSuccessResponse(res, { user }, 'User profile retrieved successfully');
+  // Include deactivation flag in response
+  sendSuccessResponse(res, { 
+    user: {
+      ...user.toObject(),
+      isDeactivated: isDeactivated,
+      accountStatus: isDeactivated ? 'deactivated' : 'active'
+    }
+  }, 'User profile retrieved successfully');
 }));
 
 // @route   POST /api/users/upload-avatar

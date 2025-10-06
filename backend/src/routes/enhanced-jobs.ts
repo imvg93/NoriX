@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { Job } from '../models/Job';
 import { User } from '../models/User';
 import { Application } from '../models/Application';
+import { KYC } from '../models/KYC';
 import { authenticateToken, requireRole, AuthRequest, requireEmployer, requireStudent } from '../middleware/auth';
 import { asyncHandler, sendSuccessResponse, sendErrorResponse, ValidationError } from '../middleware/errorHandler';
 
@@ -129,6 +130,39 @@ router.get('/student-dashboard', authenticateToken, requireStudent, asyncHandler
   const { page = 1, limit = 10 } = req.query;
 
   try {
+    // Check student's KYC status
+    const studentId = req.user!._id;
+    const user = await User.findById(studentId).select('kycStatus isVerified');
+    const kyc = await KYC.findOne({ userId: studentId, isActive: true });
+    
+    // Determine if KYC is approved
+    const kycStatus = kyc?.verificationStatus || user?.kycStatus || 'not_submitted';
+    const isKYCApproved = kycStatus === 'approved' || user?.isVerified;
+    
+    console.log(`🔍 Student ${studentId} KYC status:`, {
+      kycStatus,
+      isVerified: user?.isVerified,
+      isKYCApproved
+    });
+    
+    // If KYC not approved, return empty jobs list with KYC status
+    if (!isKYCApproved) {
+      console.log(`⚠️ Student ${studentId} KYC not approved - hiding job listings`);
+      
+      return sendSuccessResponse(res, {
+        jobs: [],
+        pagination: {
+          current: Number(page),
+          pages: 0,
+          total: 0
+        },
+        kycRequired: true,
+        kycStatus: kycStatus,
+        message: 'Complete KYC to get your first job'
+      }, 'KYC approval required to view jobs');
+    }
+    
+    // KYC approved - return jobs
     const filter: any = {
       status: 'active'
     };
@@ -152,7 +186,9 @@ router.get('/student-dashboard', authenticateToken, requireStudent, asyncHandler
         current: Number(page),
         pages: Math.ceil(total / Number(limit)),
         total
-      }
+      },
+      kycRequired: false,
+      kycStatus: 'approved'
     }, 'Jobs retrieved successfully');
   } catch (e: any) {
     console.error('❌ Failed to fetch student dashboard jobs:', e?.message);
@@ -174,6 +210,19 @@ router.post('/:jobId/apply', authenticateToken, requireStudent, asyncHandler(asy
     }
     if (!mongoose.isValidObjectId(jobId)) {
       return sendErrorResponse(res, 400, 'Invalid job ID');
+    }
+
+    // Check if student's KYC is approved
+    const studentId = req.user!._id;
+    const user = await User.findById(studentId).select('kycStatus isVerified');
+    const kyc = await KYC.findOne({ userId: studentId, isActive: true });
+    
+    const kycStatus = kyc?.verificationStatus || user?.kycStatus || 'not_submitted';
+    const isKYCApproved = kycStatus === 'approved' || user?.isVerified;
+    
+    if (!isKYCApproved) {
+      console.log(`⚠️ Student ${studentId} attempted to apply without KYC approval`);
+      return sendErrorResponse(res, 403, 'Please complete and get your KYC approved before applying to jobs');
     }
 
     // Check if job exists and is active
@@ -385,7 +434,10 @@ router.get('/employer-dashboard', authenticateToken, requireEmployer, asyncHandl
 router.patch('/applications/:applicationId/approve', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { applicationId } = req.params;
 
-  const application = await Application.findById(applicationId);
+  const application = await Application.findById(applicationId)
+    .populate('jobId', 'jobTitle companyName location salaryRange')
+    .populate('studentId', 'name email');
+  
   if (!application) {
     throw new ValidationError('Application not found');
   }
@@ -399,22 +451,28 @@ router.patch('/applications/:applicationId/approve', authenticateToken, requireE
   // Update application status
   await application.updateStatus('accepted', 'Application approved by employer');
 
-  // Trigger student notification
-  try {
-    await fetch('http://localhost:5000/api/notifications/application-approved', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${req.headers.authorization?.replace('Bearer ', '')}`
-      },
-      body: JSON.stringify({
-        applicationId,
-        studentId: application.studentId,
-        jobTitle: job.jobTitle
-      })
-    });
-  } catch (error) {
-    console.error('Failed to send notification:', error);
+  // Real-time notification to student via socket
+  const socketManager = (global as any).socketManager;
+  if (socketManager && application.studentId) {
+    const studentId = typeof application.studentId === 'object' 
+      ? (application.studentId as any)._id.toString() 
+      : application.studentId.toString();
+    
+    const jobData = typeof application.jobId === 'object' ? application.jobId : job;
+    
+    socketManager.notifyApplicationStatusUpdate({
+      _id: application._id,
+      status: 'accepted',
+      jobId: job._id,
+      jobTitle: (jobData as any).jobTitle || job.jobTitle,
+      companyName: (jobData as any).companyName || job.companyName,
+      location: (jobData as any).location || job.location,
+      salaryRange: (jobData as any).salaryRange || job.salaryRange,
+      approvedAt: application.shortlistedDate || new Date(),
+      message: `Your application for ${(jobData as any).jobTitle || job.jobTitle} at ${(jobData as any).companyName || job.companyName} has been approved! 🎉`
+    }, studentId);
+    
+    console.log(`📢 Real-time notification sent to student ${studentId} for approved application`);
   }
 
   sendSuccessResponse(res, { application }, 'Application approved successfully');
@@ -459,6 +517,36 @@ router.patch('/applications/:applicationId/reject', authenticateToken, requireEm
   }
 
   sendSuccessResponse(res, { application }, 'Application rejected successfully');
+}));
+
+// @route   GET /api/enhanced-jobs/applications/recent-approved
+// @desc    Get recent approved applications for the logged-in student
+// @access  Private (Students only)
+router.get('/applications/recent-approved', authenticateToken, requireStudent, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { limit = 10 } = req.query;
+
+  const applications = await Application.find({ 
+    studentId: req.user!._id,
+    status: 'accepted'
+  })
+    .populate('jobId', 'jobTitle companyName location salaryRange')
+    .populate('employer', 'name companyName')
+    .sort({ shortlistedDate: -1 }) // Sort by approval date (most recent first)
+    .limit(Number(limit));
+
+  const recentApplications = applications.map(app => ({
+    _id: app._id,
+    jobTitle: (app.jobId as any)?.jobTitle || 'Unknown Job',
+    companyName: (app.jobId as any)?.companyName || 'Unknown Company',
+    location: (app.jobId as any)?.location || 'Unknown Location',
+    salaryRange: (app.jobId as any)?.salaryRange || 'Not specified',
+    status: app.status,
+    approvedDate: app.shortlistedDate || app.updatedAt,
+    appliedDate: app.appliedAt,
+    jobId: (app.jobId as any)?._id || app.jobId
+  }));
+
+  sendSuccessResponse(res, { applications: recentApplications }, 'Recent approved applications retrieved successfully');
 }));
 
 // @route   GET /api/enhanced-jobs/applications/student
