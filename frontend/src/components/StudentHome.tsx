@@ -159,6 +159,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [recentApprovedApplications, setRecentApprovedApplications] = useState<RecentApplication[]>([]);
+  const [approvedApplicationsWithContact, setApprovedApplicationsWithContact] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -209,8 +210,12 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
             isCompleted: false,
             status: responseData.kycStatus || 'not-submitted'
           });
+          // Set error message to guide user to complete KYC
+          setErrorMessage('Complete your KYC to view and apply for jobs.');
         } else {
           setJobs(Array.isArray(jobsData.jobs) ? jobsData.jobs : []);
+          // Clear any previous KYC-related error messages
+          setErrorMessage('');
         }
         
         // Fetch user applications
@@ -234,6 +239,16 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
         } catch (error) {
           console.error('Error fetching recent approved applications:', error);
           setRecentApprovedApplications([]);
+        }
+        
+        // Also fetch approved applications with contact details for the new section
+        try {
+          const approvedWithContactData = await apiService.getApprovedApplicationsWithContact(3);
+          console.log('📊 Approved applications with contact:', approvedWithContactData);
+          setApprovedApplicationsWithContact(Array.isArray(approvedWithContactData.applications) ? approvedWithContactData.applications : []);
+        } catch (error) {
+          console.error('Error fetching approved applications with contact:', error);
+          setApprovedApplicationsWithContact([]);
         }
         
         // Initialize empty arrays for saved jobs, interviews, and notifications
@@ -457,6 +472,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
   const quickActions = [
     { name: 'Search Jobs', icon: Search, href: '/jobs', color: 'blue' },
     { name: 'My Applications', icon: FileText, href: '/applications', color: 'green' },
+    { name: 'Approved Applications', icon: CheckCircle, href: '/student/approved-applications', color: 'green' },
     { name: 'Saved Jobs', icon: Bookmark, href: '/saved-jobs', color: 'purple' },
     { name: 'Profile', icon: User, href: '/profile', color: 'orange' }
   ];
@@ -612,7 +628,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
               <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-white flex-shrink-0" />
               <div className="min-w-0 flex-1">
                 <h3 className="text-white font-semibold text-sm sm:text-base">Complete Your KYC Verification</h3>
-                <p className="text-orange-100 text-xs sm:text-sm">Verify your identity to access all job opportunities</p>
+                <p className="text-orange-100 text-xs sm:text-sm">Complete your KYC to view and apply for jobs.</p>
               </div>
             </div>
             <Link 
@@ -662,7 +678,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
           value={interviews.filter(i => i.status === 'scheduled').length}
           icon={Calendar}
           color="orange"
-          change={interviews.length > 0 ? `Next: ${interviews[0].date}` : 'No upcoming'}
+          change={interviews.length > 0 && interviews[0]?.date ? `Next: ${interviews[0].date}` : 'No upcoming'}
           changeType="neutral"
         />
         <StatsCard
@@ -670,33 +686,38 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
           value={jobs.length}
           icon={TrendingUp}
           color="green"
-          change={`${filteredJobs.length} match your criteria`}
+          change={`${jobs.filter(job => job.highlighted === true).length} featured • ${filteredJobs.length} match criteria`}
           changeType="positive"
         />
       </div>
 
-      {/* Featured Non-IT Jobs Section - Mobile Optimized */}
+      {/* Highlighted Jobs Section - Mobile Optimized */}
       {kycStatus.isCompleted ? (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.15 }}
-          className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-orange-200"
+          className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl sm:rounded-2xl p-4 sm:p-6 border-2 border-yellow-300 shadow-lg"
         >
           <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-orange-600 rounded-full">
-              <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+            <div className="p-2 bg-yellow-500 rounded-full">
+              <Star className="w-4 h-4 sm:w-5 sm:h-5 text-white fill-current" />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Featured Non-IT & Daily Labor Jobs</h2>
-              <p className="text-xs sm:text-sm text-gray-600">Perfect opportunities for students looking for flexible work</p>
+              <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
+                ⭐ Featured & Highlighted Jobs
+                <span className="px-2 py-1 bg-yellow-200 text-yellow-800 rounded-full text-xs font-semibold">
+                  HOT
+                </span>
+              </h2>
+              <p className="text-xs sm:text-sm text-gray-600">Premium opportunities with highlighted visibility</p>
             </div>
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {filteredJobs
-              .filter(job => job.type === 'Daily Labor' || job.type === 'Part-time')
-              .slice(0, 3)
+              .filter(job => job.highlighted === true)
+              .slice(0, 6)
               .map((job) => {
               const isApplied = Array.isArray(appliedJobs) ? appliedJobs.some(aj => aj.job._id === job._id) : false;
               const isSaved = Array.isArray(savedJobs) ? savedJobs.some(sj => sj.job._id === job._id) : false;
@@ -706,12 +727,131 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                   key={job._id}
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 border border-orange-200 hover:shadow-md transition-shadow"
+                  className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 border-2 border-yellow-300 hover:shadow-lg transition-all duration-300 relative overflow-hidden"
+                >
+                  {/* Highlighted Badge */}
+                  <div className="absolute top-0 right-0 bg-yellow-500 text-white px-2 py-1 text-xs font-bold rounded-bl-lg">
+                    ⭐ FEATURED
+                  </div>
+                  
+                  <div className="flex items-start justify-between mb-3 pt-4">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-gray-900 mb-1 text-sm sm:text-base truncate">{job.title}</h3>
+                      <p className="text-yellow-600 font-semibold text-xs sm:text-sm truncate">{job.company}</p>
+                    </div>
+                    <div className="flex items-center gap-1 ml-2">
+                      <button
+                        onClick={() => handleSaveJob(job._id)}
+                        className={`p-1 rounded-full transition-colors ${
+                          isSaved 
+                            ? 'bg-purple-100 text-purple-600' 
+                            : 'bg-gray-100 text-gray-400 hover:bg-purple-100 hover:text-purple-600'
+                        }`}
+                      >
+                        <Bookmark className={`w-3 h-3 sm:w-4 sm:h-4 ${isSaved ? 'fill-current' : ''}`} />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-3 text-xs text-gray-600">
+                    <div className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3" />
+                      <span className="truncate">{job.location}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <DollarSign className="w-3 h-3" />
+                      <span className="truncate font-semibold text-green-600">{formatSalaryToINR(job.salary)}</span>
+                    </div>
+                  </div>
+                  
+                  <p className="text-gray-700 text-xs sm:text-sm mb-3 line-clamp-2">{job.description}</p>
+                  
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    {job.requirements?.slice(0, 2).map((req, index) => (
+                      <span key={index} className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs truncate font-medium">
+                        {req}
+                      </span>
+                    ))}
+                    {job.requirements && job.requirements.length > 2 && (
+                      <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">
+                        +{job.requirements.length - 2} more
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    {isApplied ? (
+                      <div className="flex items-center justify-center gap-1 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-xs font-semibold">
+                        <CheckCircle className="w-3 h-3" />
+                        <span>Applied</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleApplyJob(job._id)}
+                        className="flex-1 px-3 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors text-xs font-bold shadow-md"
+                      >
+                        ⚡ Apply Now
+                      </button>
+                    )}
+                    <Link 
+                      href={`/jobs/${job._id}`}
+                      className="px-3 py-2 border border-yellow-300 text-yellow-700 rounded-lg hover:bg-yellow-50 transition-colors text-xs text-center font-medium"
+                    >
+                      View Details
+                    </Link>
+                  </div>
+                </motion.div>
+              );
+            })}
+        </div>
+        
+          {filteredJobs.filter(job => job.highlighted === true).length === 0 && (
+            <div className="text-center py-6 sm:py-8">
+              <Star className="w-10 h-10 sm:w-12 sm:h-12 text-yellow-400 mx-auto mb-3 sm:mb-4" />
+              <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No highlighted jobs available</h3>
+              <p className="text-gray-600 text-sm sm:text-base">Check back later for featured opportunities!</p>
+            </div>
+          )}
+        </motion.div>
+      ) : null}
+
+      {/* Regular Jobs Section - Mobile Optimized */}
+      {kycStatus.isCompleted && filteredJobs.filter(job => job.highlighted !== true).length > 0 ? (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-blue-200"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-2 bg-blue-600 rounded-full">
+              <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900">All Available Jobs</h2>
+              <p className="text-xs sm:text-sm text-gray-600">Browse through all job opportunities</p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+            {filteredJobs
+              .filter(job => job.highlighted !== true)
+              .slice(0, 6)
+              .map((job) => {
+              const isApplied = Array.isArray(appliedJobs) ? appliedJobs.some(aj => aj.job._id === job._id) : false;
+              const isSaved = Array.isArray(savedJobs) ? savedJobs.some(sj => sj.job._id === job._id) : false;
+              
+              return (
+                <motion.div
+                  key={job._id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 border border-blue-200 hover:shadow-md transition-shadow"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-gray-900 mb-1 text-sm sm:text-base truncate">{job.title}</h3>
-                      <p className="text-orange-600 font-medium text-xs sm:text-sm truncate">{job.company}</p>
+                      <p className="text-blue-600 font-medium text-xs sm:text-sm truncate">{job.company}</p>
                     </div>
                     <div className="flex items-center gap-1 ml-2">
                       <button
@@ -742,7 +882,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                   
                   <div className="flex flex-wrap gap-1 mb-3">
                     {job.requirements?.slice(0, 2).map((req, index) => (
-                      <span key={index} className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs truncate">
+                      <span key={index} className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs truncate">
                         {req}
                       </span>
                     ))}
@@ -762,7 +902,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                     ) : (
                       <button
                         onClick={() => handleApplyJob(job._id)}
-                        className="flex-1 px-3 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-xs font-medium"
+                        className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium"
                       >
                         Apply Now
                       </button>
@@ -779,11 +919,15 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
             })}
         </div>
         
-          {filteredJobs.filter(job => job.type === 'Daily Labor' || job.type === 'Part-time').length === 0 && (
-            <div className="text-center py-6 sm:py-8">
-              <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 text-orange-400 mx-auto mb-3 sm:mb-4" />
-              <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No featured jobs available</h3>
-              <p className="text-gray-600 text-sm sm:text-base">Check back later for new opportunities!</p>
+          {filteredJobs.filter(job => job.highlighted !== true).length > 6 && (
+            <div className="text-center mt-4">
+              <Link 
+                href="/jobs"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              >
+                <Eye className="w-4 h-4" />
+                View All Jobs
+              </Link>
             </div>
           )}
         </motion.div>
@@ -871,7 +1015,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
               </div>
               <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Complete KYC to get your first job</h3>
               <p className="text-gray-600 text-sm sm:text-base mb-6 max-w-md mx-auto">
-                To access job listings and apply for opportunities, please complete your KYC verification. This helps us ensure safety and trust for all users.
+                Complete your KYC to view and apply for jobs.
               </p>
               <Link 
                 href="/kyc-profile"
@@ -905,19 +1049,41 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                 ? savedJobs.some(sj => getJobIdFromRef(sj?.job) === job._id)
                 : false;
               
+              const isHighlighted = job.highlighted === true;
+              
               return (
                 <motion.div
                   key={job._id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="border border-gray-200 rounded-lg sm:rounded-xl p-4 sm:p-6 hover:shadow-md transition-shadow"
+                  className={`border rounded-lg sm:rounded-xl p-4 sm:p-6 hover:shadow-md transition-shadow relative ${
+                    isHighlighted 
+                      ? 'border-2 border-yellow-400 bg-gradient-to-r from-yellow-50 to-orange-50 shadow-lg' 
+                      : 'border-gray-200'
+                  }`}
                 >
+                  {/* Highlighted Badge */}
+                  {isHighlighted && (
+                    <div className="absolute top-0 right-0 bg-yellow-500 text-white px-3 py-1 text-xs font-bold rounded-bl-lg">
+                      ⭐ FEATURED
+                    </div>
+                  )}
+                  
                   <div className="flex flex-col gap-4">
                     <div className="flex-1">
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1 truncate">{job.title}</h3>
-                          <p className="text-base sm:text-lg text-blue-600 font-medium truncate">{job.company}</p>
+                          <h3 className={`text-lg sm:text-xl font-semibold mb-1 truncate ${
+                            isHighlighted ? 'text-gray-900' : 'text-gray-900'
+                          }`}>
+                            {job.title}
+                            {isHighlighted && <span className="ml-2 text-yellow-600">🔥</span>}
+                          </h3>
+                          <p className={`text-base sm:text-lg font-medium truncate ${
+                            isHighlighted ? 'text-yellow-600' : 'text-blue-600'
+                          }`}>
+                            {job.company}
+                          </p>
                         </div>
                         <div className="flex items-center gap-2 ml-3">
                           <button
@@ -940,9 +1106,15 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                         </div>
                         <div className="flex items-center gap-1">
                           <DollarSign className="w-4 h-4" />
-                          <span className="truncate">{formatSalaryToINR(job.salary)}</span>
+                          <span className={`truncate ${isHighlighted ? 'font-semibold text-green-600' : ''}`}>
+                            {formatSalaryToINR(job.salary)}
+                          </span>
                         </div>
-                        <span className="px-2 py-1 bg-blue-100 text-blue-600 rounded-full text-xs w-fit">
+                        <span className={`px-2 py-1 rounded-full text-xs w-fit ${
+                          isHighlighted 
+                            ? 'bg-yellow-100 text-yellow-800 font-semibold' 
+                            : 'bg-blue-100 text-blue-600'
+                        }`}>
                           {job.type}
                         </span>
                       </div>
@@ -951,7 +1123,11 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                       
                       <div className="flex flex-wrap gap-2 mb-4">
                         {job.requirements?.slice(0, 3).map((req, index) => (
-                          <span key={index} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs sm:text-sm truncate">
+                          <span key={index} className={`px-3 py-1 rounded-full text-xs sm:text-sm truncate ${
+                            isHighlighted 
+                              ? 'bg-yellow-100 text-yellow-800 font-medium' 
+                              : 'bg-gray-100 text-gray-700'
+                          }`}>
                             {req}
                           </span>
                         ))}
@@ -966,6 +1142,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                     <div className="flex flex-col gap-3">
                       <div className="text-xs sm:text-sm text-gray-500">
                         Posted {new Date(job.createdAt).toLocaleDateString()}
+                        {isHighlighted && <span className="ml-2 text-yellow-600 font-semibold">• Featured Job</span>}
                       </div>
                       
                       <div className="flex flex-col sm:flex-row gap-2">
@@ -977,16 +1154,24 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                         ) : (
                           <button
                             onClick={() => handleApplyJob(job._id)}
-                            className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm sm:text-base"
+                            className={`flex items-center justify-center gap-2 px-4 py-2 text-white rounded-lg transition-colors font-medium text-sm sm:text-base ${
+                              isHighlighted 
+                                ? 'bg-yellow-500 hover:bg-yellow-600 shadow-md' 
+                                : 'bg-blue-600 hover:bg-blue-700'
+                            }`}
                           >
                             <Plus className="w-4 h-4" />
-                            Apply Now
+                            {isHighlighted ? '⚡ Apply Now' : 'Apply Now'}
                           </button>
                         )}
                         
                         <Link 
                           href={`/jobs/${job._id}`}
-                          className="flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm sm:text-base"
+                          className={`flex items-center justify-center gap-2 px-4 py-2 border rounded-lg transition-colors text-sm sm:text-base ${
+                            isHighlighted 
+                              ? 'border-yellow-300 text-yellow-700 hover:bg-yellow-50' 
+                              : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                          }`}
                         >
                           <Eye className="w-4 h-4" />
                           View Details
@@ -1009,9 +1194,19 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6"
         >
-          <div className="flex items-center gap-2 mb-4">
-            <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900">Recent Approved Applications</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Recent Approved Applications</h2>
+            </div>
+            {Array.isArray(recentApprovedApplications) && recentApprovedApplications.length > 0 && (
+              <Link 
+                href="/student/approved-applications"
+                className="text-sm text-green-600 hover:text-green-700 font-medium"
+              >
+                View All
+              </Link>
+            )}
           </div>
           <div className="space-y-3">
             {Array.isArray(recentApprovedApplications) && recentApprovedApplications.length > 0 ? recentApprovedApplications.slice(0, 3).map((application) => (
@@ -1155,6 +1350,97 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
         </motion.div>
       )}
 
+      {/* Approved Applications with Contact Details - Mobile Optimized */}
+      {kycStatus.isCompleted && Array.isArray(approvedApplicationsWithContact) && approvedApplicationsWithContact.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+          className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl sm:rounded-2xl p-4 sm:p-6 border-2 border-green-300 shadow-lg"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-green-500 rounded-full">
+                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-white fill-current" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
+                  🎉 Approved Applications with Contact Details
+                  <span className="px-2 py-1 bg-green-200 text-green-800 rounded-full text-xs font-semibold">
+                    CONTACT AVAILABLE
+                  </span>
+                </h2>
+                <p className="text-xs sm:text-sm text-gray-600">Congratulations! You can now contact these employers directly</p>
+              </div>
+            </div>
+            <Link 
+              href="/student/approved-applications"
+              className="text-sm text-green-600 hover:text-green-700 font-medium"
+            >
+              View All
+            </Link>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+            {approvedApplicationsWithContact.slice(0, 3).map((application) => (
+              <motion.div
+                key={application._id}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 border-2 border-green-300 hover:shadow-lg transition-all duration-300 relative overflow-hidden"
+              >
+                {/* Approved Badge */}
+                <div className="absolute top-0 right-0 bg-green-500 text-white px-2 py-1 text-xs font-bold rounded-bl-lg">
+                  ✅ APPROVED
+                </div>
+                
+                <div className="flex items-start justify-between mb-3 pt-4">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-gray-900 mb-1 text-sm sm:text-base truncate">{application.jobTitle}</h3>
+                    <p className="text-green-600 font-semibold text-xs sm:text-sm truncate">{application.companyName}</p>
+                  </div>
+                </div>
+                
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-3 text-xs text-gray-600">
+                  <div className="flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />
+                    <span className="truncate">{application.location}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <DollarSign className="w-3 h-3" />
+                    <span className="truncate font-semibold text-green-600">{formatSalaryToINR(application.salaryRange)}</span>
+                  </div>
+                </div>
+                
+                {/* Employer Contact Preview */}
+                <div className="bg-green-50 rounded-lg p-2 mb-3">
+                  <div className="text-xs text-green-700 font-medium mb-1">Contact Person:</div>
+                  <div className="text-xs text-gray-700 truncate">{application.employerContact?.name || 'Not provided'}</div>
+                  {application.employerContact?.phone && application.employerContact.phone !== 'Not provided' && (
+                    <div className="text-xs text-green-600 truncate">📞 {application.employerContact.phone}</div>
+                  )}
+                </div>
+                
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Link 
+                    href="/student/approved-applications"
+                    className="flex-1 px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-xs font-bold shadow-md text-center"
+                  >
+                    📞 View Contact Details
+                  </Link>
+                  <Link 
+                    href={`/jobs/${application.jobId}`}
+                    className="px-3 py-2 border border-green-300 text-green-700 rounded-lg hover:bg-green-50 transition-colors text-xs text-center font-medium"
+                  >
+                    View Job
+                  </Link>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
       {/* Quick Actions - Mobile Optimized */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -1163,7 +1449,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
         className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6"
       >
         <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
           {quickActions.map((action) => (
             <a
               key={action.name}

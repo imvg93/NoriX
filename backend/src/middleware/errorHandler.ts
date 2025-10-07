@@ -73,10 +73,18 @@ export const errorHandler = (
 
   // Concise logging + stack for server-side diagnosis
   const timestamp = new Date().toISOString();
-  console.warn(`[${timestamp}] ${req.method} ${req.url} -> ${err.message}`);
-  if (process.env.NODE_ENV !== 'test') {
-    if ((err as any).stack) {
-      console.error(`[${timestamp}] Stack:`, (err as any).stack);
+  
+  // Only log 404 errors in development or if they're not common bot patterns
+  const is404 = error.statusCode === 404;
+  const isBotRequest = /\.(js|xml|cgi|php|asp|jsp|txt|log|conf|ini|env|git|svn|htaccess|htpasswd|sql|bak|old|tmp|temp)$/i.test(req.url) ||
+                      /(admin|wp-admin|wp-login|phpmyadmin|mysql|database|config|backup|test|debug|loginMsg|rootDesc|get\.cgi|robots\.txt|sitemap\.xml|favicon\.ico|\.well-known)/i.test(req.url);
+  
+  if (!is404 || (is404 && !isBotRequest)) {
+    console.warn(`[${timestamp}] ${req.method} ${req.url} -> ${err.message}`);
+    if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV !== 'production') {
+      if ((err as any).stack) {
+        console.error(`[${timestamp}] Stack:`, (err as any).stack);
+      }
     }
   }
 

@@ -456,7 +456,7 @@ router.patch('/applications/:applicationId/approve', authenticateToken, requireE
   if (socketManager && application.studentId) {
     const studentId = typeof application.studentId === 'object' 
       ? (application.studentId as any)._id.toString() 
-      : application.studentId.toString();
+      : String(application.studentId);
     
     const jobData = typeof application.jobId === 'object' ? application.jobId : job;
     
@@ -530,7 +530,7 @@ router.get('/applications/recent-approved', authenticateToken, requireStudent, a
     status: 'accepted'
   })
     .populate('jobId', 'jobTitle companyName location salaryRange')
-    .populate('employer', 'name companyName')
+    .populate('employer', 'name companyName phone address')
     .sort({ shortlistedDate: -1 }) // Sort by approval date (most recent first)
     .limit(Number(limit));
 
@@ -543,10 +543,58 @@ router.get('/applications/recent-approved', authenticateToken, requireStudent, a
     status: app.status,
     approvedDate: app.shortlistedDate || app.updatedAt,
     appliedDate: app.appliedAt,
-    jobId: (app.jobId as any)?._id || app.jobId
+    jobId: (app.jobId as any)?._id || app.jobId,
+    // Include employer contact details for approved applications
+    employerContact: {
+      name: (app.employer as any)?.name || 'Unknown',
+      companyName: (app.employer as any)?.companyName || 'Unknown Company',
+      phone: (app.employer as any)?.phone || 'Not provided',
+      address: (app.employer as any)?.address || 'Not provided'
+    }
   }));
 
   sendSuccessResponse(res, { applications: recentApplications }, 'Recent approved applications retrieved successfully');
+}));
+
+// @route   GET /api/enhanced-jobs/applications/approved-with-contact
+// @desc    Get approved applications with employer contact details for the logged-in student
+// @access  Private (Students only)
+router.get('/applications/approved-with-contact', authenticateToken, requireStudent, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { limit = 10 } = req.query;
+
+  const applications = await Application.find({ 
+    studentId: req.user!._id,
+    status: 'accepted'
+  })
+    .populate('jobId', 'jobTitle companyName location salaryRange workType description')
+    .populate('employer', 'name companyName phone address email businessType')
+    .sort({ shortlistedDate: -1 }) // Sort by approval date (most recent first)
+    .limit(Number(limit));
+
+  const approvedApplicationsWithContact = applications.map(app => ({
+    _id: app._id,
+    jobTitle: (app.jobId as any)?.jobTitle || 'Unknown Job',
+    companyName: (app.jobId as any)?.companyName || 'Unknown Company',
+    location: (app.jobId as any)?.location || 'Unknown Location',
+    salaryRange: (app.jobId as any)?.salaryRange || 'Not specified',
+    workType: (app.jobId as any)?.workType || 'Not specified',
+    description: (app.jobId as any)?.description || 'No description available',
+    status: app.status,
+    approvedDate: app.shortlistedDate || app.updatedAt,
+    appliedDate: app.appliedAt,
+    jobId: (app.jobId as any)?._id || app.jobId,
+    // Full employer contact details for approved applications
+    employerContact: {
+      name: (app.employer as any)?.name || 'Unknown',
+      companyName: (app.employer as any)?.companyName || 'Unknown Company',
+      phone: (app.employer as any)?.phone || 'Not provided',
+      address: (app.employer as any)?.address || 'Not provided',
+      email: (app.employer as any)?.email || 'Not provided',
+      businessType: (app.employer as any)?.businessType || 'Not specified'
+    }
+  }));
+
+  sendSuccessResponse(res, { applications: approvedApplicationsWithContact }, 'Approved applications with contact details retrieved successfully');
 }));
 
 // @route   GET /api/enhanced-jobs/applications/student
