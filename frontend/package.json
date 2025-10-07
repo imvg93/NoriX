@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "node start.js",
     "start:next": "next start -p ${PORT:-3000}",
-    "lint": "next lint"
+    "lint": "next lint",
+    "clear-cache": "node clear-cache.js",
+    "fresh-start": "npm run clear-cache && npm run dev"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.7",

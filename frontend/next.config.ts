@@ -15,11 +15,42 @@ const nextConfig: NextConfig = {
   env: {
     PORT: process.env.PORT || '3000',
   },
-  turbopack: {
-    rules: {
-      '*.svg': {
-        loaders: ['@svgr/webpack'],
-        as: '*.js',
+  // Webpack configuration to handle chunk loading issues
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+      };
+    }
+    
+    // Optimize chunk splitting
+    config.optimization = {
+      ...config.optimization,
+      splitChunks: {
+        chunks: 'all',
+        cacheGroups: {
+          vendor: {
+            test: /[\\/]node_modules[\\/]/,
+            name: 'vendors',
+            chunks: 'all',
+          },
+        },
+      },
+    };
+    
+    return config;
+  },
+  // Turbopack configuration
+  experimental: {
+    turbo: {
+      rules: {
+        '*.svg': {
+          loaders: ['@svgr/webpack'],
+          as: '*.js',
+        },
       },
     },
   },
@@ -28,7 +59,7 @@ const nextConfig: NextConfig = {
       return [
         {
           source: "/api/:path*",
-          destination: "http://localhost:5000/api/:path*",
+          destination: "http://localhost:5001/api/:path*", // Fixed port to match backend
         },
       ];
     }

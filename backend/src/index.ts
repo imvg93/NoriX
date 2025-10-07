@@ -25,6 +25,7 @@ import notificationRoutes from './routes/notifications';
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
+import { botFilter } from './middleware/botFilter';
 
 // Load environment variables
 dotenv.config();
@@ -107,6 +108,9 @@ app.get('/api/test', (req, res) => {
     }
   });
 });
+
+// Bot filter middleware - should be applied before API routes
+app.use(botFilter);
 
 // API Routes
 app.use('/api/auth', authRoutes);

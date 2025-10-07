@@ -61,6 +61,7 @@ interface Job {
   views?: number;
   applicationsCount?: number;
   requirements?: string[];
+  highlighted?: boolean;
 }
 
 interface Application {
@@ -258,7 +259,7 @@ class ApiService {
       requirements,
       skillsRequired: requirements,
       applicants: raw.applicants || raw.applications || [],
-      highlighted: raw.highlighted ?? false,
+      highlighted: raw.highlighted === true || raw.highlighted === 'true', // Ensure boolean conversion
     };
 
     return base as Job;
@@ -594,6 +595,14 @@ class ApiService {
 
   async getRecentApprovedApplications(limit = 10): Promise<any> {
     const raw = await this.request<any>(`/enhanced-jobs/applications/recent-approved?limit=${limit}`);
+    const payload = this.unwrap<any>(raw);
+    return {
+      applications: Array.isArray(payload?.applications) ? payload.applications : [],
+    };
+  }
+
+  async getApprovedApplicationsWithContact(limit = 10): Promise<any> {
+    const raw = await this.request<any>(`/enhanced-jobs/applications/approved-with-contact?limit=${limit}`);
     const payload = this.unwrap<any>(raw);
     return {
       applications: Array.isArray(payload?.applications) ? payload.applications : [],
