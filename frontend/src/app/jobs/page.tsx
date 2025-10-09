@@ -76,6 +76,7 @@ const JobsPage = () => {
         setLoading(true);
 
         const jobsResponse = await apiService.getJobs() as JobsResponse;
+        console.log('📊 Fetched jobs from /api/jobs:', jobsResponse.jobs?.length || 0, jobsResponse);
         setJobs(jobsResponse.jobs || []);
 
         if (isAuthenticated && user?.userType === "student") {

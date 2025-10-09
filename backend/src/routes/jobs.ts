@@ -36,6 +36,21 @@ router.get('/', async (req, res, next) => {
       approvalStatus: 'approved' // Only show approved jobs to public
     };
 
+    console.log('🔍 GET /api/jobs - Filter:', filter);
+    
+    // Debug: Check all jobs in database
+    const allJobs = await Job.countDocuments({});
+    const activeJobs = await Job.countDocuments({ status: 'active' });
+    const approvedJobs = await Job.countDocuments({ approvalStatus: 'approved' });
+    const activeApprovedJobs = await Job.countDocuments(filter);
+    
+    console.log('📊 Database stats:', { 
+      total: allJobs, 
+      active: activeJobs, 
+      approved: approvedJobs,
+      activeAndApproved: activeApprovedJobs 
+    });
+
     if (location) filter.location = { $regex: location, $options: 'i' };
     if (type) filter.type = type;
     if (category) filter.category = { $regex: category, $options: 'i' };
@@ -55,14 +70,23 @@ router.get('/', async (req, res, next) => {
     const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
     
     const jobs = await Job.find(filter)
-
       .populate('employerId', 'name companyName businessType')
-
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit as string));
 
     const total = await Job.countDocuments(filter);
+
+    console.log('✅ Returning jobs:', jobs.length, 'Total:', total);
+    if (jobs.length > 0) {
+      console.log('📋 Sample job:', {
+        id: jobs[0]._id,
+        title: jobs[0].jobTitle,
+        status: jobs[0].status,
+        approvalStatus: jobs[0].approvalStatus,
+        company: jobs[0].companyName
+      });
+    }
 
     res.json({
       jobs,
