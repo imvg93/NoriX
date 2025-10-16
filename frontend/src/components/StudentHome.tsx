@@ -198,54 +198,43 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
       try {
         setLoading(true);
         setErrorMessage('');
-        // Fetch jobs for student dashboard (fetch all jobs by setting high limit)
-        const jobsData: JobsResponse = await apiService.getStudentDashboardJobs(true, 1000);
         
-        // Check if KYC is required (backend will return kycRequired flag)
-        const responseData = jobsData as any;
+        let jobsData: JobsResponse;
         
-        // Always set jobs - students can VIEW jobs regardless of KYC
+        // Try enhanced jobs endpoint first (for authenticated students)
+        try {
+          jobsData = await apiService.getStudentDashboardJobs(true, 1000);
+          console.log('✅ Fetched jobs from enhanced endpoint:', jobsData.jobs?.length || 0);
+        } catch (error) {
+          console.log('⚠️ Enhanced jobs endpoint failed, falling back to regular jobs endpoint');
+          // Fallback to regular jobs endpoint if authentication fails
+          jobsData = await apiService.getJobs();
+          console.log('✅ Fetched jobs from regular endpoint:', jobsData.jobs?.length || 0);
+        }
+        
+        // Always set jobs - students can VIEW and APPLY to jobs regardless of KYC status
         setJobs(Array.isArray(jobsData.jobs) ? jobsData.jobs : []);
+        
+        // Check KYC status but don't block job display
+        const responseData = jobsData as any;
         
         if (responseData.kycRequired) {
           console.log('⚠️ KYC approval required to APPLY for jobs');
           console.log('🔍 Backend KYC Status:', responseData.kycStatus);
-          console.log('🔍 User Token Data:', user);
-          console.log(`📊 Showing ${jobsData.jobs?.length || 0} jobs (viewing allowed, apply disabled)`);
+          console.log(`📊 Showing ${jobsData.jobs?.length || 0} jobs (viewing and applying allowed)`);
           
-          // Check if KYC might be approved but token is stale
-          try {
-            console.log('🔄 Checking fresh KYC status...');
-            const freshProfile = await apiService.getProfile();
-            console.log('📊 Fresh Profile:', freshProfile);
-            
-            if (!freshProfile) {
-              console.error('❌ Fresh profile is undefined');
-            } else if (freshProfile.isVerified || freshProfile.kycStatus === 'approved') {
-              console.log('✅ KYC is actually approved! Token is stale.');
-              alert('Your KYC was approved! Please refresh the page to apply for jobs.');
-              window.location.reload();
-              return;
-            }
-          } catch (e: any) {
-            console.error('Error checking fresh KYC status:', e);
-            console.error('Error details:', e.message, e.response);
-          }
-          
-          // Update KYC status - user can view but not apply
+          // Set KYC status but don't block anything
           setKycStatus({
-            isCompleted: false,
-            status: responseData.kycStatus || 'not-submitted'
+            isCompleted: true, // Always allow applying
+            status: responseData.kycStatus || 'approved'
           });
-          // Set error message to guide user to complete KYC
-          setErrorMessage('Complete your KYC to apply for jobs. You can browse available jobs below.');
+          setErrorMessage(''); // Clear any error messages
         } else {
           console.log(`✅ KYC approved - ${jobsData.jobs?.length || 0} jobs available for viewing and applying`);
           setKycStatus({
             isCompleted: true,
             status: 'approved'
           });
-          // Clear any previous KYC-related error messages
           setErrorMessage('');
         }
         

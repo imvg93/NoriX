@@ -77,19 +77,43 @@ router.get('/', async (req, res, next) => {
 
     const total = await Job.countDocuments(filter);
 
-    console.log('✅ Returning jobs:', jobs.length, 'Total:', total);
-    if (jobs.length > 0) {
+    // Normalize job data to ensure consistent field names
+    const normalizedJobs = jobs.map(job => {
+      const jobObj = job.toObject() as any; // Use any to handle dynamic properties
+      
+      // Handle field name inconsistencies
+      if (!jobObj.jobTitle && jobObj.title) {
+        jobObj.jobTitle = jobObj.title;
+      }
+      if (!jobObj.companyName && jobObj.company) {
+        jobObj.companyName = jobObj.company;
+      }
+      if (!jobObj.salaryRange && jobObj.salary) {
+        jobObj.salaryRange = typeof jobObj.salary === 'number' ? `₹${jobObj.salary}/month` : jobObj.salary;
+      }
+      if (!jobObj.workType && jobObj.type) {
+        jobObj.workType = jobObj.type;
+      }
+      if (!jobObj.skillsRequired && jobObj.requirements) {
+        jobObj.skillsRequired = Array.isArray(jobObj.requirements) ? jobObj.requirements : [];
+      }
+      
+      return jobObj;
+    });
+
+    console.log('✅ Returning jobs:', normalizedJobs.length, 'Total:', total);
+    if (normalizedJobs.length > 0) {
       console.log('📋 Sample job:', {
-        id: jobs[0]._id,
-        title: jobs[0].jobTitle,
-        status: jobs[0].status,
-        approvalStatus: jobs[0].approvalStatus,
-        company: jobs[0].companyName
+        id: normalizedJobs[0]._id,
+        title: normalizedJobs[0].jobTitle,
+        company: normalizedJobs[0].companyName,
+        status: normalizedJobs[0].status,
+        approvalStatus: normalizedJobs[0].approvalStatus
       });
     }
 
     res.json({
-      jobs,
+      jobs: normalizedJobs,
       pagination: {
         page: parseInt(page as string),
         limit: parseInt(limit as string),

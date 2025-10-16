@@ -116,6 +116,7 @@ interface User {
   address?: string;
   isVerified?: boolean;
   emailVerified?: boolean;
+  kycStatus?: 'not-submitted' | 'pending' | 'approved' | 'rejected' | null;
   createdAt: string;
 }
 

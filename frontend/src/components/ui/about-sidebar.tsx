@@ -28,7 +28,7 @@ export function AboutSidebar({ className }: SidebarProps) {
         <div className="flex items-center space-x-2 mb-8">
           <div className="relative h-10 w-32">
             <Image
-              src="/img/logogreen.png"
+              src="/img/norixwhite.png"
               alt="NoriX logo"
               fill
               sizes="128px"

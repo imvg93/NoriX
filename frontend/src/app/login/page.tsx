@@ -6,7 +6,7 @@ export default function Login() {
       heading="Sign in to your account"
       logo={{
         url: "/",
-        src: "/img/logowhite.png",
+        src: "/img/norixgreen.png",
         alt: "NoriX",
         title: "NoriX",
       }}

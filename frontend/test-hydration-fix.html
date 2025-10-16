@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socket Hydration Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔌 Socket Connection & Hydration Test</h1>
+    
+    <div class="test-section">
+        <h2>Test Instructions</h2>
+        <ol>
+            <li>Open your Next.js app in development mode</li>
+            <li>Open browser developer tools (F12)</li>
+            <li>Go to Console tab</li>
+            <li>Look for the clientReferenceManifest error</li>
+            <li>Check if socket connection is working</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>Expected Fixes Applied</h2>
+        <div class="info status">
+            ✅ Socket service initialization deferred to client-side only<br>
+            ✅ SocketStatus component uses SSR-safe rendering<br>
+            ✅ Custom useSocket hook for better state management<br>
+            ✅ Next.js config optimized for chunk splitting<br>
+            ✅ Global window assignment made safer
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Console Test Commands</h2>
+        <p>Run these commands in your browser console to test the socket:</p>
+        <pre>
+// Check if socket service is available
+console.log('Socket service:', window.socketService);
+
+// Check connection status
+window.socketService?.checkConnection();
+
+// Test reconnection
+window.socketService?.forceReconnect();
+
+// Test ping
+window.socketService?.ping();
+        </pre>
+    </div>
+
+    <div class="test-section">
+        <h2>Troubleshooting Steps</h2>
+        <div class="warning status">
+            <strong>If you still see clientReferenceManifest error:</strong>
+            <ol>
+                <li>Clear Next.js cache: <code>npm run clear-cache</code></li>
+                <li>Delete <code>.next</code> folder manually</li>
+                <li>Restart development server: <code>npm run dev</code></li>
+                <li>Hard refresh browser (Ctrl+Shift+R)</li>
+            </ol>
+        </div>
+        
+        <div class="info status">
+            <strong>If socket connection issues persist:</strong>
+            <ol>
+                <li>Check browser console for socket logs</li>
+                <li>Verify backend server is running on correct port</li>
+                <li>Check network tab for connection attempts</li>
+                <li>Use the SocketStatus component in development mode</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Verification Checklist</h2>
+        <div class="success status">
+            <input type="checkbox"> No clientReferenceManifest error in console<br>
+            <input type="checkbox"> Socket connects automatically on page load<br>
+            <input type="checkbox"> SocketStatus component renders without hydration warnings<br>
+            <input type="checkbox"> Socket reconnects after network issues<br>
+            <input type="checkbox"> No console errors related to socket initialization
+        </div>
+    </div>
+
+    <script>
+        console.log('🔌 Socket Hydration Test Page Loaded');
+        console.log('💡 Check your Next.js app console for socket-related logs');
+    </script>
+</body>
+</html>

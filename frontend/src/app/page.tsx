@@ -79,7 +79,7 @@ export default function Home() {
               <Link href="/" className="flex items-center">
                 <div className="relative h-12 w-40 sm:h-16 sm:w-56">
                   <Image
-                    src="/img/logowhite.png"
+                    src="/img/norixgreen.png"
                     alt="NoriX logo"
                     fill
                     sizes="(max-width: 640px) 160px, 224px"

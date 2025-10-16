@@ -540,7 +540,7 @@ const ServicesPage = () => {
             <Link href="/" className="flex items-center">
               <div className="relative h-12 w-40 sm:h-12 sm:w-40">
                 <Image
-                  src="/img/logowhite.png"
+                  src="/img/norixgreen.png"
                   alt="NoriX logo"
                   fill
                   sizes="(max-width: 640px) 160px, 224px"

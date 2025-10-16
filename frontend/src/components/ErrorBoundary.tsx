@@ -1,6 +1,7 @@
 "use client";
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { ChunkErrorHandler } from '../utils/chunkErrorHandler';
 
 interface Props {
   children: ReactNode;
@@ -25,21 +26,16 @@ class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
     
-    // Check if it's a chunk loading error
-    if (error.name === 'ChunkLoadError' || error.message.includes('Loading chunk')) {
-      console.log('Chunk loading error detected, attempting to reload...');
-      // Reload the page after a short delay
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+    // Use the chunk error handler
+    if (ChunkErrorHandler.handleChunkError(error)) {
+      return; // Chunk error handler will take care of it
     }
   }
 
   render() {
     if (this.state.hasError) {
-      // Check if it's a chunk loading error
-      if (this.state.error?.name === 'ChunkLoadError' || 
-          this.state.error?.message.includes('Loading chunk')) {
+      // Check if it's a chunk loading error using the handler
+      if (this.state.error && ChunkErrorHandler.handleChunkError(this.state.error)) {
         return (
           <div className="min-h-screen flex items-center justify-center bg-gray-50">
             <div className="text-center p-8">

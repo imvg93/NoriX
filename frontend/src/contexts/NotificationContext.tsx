@@ -151,7 +151,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       new window.Notification(notification.title, {
         body: notification.message,
-        icon: '/favicon.ico',
+        icon: '/img/Favicon.ico',
         tag: newNotification.id
       });
     }
