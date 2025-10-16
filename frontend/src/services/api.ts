@@ -116,6 +116,7 @@ interface User {
   address?: string;
   isVerified?: boolean;
   emailVerified?: boolean;
+  kycStatus?: 'not-submitted' | 'pending' | 'approved' | 'rejected' | null;
   createdAt: string;
 }
 
@@ -362,8 +363,49 @@ class ApiService {
   }
 
   async getProfile(): Promise<User> {
-    const response = await this.request<{ user: User }>('/users/profile');
-    return response.user;
+    try {
+      const response = await this.request<any>('/users/profile');
+      console.log('📊 getProfile raw response:', response);
+      console.log('📊 Response type:', typeof response);
+      console.log('📊 Response keys:', response ? Object.keys(response) : 'null');
+      
+      // Handle different response structures
+      let user = null;
+      
+      // Check if response has user property
+      if (response && response.user) {
+        user = response.user;
+      }
+      // Check if response itself is the user object
+      else if (response && response._id && response.email) {
+        user = response;
+      }
+      // Check if response has data.user
+      else if (response && response.data && response.data.user) {
+        user = response.data.user;
+      }
+      
+      if (!user) {
+        console.error('❌ Invalid profile response structure:', {
+          response,
+          hasUser: !!response?.user,
+          hasId: !!response?._id,
+          hasDataUser: !!response?.data?.user
+        });
+        throw new Error('Invalid profile response from server');
+      }
+      
+      console.log('✅ Extracted user:', user);
+      return user;
+    } catch (error: any) {
+      console.error('❌ getProfile error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.status,
+        details: error.details
+      });
+      throw error;
+    }
   }
 
   // Employer KYC APIs
@@ -505,8 +547,11 @@ class ApiService {
     });
   }
 
-  async getStudentDashboardJobs(showHighlighted = true): Promise<JobsResponse> {
-    const queryParams = new URLSearchParams({ showHighlighted: showHighlighted.toString() });
+  async getStudentDashboardJobs(showHighlighted = true, limit = 1000): Promise<JobsResponse> {
+    const queryParams = new URLSearchParams({ 
+      showHighlighted: showHighlighted.toString(),
+      limit: limit.toString()
+    });
     const raw = await this.request<any>(`/enhanced-jobs/student-dashboard?${queryParams}`);
     const payload = this.unwrap<any>(raw);
     const jobs = Array.isArray(payload?.jobs) ? payload.jobs.map((j: any) => this.mapEnhancedJobToFrontendJob(j)) : [];
@@ -514,7 +559,7 @@ class ApiService {
       jobs,
       pagination: {
         page: payload?.pagination?.current || 1,
-        limit: 10,
+        limit: limit,
         total: payload?.pagination?.total || jobs.length,
         pages: payload?.pagination?.pages || 1,
       }

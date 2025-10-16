@@ -9,7 +9,10 @@
     "start:next": "next start -p ${PORT:-3000}",
     "lint": "next lint",
     "clear-cache": "node clear-cache.js",
-    "fresh-start": "npm run clear-cache && npm run dev"
+    "fix-chunks": "node fix-chunk-loading.js",
+    "fresh-start": "npm run clear-cache && npm run dev",
+    "generate-favicons": "node generate-favicons.js",
+    "update-favicon": "node update-favicon.js"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.7",

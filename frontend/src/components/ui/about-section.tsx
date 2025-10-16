@@ -260,7 +260,7 @@ export default function AboutSection() {
             <div className="text-right">
             <div className="relative h-16 w-48 ml-auto">
                     <Image
-                      src="/img/logowhite.png"
+                      src="/img/norixgreen.png"
                       alt="NoriX logo"
                       fill
                       sizes="192px"

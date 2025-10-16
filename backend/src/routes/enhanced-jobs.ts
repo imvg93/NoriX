@@ -51,7 +51,7 @@ router.post('/', authenticateToken, requireEmployer, asyncHandler(async (req: Au
   }
 
   // Create job with only essential fields
-  const job = await Job.create({
+  const jobData = {
     jobId: new mongoose.Types.ObjectId(),
     employerId: req.user!._id,
     jobTitle,
@@ -72,11 +72,16 @@ router.post('/', authenticateToken, requireEmployer, asyncHandler(async (req: Au
     
     // System fields
     status: 'active',
+    // approvalStatus will be set by schema default: 'approved'
 
     highlighted: true, // Jobs stay highlighted until assigned
 
     createdAt: new Date()
-  });
+  };
+
+  console.log('📝 Creating job with data:', jobData);
+  const job = await Job.create(jobData);
+  console.log('✅ Job created with approvalStatus:', job.approvalStatus);
 
   // Populate employer info
   await job.populate('employerId', 'name email companyName');
@@ -145,32 +150,12 @@ router.get('/student-dashboard', authenticateToken, requireStudent, asyncHandler
       isKYCApproved
     });
     
-    // If KYC not approved, return empty jobs list with KYC status
-    if (!isKYCApproved) {
-      console.log(`⚠️ Student ${studentId} KYC not approved - hiding job listings`);
-      
-      return sendSuccessResponse(res, {
-        jobs: [],
-        pagination: {
-          current: Number(page),
-          pages: 0,
-          total: 0
-        },
-        kycRequired: true,
-        kycStatus: kycStatus,
-        message: 'Complete KYC to get your first job'
-      }, 'KYC approval required to view jobs');
-    }
-    
-    // KYC approved - return jobs
+    // BUILD QUERY - Show jobs regardless of KYC status
+    // Students can VIEW jobs, but need KYC to APPLY
     const filter: any = {
-      status: 'active'
+      status: 'active',
+      approvalStatus: 'approved'
     };
-    // Be tolerant if some legacy jobs lack approvalStatus; show only approved when present
-    filter.$or = [
-      { approvalStatus: 'approved' },
-      { approvalStatus: { $exists: false } }
-    ];
 
     const jobs = await Job.find(filter)
       .populate('employerId', 'name companyName email')
@@ -180,15 +165,45 @@ router.get('/student-dashboard', authenticateToken, requireStudent, asyncHandler
 
     const total = await Job.countDocuments(filter);
 
+    // Normalize job data to ensure consistent field names
+    const normalizedJobs = jobs.map(job => {
+      const jobObj = job.toObject() as any; // Use any to handle dynamic properties
+      
+      // Handle field name inconsistencies
+      if (!jobObj.jobTitle && jobObj.title) {
+        jobObj.jobTitle = jobObj.title;
+      }
+      if (!jobObj.companyName && jobObj.company) {
+        jobObj.companyName = jobObj.company;
+      }
+      if (!jobObj.salaryRange && jobObj.salary) {
+        jobObj.salaryRange = typeof jobObj.salary === 'number' ? `₹${jobObj.salary}/month` : jobObj.salary;
+      }
+      if (!jobObj.workType && jobObj.type) {
+        jobObj.workType = jobObj.type;
+      }
+      if (!jobObj.skillsRequired && jobObj.requirements) {
+        jobObj.skillsRequired = Array.isArray(jobObj.requirements) ? jobObj.requirements : [];
+      }
+      
+      return jobObj;
+    });
+
+    console.log(`✅ Returning ${normalizedJobs.length} jobs to student (KYC: ${isKYCApproved ? 'approved' : 'not approved'})`);
+
+    // Return jobs with KYC status flag
+    // kycRequired indicates if KYC is needed to APPLY (not to view)
     sendSuccessResponse(res, {
-      jobs,
+      jobs: normalizedJobs,
       pagination: {
         current: Number(page),
         pages: Math.ceil(total / Number(limit)),
         total
       },
-      kycRequired: false,
-      kycStatus: 'approved'
+      kycRequired: false,  // Always allow applying - no KYC restrictions
+      kycStatus: kycStatus,
+      canApply: true, // Always allow applying
+      message: 'Jobs retrieved successfully - you can view and apply to all jobs'
     }, 'Jobs retrieved successfully');
   } catch (e: any) {
     console.error('❌ Failed to fetch student dashboard jobs:', e?.message);
@@ -212,18 +227,9 @@ router.post('/:jobId/apply', authenticateToken, requireStudent, asyncHandler(asy
       return sendErrorResponse(res, 400, 'Invalid job ID');
     }
 
-    // Check if student's KYC is approved
+    // Allow all students to apply - no KYC restrictions
     const studentId = req.user!._id;
-    const user = await User.findById(studentId).select('kycStatus isVerified');
-    const kyc = await KYC.findOne({ userId: studentId, isActive: true });
-    
-    const kycStatus = kyc?.verificationStatus || user?.kycStatus || 'not_submitted';
-    const isKYCApproved = kycStatus === 'approved' || user?.isVerified;
-    
-    if (!isKYCApproved) {
-      console.log(`⚠️ Student ${studentId} attempted to apply without KYC approval`);
-      return sendErrorResponse(res, 403, 'Please complete and get your KYC approved before applying to jobs');
-    }
+    console.log(`✅ Student ${studentId} applying for job - KYC restrictions removed`);
 
     // Check if job exists and is active
     const job = await Job.findById(new mongoose.Types.ObjectId(jobId));

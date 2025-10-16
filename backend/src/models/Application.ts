@@ -153,7 +153,22 @@ const applicationSchema = new Schema<IApplication>({
     maxlength: [1000, 'Employer feedback cannot exceed 1000 characters']
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { 
+    virtuals: true,
+    transform: function(doc: any, ret: any) {
+      // Ensure virtuals don't crash during serialization
+      try {
+        ret.duration = doc.duration || 'Unknown';
+        ret.statusColor = doc.statusColor || 'gray';
+      } catch (e) {
+        ret.duration = 'Unknown';
+        ret.statusColor = 'gray';
+      }
+      return ret;
+    }
+  },
+  toObject: { virtuals: true }
 });
 
 // Indexes for better query performance and duplicate prevention
@@ -175,20 +190,22 @@ applicationSchema.index({ status: 1 });
 applicationSchema.index({ appliedAt: -1 });
 
 // Virtual for application duration
-applicationSchema.virtual('duration').get(function() {
+applicationSchema.virtual('duration').get(function () {
+  // Handle missing or invalid appliedAt
   if (!this.appliedAt) return 'Unknown';
-  
+
+  const applied = new Date(this.appliedAt);
+  if (isNaN(applied.getTime())) return 'Unknown';
+
   const now = new Date();
-  const applied = this.appliedAt;
-  const diffInMs = now.getTime() - applied.getTime();
-  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
-  
-  if (diffInDays === 0) return 'Today';
-  if (diffInDays === 1) return 'Yesterday';
-  if (diffInDays < 7) return `${diffInDays} days ago`;
-  if (diffInDays < 30) return `${Math.floor(diffInDays / 7)} weeks ago`;
-  return `${Math.floor(diffInDays / 30)} months ago`;
+  const diff = now.getTime() - applied.getTime();
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+  if (days < 1) return 'Today';
+  if (days === 1) return '1 day ago';
+  return `${days} days ago`;
 });
+
 
 // Virtual for status color (for frontend)
 applicationSchema.virtual('statusColor').get(function() {

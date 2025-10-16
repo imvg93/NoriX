@@ -36,6 +36,21 @@ router.get('/', async (req, res, next) => {
       approvalStatus: 'approved' // Only show approved jobs to public
     };
 
+    console.log('🔍 GET /api/jobs - Filter:', filter);
+    
+    // Debug: Check all jobs in database
+    const allJobs = await Job.countDocuments({});
+    const activeJobs = await Job.countDocuments({ status: 'active' });
+    const approvedJobs = await Job.countDocuments({ approvalStatus: 'approved' });
+    const activeApprovedJobs = await Job.countDocuments(filter);
+    
+    console.log('📊 Database stats:', { 
+      total: allJobs, 
+      active: activeJobs, 
+      approved: approvedJobs,
+      activeAndApproved: activeApprovedJobs 
+    });
+
     if (location) filter.location = { $regex: location, $options: 'i' };
     if (type) filter.type = type;
     if (category) filter.category = { $regex: category, $options: 'i' };
@@ -55,17 +70,50 @@ router.get('/', async (req, res, next) => {
     const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
     
     const jobs = await Job.find(filter)
-
       .populate('employerId', 'name companyName businessType')
-
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit as string));
 
     const total = await Job.countDocuments(filter);
 
+    // Normalize job data to ensure consistent field names
+    const normalizedJobs = jobs.map(job => {
+      const jobObj = job.toObject() as any; // Use any to handle dynamic properties
+      
+      // Handle field name inconsistencies
+      if (!jobObj.jobTitle && jobObj.title) {
+        jobObj.jobTitle = jobObj.title;
+      }
+      if (!jobObj.companyName && jobObj.company) {
+        jobObj.companyName = jobObj.company;
+      }
+      if (!jobObj.salaryRange && jobObj.salary) {
+        jobObj.salaryRange = typeof jobObj.salary === 'number' ? `₹${jobObj.salary}/month` : jobObj.salary;
+      }
+      if (!jobObj.workType && jobObj.type) {
+        jobObj.workType = jobObj.type;
+      }
+      if (!jobObj.skillsRequired && jobObj.requirements) {
+        jobObj.skillsRequired = Array.isArray(jobObj.requirements) ? jobObj.requirements : [];
+      }
+      
+      return jobObj;
+    });
+
+    console.log('✅ Returning jobs:', normalizedJobs.length, 'Total:', total);
+    if (normalizedJobs.length > 0) {
+      console.log('📋 Sample job:', {
+        id: normalizedJobs[0]._id,
+        title: normalizedJobs[0].jobTitle,
+        company: normalizedJobs[0].companyName,
+        status: normalizedJobs[0].status,
+        approvalStatus: normalizedJobs[0].approvalStatus
+      });
+    }
+
     res.json({
-      jobs,
+      jobs: normalizedJobs,
       pagination: {
         page: parseInt(page as string),
         limit: parseInt(limit as string),

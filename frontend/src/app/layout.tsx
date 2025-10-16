@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "../contexts/AuthContext";
 import { NotificationProvider } from "../contexts/NotificationContext";
 import ErrorBoundary from "../components/ErrorBoundary";
+import ChunkErrorFallback from "../components/ChunkErrorFallback";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,7 +19,18 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "NoriX",
   description: "Find the perfect job opportunities for students",
-  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
+  icons: {
+    icon: '/img/Favicon.ico',
+    shortcut: '/img/Favicon.ico'
+  },
+  manifest: '/manifest.json',
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
@@ -31,7 +43,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <ErrorBoundary>
+        <ErrorBoundary fallback={<ChunkErrorFallback />}>
           <AuthProvider>
             <NotificationProvider>
               {children}

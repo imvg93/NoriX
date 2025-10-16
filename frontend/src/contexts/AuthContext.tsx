@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import socketService from '../services/socketService';
 import { requestNotificationPermission } from './NotificationContext';
+import { AuthPreservation } from '../utils/authPreservation';
 
 interface User {
   _id: string;
@@ -97,18 +98,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setUser(parsedUser);
               setToken(savedToken);
               console.log('✅ Authentication restored successfully');
+              
+              // Start authentication backup for future reloads
+              AuthPreservation.startAuthBackup();
             } else {
               console.log('❌ Invalid token, clearing storage');
               localStorage.removeItem('user');
               localStorage.removeItem('token');
+              AuthPreservation.clearBackup();
             }
           } catch (error) {
             console.error('❌ Error parsing saved user data:', error);
             localStorage.removeItem('user');
             localStorage.removeItem('token');
+            AuthPreservation.clearBackup();
           }
         } else {
-          console.log('ℹ️ No saved authentication found');
+          // Try to restore from backup
+          const backupAuth = AuthPreservation.restoreAuth();
+          if (backupAuth) {
+            console.log('🔍 Restoring authentication from backup');
+            setUser(backupAuth.user);
+            setToken(backupAuth.token);
+            
+            // Save to normal storage
+            localStorage.setItem('user', JSON.stringify(backupAuth.user));
+            localStorage.setItem('token', backupAuth.token);
+            
+            // Start authentication backup
+            AuthPreservation.startAuthBackup();
+          } else {
+            console.log('ℹ️ No saved authentication found');
+          }
         }
       } catch (error) {
         console.error('❌ Auth initialization error:', error);
@@ -143,10 +164,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     setToken(null);
     
-    // Clear localStorage
+    // Clear localStorage and backup
     if (typeof window !== 'undefined') {
       localStorage.removeItem('user');
       localStorage.removeItem('token');
+      AuthPreservation.clearBackup();
+      AuthPreservation.stopAuthBackup();
     }
 
     // Disconnect socket

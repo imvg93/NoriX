@@ -76,6 +76,8 @@ const JobsPage = () => {
         setLoading(true);
 
         const jobsResponse = await apiService.getJobs() as JobsResponse;
+        console.log('📊 Fetched jobs from /api/jobs:', jobsResponse.jobs?.length || 0, jobsResponse);
+        console.log('📊 Sample job data:', jobsResponse.jobs?.[0]);
         setJobs(jobsResponse.jobs || []);
 
         if (isAuthenticated && user?.userType === "student") {
@@ -195,8 +197,8 @@ const JobsPage = () => {
             <Link  href="/">
               
                 <Image
-                  src="/img/logowhite.png"
-                  alt="StudentJobs logo"
+                  src="/img/norixgreen.png"
+                  alt="NoriX logo"
                   fill
                   sizes="128px"
                   className="object-contain"
