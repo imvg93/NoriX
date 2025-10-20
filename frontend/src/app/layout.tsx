@@ -5,6 +5,7 @@ import { AuthProvider } from "../contexts/AuthContext";
 import { NotificationProvider } from "../contexts/NotificationContext";
 import ErrorBoundary from "../components/ErrorBoundary";
 import ChunkErrorFallback from "../components/ChunkErrorFallback";
+import Layout from "../components/Layout";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -39,14 +40,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" data-scroll-behavior="smooth">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ErrorBoundary fallback={<ChunkErrorFallback />}>
           <AuthProvider>
             <NotificationProvider>
-              {children}
+              <Layout>
+                {children}
+              </Layout>
             </NotificationProvider>
           </AuthProvider>
         </ErrorBoundary>

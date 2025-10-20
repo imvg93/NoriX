@@ -180,10 +180,8 @@ export default function Signup() {
         setStep('success');
         setSuccess('Account created successfully! Redirecting to your dashboard...');
         
-        // Redirect immediately to appropriate dashboard based on user type
-        const redirectPath = userType === 'student' ? '/student-home' 
-                           : userType === 'employer' ? '/employer-home'
-                           : '/';
+        // Redirect immediately to main page
+        const redirectPath = '/';
         
         console.log('🚀 Redirecting to:', redirectPath); // Debug log
         

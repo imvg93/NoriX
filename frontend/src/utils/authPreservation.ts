@@ -1,6 +1,7 @@
 // Utility to preserve authentication during page reloads
 export class AuthPreservation {
   private static readonly AUTH_KEY = 'noriX_auth_backup';
+  private static readonly NAVIGATION_KEY = 'noriX_navigation_history';
   private static readonly BACKUP_INTERVAL = 30000; // 30 seconds
   private static backupTimer: NodeJS.Timeout | null = null;
 
@@ -96,6 +97,64 @@ export class AuthPreservation {
       clearInterval(this.backupTimer);
       this.backupTimer = null;
     }
+  }
+
+  // Track navigation to prevent unnecessary redirects
+  static trackNavigation(path: string, userType?: string) {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const navigationData = {
+        path,
+        userType,
+        timestamp: Date.now(),
+        referrer: document.referrer
+      };
+
+      // Keep only last 5 navigation entries
+      const history = this.getNavigationHistory();
+      history.push(navigationData);
+      if (history.length > 5) {
+        history.shift();
+      }
+
+      localStorage.setItem(this.NAVIGATION_KEY, JSON.stringify(history));
+    } catch (error) {
+      console.error('🔐 Error tracking navigation:', error);
+    }
+  }
+
+  // Get navigation history
+  static getNavigationHistory(): any[] {
+    if (typeof window === 'undefined') return [];
+
+    try {
+      const history = localStorage.getItem(this.NAVIGATION_KEY);
+      return history ? JSON.parse(history) : [];
+    } catch (error) {
+      console.error('🔐 Error getting navigation history:', error);
+      return [];
+    }
+  }
+
+  // Check if we should redirect to login or stay
+  static shouldRedirectToLogin(): boolean {
+    if (typeof window === 'undefined') return true;
+
+    const history = this.getNavigationHistory();
+    const recentNavigation = history[history.length - 1];
+
+    // If we have recent navigation within the app, don't redirect to login
+    if (recentNavigation && Date.now() - recentNavigation.timestamp < 30000) { // 30 seconds
+      return false;
+    }
+
+    // If we're coming from a back navigation
+    if (document.referrer.includes(window.location.origin)) {
+      return false;
+    }
+
+    return true;
   }
 
   // Enhanced reload that preserves authentication

@@ -38,7 +38,6 @@ import { apiService, type JobsResponse, type ApplicationsResponse, type Job, typ
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
 import NotificationDropdown from './NotificationDropdown';
-import { kycStatusService } from '../services/kycStatusService';
 
 interface AppliedJob {
   _id: string;
@@ -168,7 +167,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
   const [selectedType, setSelectedType] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [filteredJobs, setFilteredJobs] = useState<Job[]>([]);
-  const [kycStatus, setKycStatus] = useState<{isCompleted: boolean, status: string}>({isCompleted: false, status: 'not-submitted'});
+  const [kycStatus, setKycStatus] = useState<{isCompleted: boolean, status: string}>({isCompleted: true, status: 'approved'});
 
   const getJobIdFromRef = (jobRef: any): string | null => {
     if (!jobRef) return null;
@@ -215,28 +214,13 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
         // Always set jobs - students can VIEW and APPLY to jobs regardless of KYC status
         setJobs(Array.isArray(jobsData.jobs) ? jobsData.jobs : []);
         
-        // Check KYC status but don't block job display
-        const responseData = jobsData as any;
-        
-        if (responseData.kycRequired) {
-          console.log('⚠️ KYC approval required to APPLY for jobs');
-          console.log('🔍 Backend KYC Status:', responseData.kycStatus);
-          console.log(`📊 Showing ${jobsData.jobs?.length || 0} jobs (viewing and applying allowed)`);
-          
-          // Set KYC status but don't block anything
-          setKycStatus({
-            isCompleted: true, // Always allow applying
-            status: responseData.kycStatus || 'approved'
-          });
-          setErrorMessage(''); // Clear any error messages
-        } else {
-          console.log(`✅ KYC approved - ${jobsData.jobs?.length || 0} jobs available for viewing and applying`);
-          setKycStatus({
-            isCompleted: true,
-            status: 'approved'
-          });
-          setErrorMessage('');
-        }
+        // Always set KYC as completed to bypass all KYC checks
+        setKycStatus({
+          isCompleted: true,
+          status: 'approved'
+        });
+        setErrorMessage(''); // Clear any error messages
+        console.log(`✅ Showing ${jobsData.jobs?.length || 0} jobs - KYC bypassed`);
         
         // Fetch user applications
         try {
@@ -277,17 +261,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
         setInterviews([]);
         setNotifications([]);
         
-        // Check KYC status
-        try {
-          const kycStatusData = await kycStatusService.checkKYCStatus();
-          setKycStatus({
-            isCompleted: kycStatusData.isCompleted,
-            status: kycStatusData.status
-          });
-        } catch (error) {
-          console.error('Error checking KYC status:', error);
-          // Keep default state if KYC check fails
-        }
+        // KYC status check removed - always bypassed
         
       } catch (error: any) {
         console.error('Error fetching data:', error);
@@ -424,13 +398,18 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
 
   const handleApplyJob = async (jobId: string) => {
     try {
+      // Validate jobId
+      if (!jobId || typeof jobId !== 'string') {
+        alert('Invalid job ID. Please try again.');
+        return;
+      }
+
       // Prevent duplicate applications locally
       const alreadyApplied = Array.isArray(appliedJobs) && appliedJobs.some(aj => {
         const refId = getJobIdFromRef(aj?.job);
         return refId === jobId;
       });
       if (alreadyApplied) {
-        // eslint-disable-next-line no-alert
         alert('You have already applied for this job.');
         return;
       }
@@ -441,31 +420,52 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
         availabilityPreference = 'flexible';
       }
 
-      await apiService.applyToJob(jobId, {
+      console.log('📝 Applying to job:', jobId, 'with availability:', availabilityPreference);
+      
+      const response = await apiService.applyToJob(jobId, {
         availability: availabilityPreference
       });
+      
+      console.log('✅ Application response:', response);
       
       // Update applied jobs list
       const job = jobs.find(j => j._id === jobId);
       if (job) {
-        setAppliedJobs(prev => [...prev, {
+        const newApplication = {
           _id: Date.now().toString(),
           job,
           status: 'applied',
           appliedDate: new Date().toISOString().split('T')[0]
-        }]);
+        };
+        
+        setAppliedJobs(prev => [...prev, newApplication]);
+        console.log('✅ Added application to local state:', newApplication);
       }
       
-      // Success toast fallback
-      if (typeof window !== 'undefined') {
-        // eslint-disable-next-line no-alert
-        alert('Application submitted successfully');
-      }
+      // Success notification
+      alert('Application submitted successfully! 🎉');
+      
     } catch (error: any) {
-      console.error('Error applying to job:', error);
-      const friendly = error?.message || 'Failed to submit application. Please try again.';
-      // eslint-disable-next-line no-alert
-      alert(friendly);
+      console.error('❌ Error applying to job:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        status: error.status,
+        details: error.details
+      });
+      
+      let friendlyMessage = 'Failed to submit application. Please try again.';
+      
+      if (error.message) {
+        friendlyMessage = error.message;
+      } else if (error.status === 401) {
+        friendlyMessage = 'Please log in again to apply for jobs.';
+      } else if (error.status === 403) {
+        friendlyMessage = 'You do not have permission to apply for this job.';
+      } else if (error.status === 404) {
+        friendlyMessage = 'Job not found. It may have been removed.';
+      }
+      
+      alert(friendlyMessage);
     }
   };
 
@@ -543,76 +543,13 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
               <Home className="w-4 h-4" />
               Home
             </Link>
-            {kycStatus.isCompleted ? (
-              <div className="flex items-center gap-1 px-3 py-2 rounded-lg bg-green-600 text-white text-sm font-medium cursor-not-allowed opacity-75">
-                <Shield className="w-4 h-4" />
-                <span className="hidden xs:inline">KYC Verified</span>
-                <span className="xs:hidden">Verified</span>
-              </div>
-            ) : (
-              <Link 
-                href="/kyc-profile" 
-                className="flex items-center gap-1 px-3 py-2 rounded-lg transition-colors text-sm font-medium bg-orange-600 text-white hover:bg-orange-700"
-              >
-                <Shield className="w-4 h-4" />
-                <span className="hidden xs:inline">Complete KYC</span>
-                <span className="xs:hidden">KYC</span>
-              </Link>
-            )}
+            {/* KYC buttons removed - no longer needed */}
             <button 
               onClick={() => window.history.back()} 
               className="flex items-center gap-1 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
             >
               <ArrowLeft className="w-4 h-4" />
               Back
-            </button>
-          </div>
-        </div>
-
-        {/* Desktop Header */}
-        <div className="hidden sm:flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link 
-              href="/home" 
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-            >
-              <Home className="w-4 h-4" />
-              Home
-            </Link>
-            {kycStatus.isCompleted ? (
-              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium cursor-not-allowed opacity-75">
-                <Shield className="w-4 h-4" />
-                KYC Verified
-              </div>
-            ) : (
-              <Link 
-                href="/kyc-profile" 
-                className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium bg-orange-600 text-white hover:bg-orange-700"
-              >
-                <Shield className="w-4 h-4" />
-                Complete KYC
-              </Link>
-            )}
-            <button 
-              onClick={() => window.history.back()} 
-              className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back
-            </button>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <h2 className="text-lg font-semibold text-gray-900">Student Dashboard</h2>
-              <p className="text-sm text-gray-600">Job Search & Applications</p>
-            </div>
-            <NotificationDropdown />
-            <button 
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
-            >
-              <LogOut className="w-4 h-4" />
-              Logout
             </button>
           </div>
         </div>
@@ -636,44 +573,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
         </div>
       </motion.div>
 
-      {/* KYC Status Banner - Mobile Optimized */}
-      {!kycStatus.isCompleted ? (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-orange-500 to-red-500 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-white flex-shrink-0" />
-              <div className="min-w-0 flex-1">
-                <h3 className="text-white font-semibold text-sm sm:text-base">Complete Your KYC Verification</h3>
-                <p className="text-orange-100 text-xs sm:text-sm">Complete your KYC to view and apply for jobs.</p>
-              </div>
-            </div>
-            <Link 
-              href="/kyc-profile"
-              className="bg-white text-orange-600 px-3 sm:px-4 py-2 rounded-lg font-medium hover:bg-orange-50 transition-colors text-sm text-center"
-            >
-              Complete Now
-            </Link>
-          </div>
-        </motion.div>
-      ) : (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6"
-        >
-          <div className="flex items-center gap-3">
-            <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-white flex-shrink-0" />
-            <div className="min-w-0 flex-1">
-              <h3 className="text-white font-semibold text-sm sm:text-base">✅ KYC Verification Complete</h3>
-              <p className="text-green-100 text-xs sm:text-sm">Your identity has been verified. You can now access all job opportunities!</p>
-            </div>
-          </div>
-        </motion.div>
-      )}
+      {/* KYC Status Banner Removed - No longer needed */}
 
       {/* Stats Cards - Mobile Optimized */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -712,7 +612,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
       </div>
 
       {/* Highlighted Jobs Section - Mobile Optimized */}
-      {kycStatus.isCompleted ? (
+      {jobs.length > 0 ? (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -835,7 +735,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
       ) : null}
 
       {/* Regular Jobs Section - Mobile Optimized */}
-      {kycStatus.isCompleted && filteredJobs.filter(job => job.highlighted !== true).length > 0 ? (
+      {filteredJobs.filter(job => job.highlighted !== true).length > 0 ? (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1014,63 +914,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
 
         {/* Job Listings - Mobile Optimized */}
         <div className="space-y-3 sm:space-y-4">
-          {!kycStatus.isCompleted ? (
-            <div className="text-center py-8 sm:py-12">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Shield className="w-8 h-8 sm:w-10 sm:h-10 text-orange-600" />
-              </div>
-              <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Complete KYC to get your first job</h3>
-              <p className="text-gray-600 text-sm sm:text-base mb-6 max-w-md mx-auto">
-                Complete your KYC to view and apply for jobs.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Link 
-                  href="/kyc-profile"
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium text-sm sm:text-base"
-                >
-                  <Shield className="w-5 h-5" />
-                  Complete KYC Now
-                </Link>
-                <button
-                  onClick={async () => {
-                    try {
-                      console.log('🔄 Refreshing KYC status...');
-                      const profile = await apiService.getProfile();
-                      console.log('📊 Fresh profile:', profile);
-                      
-                      if (!profile) {
-                        console.error('❌ Profile is undefined');
-                        alert('Error: Could not fetch profile. Please try logging in again.');
-                        return;
-                      }
-                      
-                      if (profile.isVerified || profile.kycStatus === 'approved') {
-                        alert('Your KYC is approved! Refreshing page...');
-                        window.location.reload();
-                      } else {
-                        alert(`KYC Status: ${profile.kycStatus || 'not submitted'}`);
-                      }
-                    } catch (error: any) {
-                      console.error('Error refreshing KYC:', error);
-                      alert(`Error checking KYC status: ${error.message || 'Please try again.'}`);
-                    }
-                  }}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm sm:text-base"
-                >
-                  <RefreshCw className="w-5 h-5" />
-                  Refresh Status
-                </button>
-              </div>
-              {kycStatus.status === 'pending' && (
-                <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
-                  <div className="flex items-center gap-2 justify-center text-blue-700">
-                    <Clock className="w-5 h-5" />
-                    <span className="text-sm font-medium">Your KYC is under review. Jobs will appear once approved.</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : filteredJobs.length === 0 ? (
+          {filteredJobs.length === 0 ? (
             <div className="text-center py-6 sm:py-8">
               <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-3 sm:mb-4" />
               <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No jobs found</h3>
@@ -1388,7 +1232,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
       )}
 
       {/* Approved Applications with Contact Details - Mobile Optimized */}
-      {kycStatus.isCompleted && Array.isArray(approvedApplicationsWithContact) && approvedApplicationsWithContact.length > 0 && (
+      {Array.isArray(approvedApplicationsWithContact) && approvedApplicationsWithContact.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

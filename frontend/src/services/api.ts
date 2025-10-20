@@ -172,8 +172,10 @@ class ApiService {
       
       if (!response.ok) {
         let errorData: any = null;
+        let errorText: string = '';
         try {
-          errorData = await response.json();
+          errorText = await response.text();
+          errorData = JSON.parse(errorText);
         } catch (_) {
           // ignore JSON parse failure
         }
@@ -188,6 +190,9 @@ class ApiService {
         } else {
           console.log(`🌐 HTTP ${response.status} ${response.statusText} - no error details`);
         }
+        
+        // Log the full error response for debugging
+        console.error('🌐 Full error response:', errorText);
         
         // Handle authentication errors
         if (response.status === 401) {
@@ -217,6 +222,46 @@ class ApiService {
 
       const responseData = await response.json();
       console.log('🌐 Success response:', responseData);
+      
+      // Check for any date-related issues in the response
+      if (responseData && typeof responseData === 'object') {
+        // Fix any undefined date fields
+        const fixDates = (obj: any): any => {
+          if (Array.isArray(obj)) {
+            return obj.map(fixDates);
+          } else if (obj && typeof obj === 'object') {
+            const fixed: any = {};
+            for (const [key, value] of Object.entries(obj)) {
+              if (key.includes('Date') || key.includes('At')) {
+                // Ensure date fields are properly formatted
+                if (value && typeof value === 'string') {
+                  try {
+                    const date = new Date(value);
+                    if (!isNaN(date.getTime())) {
+                      fixed[key] = value;
+                    } else {
+                      fixed[key] = new Date().toISOString().split('T')[0];
+                    }
+                  } catch {
+                    fixed[key] = new Date().toISOString().split('T')[0];
+                  }
+                } else if (!value) {
+                  fixed[key] = new Date().toISOString().split('T')[0];
+                } else {
+                  fixed[key] = value;
+                }
+              } else {
+                fixed[key] = fixDates(value);
+              }
+            }
+            return fixed;
+          }
+          return obj;
+        };
+        
+        return fixDates(responseData);
+      }
+      
       return responseData;
     } catch (error) {
       console.error('API request failed:', error);
@@ -255,7 +300,7 @@ class ApiService {
       status: raw.status || 'active',
       approvalStatus: raw.approvalStatus || raw.status || 'pending',
       employer: (typeof raw.employerId === 'object' ? raw.employerId?._id : raw.employerId) || raw.employer || '',
-      createdAt: raw.createdAt || new Date().toISOString(),
+      createdAt: raw.createdAt || new Date().toISOString().split('T')[0],
       applicationsCount: applicantsCount,
       requirements,
       skillsRequired: requirements,
@@ -287,7 +332,7 @@ class ApiService {
       } : studentRaw,
       employer: app.employer || (jobRaw?.employerId?._id || jobRaw?.employerId) || '',
       status: app.status,
-      appliedDate: app.appliedAt || app.createdAt || new Date().toISOString(),
+      appliedDate: app.appliedAt || app.createdAt || new Date().toISOString().split('T')[0],
       coverLetter: app.coverLetter,
       expectedPay: app.expectedPay,
       availability: app.availability,
@@ -625,6 +670,12 @@ class ApiService {
     });
   }
 
+  async closeApplication(applicationId: string) {
+    return this.request(`/enhanced-jobs/applications/${applicationId}/close`, {
+      method: 'PATCH',
+    });
+  }
+
 
   async getStudentApplications(status?: string): Promise<ApplicationsResponse> {
     const queryParams = status ? new URLSearchParams({ status }) : '' as any;
@@ -668,6 +719,23 @@ class ApiService {
     } as ApplicationsResponse;
   }
 
+  async getApplication(applicationId: string) {
+    try {
+      const raw = await this.request<any>(`/applications/${applicationId}`);
+      const payload = this.unwrap<any>(raw);
+      return {
+        application: this.mapEnhancedApplicationToFrontend(payload.application)
+      };
+    } catch (error: any) {
+      // Handle specific error cases
+      if (error.status === 404 || error.status === 400) {
+        throw new Error('Application not found');
+      }
+      // Re-throw other errors
+      throw error;
+    }
+  }
+
   // Legacy Job APIs (keeping for backward compatibility)
   async getJobs(filters?: any): Promise<JobsResponse> {
     const queryParams = filters ? new URLSearchParams(filters).toString() : '';
@@ -682,14 +750,42 @@ class ApiService {
   }
 
   async getJob(jobId: string) {
-    const raw = await this.request<any>(`/jobs/${jobId}`);
-    const payload = this.unwrap<any>(raw);
-    return this.mapEnhancedJobToFrontendJob(payload);
+    try {
+      const raw = await this.request<any>(`/jobs/${jobId}`);
+      const payload = this.unwrap<any>(raw);
+      return this.mapEnhancedJobToFrontendJob(payload);
+    } catch (error: any) {
+      // If the specific job endpoint fails due to validation errors, try fetching from jobs list
+      if (error.status === 400 && error.message?.includes('Application deadline')) {
+        console.log('Job validation error, trying to fetch from jobs list...');
+        try {
+          const jobsResponse = await this.getJobs();
+          const job = jobsResponse.jobs.find((j: any) => j._id === jobId);
+          if (job) {
+            console.log('Found job in jobs list');
+            return job;
+          }
+        } catch (fallbackError) {
+          console.error('Fallback fetch failed:', fallbackError);
+        }
+      }
+      // Re-throw the original error if fallback fails
+      throw error;
+    }
   }
 
-  async applyForJob(jobId: string) {
+  async applyForJob(jobId: string, resumeData?: FormData) {
+    const headers: Record<string, string> = {};
+    
+    // Don't set Content-Type for FormData - let browser set it with boundary
+    if (!resumeData) {
+      headers['Content-Type'] = 'application/json';
+    }
+
     return this.request(`/enhanced-jobs/${jobId}/apply`, {
       method: 'POST',
+      headers,
+      body: resumeData || undefined,
     });
   }
 
@@ -727,13 +823,27 @@ class ApiService {
   async applyToJob(jobId: string, applicationData: any) {
     try {
       console.log('📝 Applying to job:', jobId, applicationData);
+      
+      // Validate jobId
+      if (!jobId || typeof jobId !== 'string') {
+        throw new Error('Invalid job ID provided');
+      }
+      
+      // Clean application data
+      const cleanApplicationData = {
+        jobId: jobId,
+        availability: applicationData?.availability || 'flexible',
+        ...(applicationData?.coverLetter && { coverLetter: applicationData.coverLetter }),
+        ...(applicationData?.expectedPay && { expectedPay: applicationData.expectedPay })
+      };
+      
+      console.log('📝 Clean application data:', cleanApplicationData);
+      
       const response = await this.request('/applications', {
         method: 'POST',
-        body: JSON.stringify({
-          jobId: jobId, // Use jobId instead of job for consistency
-          ...applicationData,
-        }),
+        body: JSON.stringify(cleanApplicationData),
       });
+      
       console.log('✅ Job application submitted successfully:', response);
       return response;
     } catch (error) {
@@ -1013,6 +1123,31 @@ class ApiService {
         status: (error as any)?.status,
         details: (error as any)?.details,
         endpoint: `/jobs/${jobId}/approve`,
+        apiUrl: API_BASE_URL
+      });
+      throw error;
+    }
+  }
+
+  // Employer Job Management APIs
+  async approveEmployerJob(jobId: string) {
+    try {
+      console.log('✅ Employer approving job:', jobId);
+      console.log('🌐 API Base URL:', API_BASE_URL);
+      console.log('🌐 Full endpoint:', `${API_BASE_URL}/enhanced-jobs/${jobId}/approve`);
+      
+      const response = await this.request(`/enhanced-jobs/${jobId}/approve`, {
+        method: 'PATCH',
+      });
+      console.log('📊 Employer approve job response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error employer approving job:', error);
+      console.error('❌ Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        status: (error as any)?.status,
+        details: (error as any)?.details,
+        endpoint: `/enhanced-jobs/${jobId}/approve`,
         apiUrl: API_BASE_URL
       });
       throw error;

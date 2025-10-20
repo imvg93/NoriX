@@ -34,11 +34,9 @@ const LoginForm: React.FC = () => {
         
         // Redirect based on user type
         if (response.user.userType === 'admin') {
-          router.push('/admin-home');
-        } else if (response.user.userType === 'employer') {
-          router.push('/employer-home');
-        } else if (response.user.userType === 'student') {
-          router.push('/student-home');
+          router.push('/admin');
+        } else {
+          router.push('/');
         }
       } else {
         setError('Login failed. Please check your credentials.');

@@ -9,6 +9,50 @@ import { asyncHandler, sendSuccessResponse, sendErrorResponse, ValidationError }
 
 const router = express.Router();
 
+// @route   GET /api/enhanced-jobs/:id
+// @desc    Get job details by ID
+// @access  Public
+router.get('/:id', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const { id } = req.params;
+
+  if (!mongoose.isValidObjectId(id)) {
+    return sendErrorResponse(res, 400, 'Invalid job ID');
+  }
+
+  try {
+    const job = await Job.findById(id)
+      .populate('employerId', 'name email companyName phone')
+      .lean();
+
+    if (!job) {
+      return sendErrorResponse(res, 404, 'Job not found');
+    }
+
+    // Map to frontend format
+    const jobData = {
+      _id: job._id,
+      title: job.jobTitle,
+      description: job.description,
+      company: job.companyName,
+      location: job.location,
+      salary: job.salaryRange,
+      type: job.workType,
+      requirements: job.skillsRequired || [],
+      createdAt: job.createdAt,
+      employer: job.employerId?._id,
+      highlighted: job.highlighted || false,
+      status: job.status,
+      applicationDeadline: job.applicationDeadline,
+      employerDetails: job.employerId
+    };
+
+    sendSuccessResponse(res, jobData, 'Job details retrieved successfully');
+  } catch (error) {
+    console.error('Error fetching job details:', error);
+    sendErrorResponse(res, 500, 'Failed to fetch job details');
+  }
+}));
+
 // @route   POST /api/enhanced-jobs
 // @desc    Employer posts a job (essential fields only)
 // @access  Private (Employers only)
@@ -122,10 +166,69 @@ router.patch('/:id/status', authenticateToken, requireEmployer, asyncHandler(asy
     throw new ValidationError('Access denied');
   }
 
-  job.status = status as typeof job.status;
-  await job.save();
+  // Update job status without triggering validation
+  const updatedJob = await Job.findByIdAndUpdate(
+    req.params.id,
+    { status: status as typeof job.status },
+    { new: true }
+  );
 
-  sendSuccessResponse(res, { job }, 'Job status updated successfully');
+  if (!updatedJob) {
+    throw new ValidationError('Job not found after update');
+  }
+
+  sendSuccessResponse(res, { job: updatedJob }, 'Job status updated successfully');
+}));
+
+// @route   PATCH /api/enhanced-jobs/:id/approve
+// @desc    Employer approves their own job
+// @access  Private (Job owner only)
+router.patch('/:id/approve', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ValidationError('Invalid job ID');
+  }
+
+  const job = await Job.findById(id);
+  if (!job) {
+    throw new ValidationError('Job not found');
+  }
+
+  // Check if user owns the job
+  if (job.employerId.toString() !== req.user!._id.toString()) {
+    throw new ValidationError('Access denied - you can only approve your own jobs');
+  }
+
+  // Update job approval status without triggering validation
+  const updatedJob = await Job.findByIdAndUpdate(
+    id,
+    {
+      approvalStatus: 'approved',
+      approvedAt: new Date(),
+      approvedBy: req.user!._id
+    },
+    { new: true }
+  );
+
+  if (!updatedJob) {
+    throw new ValidationError('Job not found after update');
+  }
+
+  // Real-time notification to all students about the approved job
+  const socketManager = (global as any).socketManager;
+  if (socketManager) {
+    socketManager.emitJobApproval(id, {
+      jobId: updatedJob._id,
+      title: updatedJob.jobTitle,
+      company: updatedJob.companyName,
+      location: updatedJob.location,
+      status: 'approved',
+      timestamp: new Date()
+    });
+  }
+
+  sendSuccessResponse(res, { job: updatedJob }, 'Job approved successfully');
 }));
 
 // @route   GET /api/enhanced-jobs/student-dashboard

@@ -186,47 +186,60 @@ router.patch('/:id/approve', authenticateToken, async (req: AuthRequest, res, ne
       });
     }
 
-    (job as any).approvalStatus = 'approved';
-    (job as any).approvedBy = req.user._id;
-    (job as any).approvedAt = new Date();
-    await job.save();
+    // Update job approval status without triggering validation
+    const updatedJob = await Job.findByIdAndUpdate(
+      req.params.id,
+      {
+        approvalStatus: 'approved',
+        approvedBy: req.user._id,
+        approvedAt: new Date()
+      },
+      { new: true }
+    ).populate('employerId', 'name email');
+
+    if (!updatedJob) {
+      return res.status(404).json({
+        success: false,
+        message: 'Job not found after update'
+      });
+    }
 
     // Real-time notification to all students
     if (socketManager) {
       socketManager.notifyJobApproved({
-        id: job._id,
-        jobTitle: job.jobTitle,
-        companyName: job.companyName,
-        location: job.location,
-        jobType: job.workType,
-        salary: job.salaryRange,
-        description: job.description,
-        requirements: job.skillsRequired.join(', '),
-        createdAt: job.createdAt
+        id: updatedJob._id,
+        jobTitle: updatedJob.jobTitle,
+        companyName: updatedJob.companyName,
+        location: updatedJob.location,
+        jobType: updatedJob.workType,
+        salary: updatedJob.salaryRange,
+        description: updatedJob.description,
+        requirements: updatedJob.skillsRequired.join(', '),
+        createdAt: updatedJob.createdAt
       });
     }
 
     // Email notification to employer
-    if (emailService && job.employerId) {
+    if (emailService && updatedJob.employerId) {
       await emailService.sendJobApprovalNotification(
-        (job.employerId as any)._id.toString(),
+        (updatedJob.employerId as any)._id.toString(),
         {
-          id: job._id,
-          jobTitle: job.jobTitle,
-          companyName: job.companyName,
-          location: job.location,
-          jobType: job.workType,
-          salary: job.salaryRange
+          id: updatedJob._id,
+          jobTitle: updatedJob.jobTitle,
+          companyName: updatedJob.companyName,
+          location: updatedJob.location,
+          jobType: updatedJob.workType,
+          salary: updatedJob.salaryRange
         }
       );
     }
 
-    console.log(`✅ Job approved: ${job.jobTitle} - Real-time notifications sent`);
+    console.log(`✅ Job approved: ${updatedJob.jobTitle} - Real-time notifications sent`);
 
     return res.json({
       success: true,
       message: 'Job approved successfully',
-      data: job
+      data: updatedJob
     });
   } catch (error) {
     return next(error);
@@ -258,45 +271,58 @@ router.patch('/:id/reject', authenticateToken, async (req: AuthRequest, res, nex
       });
     }
 
-    (job as any).approvalStatus = 'rejected';
-    (job as any).rejectionReason = rejectionReason;
-    (job as any).rejectedBy = req.user._id;
-    (job as any).rejectedAt = new Date();
-    await job.save();
+    // Update job rejection status without triggering validation
+    const updatedJob = await Job.findByIdAndUpdate(
+      req.params.id,
+      {
+        approvalStatus: 'rejected',
+        rejectionReason: rejectionReason,
+        rejectedBy: req.user._id,
+        rejectedAt: new Date()
+      },
+      { new: true }
+    ).populate('employerId', 'name email');
+
+    if (!updatedJob) {
+      return res.status(404).json({
+        success: false,
+        message: 'Job not found after update'
+      });
+    }
 
     // Real-time notification to employer
-    if (socketManager && job.employerId) {
+    if (socketManager && updatedJob.employerId) {
       socketManager.notifyJobRejected({
-        id: job._id,
-        jobTitle: job.jobTitle,
-        companyName: job.companyName,
-        location: job.location,
-        jobType: job.workType,
+        id: updatedJob._id,
+        jobTitle: updatedJob.jobTitle,
+        companyName: updatedJob.companyName,
+        location: updatedJob.location,
+        jobType: updatedJob.workType,
         rejectionReason: rejectionReason
-      }, (job.employerId as any)._id.toString());
+      }, (updatedJob.employerId as any)._id.toString());
     }
 
     // Email notification to employer
-    if (emailService && job.employerId) {
+    if (emailService && updatedJob.employerId) {
       await emailService.sendJobRejectionNotification(
-        (job.employerId as any)._id.toString(),
+        (updatedJob.employerId as any)._id.toString(),
         {
-          id: job._id,
-          jobTitle: job.jobTitle,
-          companyName: job.companyName,
-          location: job.location,
-          jobType: job.workType
+          id: updatedJob._id,
+          jobTitle: updatedJob.jobTitle,
+          companyName: updatedJob.companyName,
+          location: updatedJob.location,
+          jobType: updatedJob.workType
         },
         rejectionReason
       );
     }
 
-    console.log(`❌ Job rejected: ${job.jobTitle} - Notifications sent to employer`);
+    console.log(`❌ Job rejected: ${updatedJob.jobTitle} - Notifications sent to employer`);
 
     return res.json({
       success: true,
       message: 'Job rejected successfully',
-      data: job
+      data: updatedJob
     });
   } catch (error) {
     return next(error);
@@ -307,18 +333,32 @@ router.patch('/:id/reject', authenticateToken, async (req: AuthRequest, res, nex
 router.get('/:id', async (req, res, next) => {
   try {
     const job = await Job.findById(req.params.id)
-
-      .populate('employerId', 'name companyName businessType location');
+      .populate('employerId', 'name companyName businessType location')
+      .lean(); // Use lean() to get a plain JavaScript object without Mongoose document methods
 
     if (!job) {
       throw new CustomError('Job not found', 404);
     }
 
-    // Increment view count
-    // Note: Job views tracking removed as it's not in the simplified schema
-    await job.save();
+    // Map the job data to match frontend expectations
+    const jobData = {
+      _id: job._id,
+      title: job.jobTitle,
+      description: job.description,
+      company: job.companyName,
+      location: job.location,
+      salary: job.salaryRange,
+      type: job.workType,
+      requirements: job.skillsRequired || [],
+      createdAt: job.createdAt,
+      employer: job.employerId?._id,
+      highlighted: job.highlighted || false,
+      status: job.status,
+      applicationDeadline: job.applicationDeadline,
+      employerDetails: job.employerId
+    };
 
-    res.json(job);
+    res.json(jobData);
   } catch (error) {
     next(error);
   }
@@ -414,6 +454,7 @@ router.post('/', async (req: AuthRequest, res, next) => {
       companyName: company,
       email: contactEmail,
       phone: contactPhone,
+      applicationDeadline: defaultExpiry, // Set application deadline to 30 days from now
       status: 'active', // Jobs start as active
       approvalStatus: 'pending', // All new jobs need admin approval
       createdAt: new Date()
@@ -553,10 +594,21 @@ router.patch('/:id/status', authenticateToken, async (req: AuthRequest, res, nex
       throw new CustomError('Not authorized to update this job status', 403);
     }
 
-    job.status = status;
-    await job.save();
+    // Update job status without triggering validation
+    const updatedJob = await Job.findByIdAndUpdate(
+      req.params.id,
+      { status: status },
+      { new: true }
+    );
 
-    res.json(job);
+    if (!updatedJob) {
+      return res.status(404).json({
+        success: false,
+        message: 'Job not found after update'
+      });
+    }
+
+    res.json(updatedJob);
   } catch (error) {
     next(error);
   }

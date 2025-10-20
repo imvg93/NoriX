@@ -4,7 +4,7 @@ export interface IApplication extends Document {
   applicationId: mongoose.Types.ObjectId; // Auto-generated ID
   jobId: mongoose.Types.ObjectId; // Reference to job
   studentId: mongoose.Types.ObjectId; // Reference to student
-  status: 'applied' | 'accepted' | 'rejected'; // Simplified status as per requirements
+  status: 'applied' | 'accepted' | 'rejected' | 'pending' | 'approved' | 'closed'; // Enhanced status options
   appliedAt: Date; // When student applied
   
   // Additional fields for enhanced functionality
@@ -66,7 +66,7 @@ const applicationSchema = new Schema<IApplication>({
   },
   status: {
     type: String,
-    enum: ['applied', 'accepted', 'rejected'],
+    enum: ['applied', 'accepted', 'rejected', 'pending', 'approved', 'closed'],
     default: 'applied'
   },
   appliedAt: {
@@ -211,8 +211,11 @@ applicationSchema.virtual('duration').get(function () {
 applicationSchema.virtual('statusColor').get(function() {
   const statusColors = {
     applied: 'blue',
+    pending: 'yellow',
+    approved: 'green',
     accepted: 'green',
-    rejected: 'red'
+    rejected: 'red',
+    closed: 'gray'
   };
   return statusColors[this.status] || 'gray';
 });
@@ -223,16 +226,20 @@ applicationSchema.methods.updateStatus = function(newStatus: string, notes?: str
   
   // Set timestamp based on status
   switch (newStatus) {
+    case 'approved':
     case 'accepted':
       this.shortlistedDate = new Date();
       break;
     case 'rejected':
       this.rejectedDate = new Date();
       break;
+    case 'closed':
+      this.withdrawnDate = new Date();
+      break;
   }
   
   if (notes) {
-    if (newStatus === 'accepted' || newStatus === 'rejected') {
+    if (newStatus === 'approved' || newStatus === 'accepted' || newStatus === 'rejected' || newStatus === 'closed') {
       this.employerNotes = notes;
     } else {
       this.studentNotes = notes;
@@ -286,9 +293,12 @@ applicationSchema.pre('save', function(next) {
   
   // Validate status transitions
   const validTransitions = {
-    applied: ['accepted', 'rejected'],
-    accepted: [],
-    rejected: []
+    applied: ['pending', 'approved', 'rejected', 'closed'],
+    pending: ['approved', 'rejected', 'closed'],
+    approved: ['closed'],
+    accepted: ['closed'],
+    rejected: [],
+    closed: []
   };
   
   if (this.isModified('status') && this.status !== 'applied') {

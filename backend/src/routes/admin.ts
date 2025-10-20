@@ -194,28 +194,37 @@ router.patch('/jobs/:id/approve', authenticateToken, requireRole(['admin']), asy
     throw new ValidationError('Job not found');
   }
 
-  // Update job status and approval status
-  job.status = 'active';
-  job.approvalStatus = 'approved';
-  job.approvedAt = new Date();
-  job.approvedBy = req.user!._id;
-  await job.save();
+  // Update job status and approval status without triggering validation
+  const updatedJob = await Job.findByIdAndUpdate(
+    id,
+    {
+      status: 'active',
+      approvalStatus: 'approved',
+      approvedAt: new Date(),
+      approvedBy: req.user!._id
+    },
+    { new: true }
+  );
 
-  const jobId = job._id instanceof mongoose.Types.ObjectId ? job._id.toString() : String(job._id);
+  if (!updatedJob) {
+    throw new ValidationError('Job not found after update');
+  }
+
+  const jobId = updatedJob._id instanceof mongoose.Types.ObjectId ? updatedJob._id.toString() : String(updatedJob._id);
 
   const socketManager = (global as any).socketManager as SocketManager | undefined;
   if (socketManager) {
     socketManager.emitJobApproval(jobId, {
-      jobId: job._id,
-      title: job.jobTitle,
-      company: job.companyName,
-      location: job.location,
+      jobId: updatedJob._id,
+      title: updatedJob.jobTitle,
+      company: updatedJob.companyName,
+      location: updatedJob.location,
       status: 'approved',
       timestamp: new Date()
     });
   }
 
-  sendSuccessResponse(res, { job }, 'Job approved successfully');
+  sendSuccessResponse(res, { job: updatedJob }, 'Job approved successfully');
 }));
 
 // @route   PATCH /api/admin/jobs/:id/reject
