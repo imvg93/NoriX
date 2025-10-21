@@ -51,44 +51,21 @@ if (missingOptionalVars.length > 0) {
 console.log('✅ All required environment variables are set');
 console.log('🚀 Starting backend server...');
 
-// Import port manager
-const { cleanupAndFindPort, killAllNodeProcesses } = require('./scripts/port-manager');
+// Start the compiled application
+const server = spawn('node', ['dist/index.js'], {
+  stdio: 'inherit',
+  cwd: __dirname
+});
 
-// Start the compiled application with port management
-const startServer = async () => {
-  try {
-    // Clean up and find available port
-    const availablePort = await cleanupAndFindPort(5000);
-    
-    // Set PORT environment variable for the child process
-    process.env.PORT = availablePort;
-    
-    console.log(`🚀 Starting server on port ${availablePort}...`);
-    
-    const server = spawn('node', ['dist/index.js'], {
-      stdio: 'inherit',
-      cwd: __dirname,
-      env: { ...process.env, PORT: availablePort }
-    });
+server.on('error', (error) => {
+  console.error('❌ Failed to start server:', error.message);
+  process.exit(1);
+});
 
-    server.on('error', (error) => {
-      console.error('❌ Failed to start server:', error.message);
-      process.exit(1);
-    });
-
-    server.on('exit', (code) => {
-      console.log(`Server exited with code ${code}`);
-      process.exit(code);
-    });
-    
-  } catch (error) {
-    console.error('❌ Failed to start server:', error.message);
-    process.exit(1);
-  }
-};
-
-// Start the server
-startServer();
+server.on('exit', (code) => {
+  console.log(`Server exited with code ${code}`);
+  process.exit(code);
+});
 
 // Handle graceful shutdown
 process.on('SIGTERM', () => {

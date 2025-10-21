@@ -253,63 +253,23 @@ router.get('/my-applications', authenticateToken, asyncHandler(async (req: AuthR
   const { page = 1, limit = 10, status } = req.query;
 
   try {
-    console.log('📋 Fetching applications for student:', req.user!._id);
-    
     const query: any = { studentId: req.user!._id };
 
     if (status) {
       query.status = status;
     }
 
-    // Fetch applications with proper error handling
     const applications = await Application.find(query)
-      .populate({
-        path: 'jobId',
-        select: 'jobTitle companyName location salaryRange workType status approvalStatus',
-        options: { strictPopulate: false }
-      })
-      .populate({
-        path: 'employer',
-        select: 'name companyName email',
-        options: { strictPopulate: false }
-      })
+      .populate('jobId', 'jobTitle companyName location salaryRange workType status')
+      .populate('employer', 'name companyName')
       .limit(Number(limit) * 1)
       .skip((Number(page) - 1) * Number(limit))
-      .sort({ appliedAt: -1 })
-      .lean();
-
-    console.log('📋 Found applications:', applications.length);
-
-    // Filter out applications with null/deleted jobs and format properly
-    const validApplications = applications
-      .filter((app: any) => app.jobId != null)
-      .map((app: any) => ({
-        _id: app._id,
-        job: app.jobId ? {
-          _id: app.jobId._id,
-          title: app.jobId.jobTitle || 'Job Title Not Available',
-          company: app.jobId.companyName || 'Company Not Available',
-          location: app.jobId.location || 'Location Not Available',
-          salary: app.jobId.salaryRange || 'Not specified',
-          type: app.jobId.workType || 'Full-time',
-          status: app.jobId.status || 'active',
-          approvalStatus: app.jobId.approvalStatus || 'pending'
-        } : null,
-        student: app.studentId,
-        employer: app.employer || '',
-        status: app.status,
-        appliedDate: app.appliedAt || app.createdAt,
-        coverLetter: app.coverLetter,
-        expectedPay: app.expectedPay,
-        availability: app.availability
-      }));
-
-    console.log('📋 Valid applications after filtering:', validApplications.length);
+      .sort({ appliedAt: -1 });
 
     const total = await Application.countDocuments(query);
 
     sendSuccessResponse(res, {
-      applications: validApplications,
+      applications,
       pagination: {
         current: Number(page),
         pages: Math.ceil(total / Number(limit)),
@@ -317,8 +277,7 @@ router.get('/my-applications', authenticateToken, asyncHandler(async (req: AuthR
       }
     }, 'Applications retrieved successfully');
   } catch (e: any) {
-    console.error('❌ Failed to fetch my applications:', e);
-    console.error('❌ Error stack:', e?.stack);
+    console.error('❌ Failed to fetch my applications:', e?.message);
     return sendErrorResponse(res, 500, 'Failed to fetch applications', process.env.NODE_ENV !== 'production' ? e?.message : undefined);
   }
 }));

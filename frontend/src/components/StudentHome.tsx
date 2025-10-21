@@ -18,7 +18,6 @@ import {
   Home,
   Search,
   Star,
-  RefreshCw,
   MapPin,
   DollarSign,
   Filter,
@@ -294,7 +293,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
       const handleJobApproved = (event: Event) => {
         const customEvent = event as CustomEvent<{ jobId?: string }>;
         console.log('🎉 New job approved:', customEvent.detail);
-        apiService.getStudentDashboardJobs(true, 1000).then((jobsData: JobsResponse) => {
+        apiService.getStudentDashboardJobs().then((jobsData: JobsResponse) => {
           const responseData = jobsData as any;
           if (!responseData.kycRequired) {
             setJobs(jobsData.jobs || []);
@@ -348,7 +347,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
           });
           
           // Refresh jobs immediately
-          apiService.getStudentDashboardJobs(true, 1000).then((jobsData: JobsResponse) => {
+          apiService.getStudentDashboardJobs().then((jobsData: JobsResponse) => {
             setJobs(Array.isArray(jobsData.jobs) ? jobsData.jobs : []);
           }).catch(console.error);
         }
@@ -637,6 +636,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {filteredJobs
               .filter(job => job.highlighted === true)
+              .slice(0, 6)
               .map((job) => {
               const isApplied = Array.isArray(appliedJobs) ? appliedJobs.some(aj => aj.job._id === job._id) : false;
               const isSaved = Array.isArray(savedJobs) ? savedJobs.some(sj => sj.job._id === job._id) : false;
@@ -755,6 +755,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {filteredJobs
               .filter(job => job.highlighted !== true)
+              .slice(0, 6)
               .map((job) => {
               const isApplied = Array.isArray(appliedJobs) ? appliedJobs.some(aj => aj.job._id === job._id) : false;
               const isSaved = Array.isArray(savedJobs) ? savedJobs.some(sj => sj.job._id === job._id) : false;
@@ -836,6 +837,18 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
               );
             })}
         </div>
+        
+          {filteredJobs.filter(job => job.highlighted !== true).length > 6 && (
+            <div className="text-center mt-4">
+              <Link 
+                href="/jobs"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              >
+                <Eye className="w-4 h-4" />
+                View All Jobs
+              </Link>
+            </div>
+          )}
         </motion.div>
       ) : null}
 
@@ -914,7 +927,34 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
 
         {/* Job Listings - Mobile Optimized */}
         <div className="space-y-3 sm:space-y-4">
-          {filteredJobs.length === 0 ? (
+
+          {!kycStatus.isCompleted ? (
+            <div className="text-center py-8 sm:py-12">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Shield className="w-8 h-8 sm:w-10 sm:h-10 text-orange-600" />
+              </div>
+              <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Complete KYC to get your first job</h3>
+              <p className="text-gray-600 text-sm sm:text-base mb-6 max-w-md mx-auto">
+                Complete your KYC to view and apply for jobs.
+              </p>
+              <Link 
+                href="/kyc-profile"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium text-sm sm:text-base"
+              >
+                <Shield className="w-5 h-5" />
+                Complete KYC Now
+              </Link>
+              {kycStatus.status === 'pending' && (
+                <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
+                  <div className="flex items-center gap-2 justify-center text-blue-700">
+                    <Clock className="w-5 h-5" />
+                    <span className="text-sm font-medium">Your KYC is under review. Jobs will appear once approved.</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : filteredJobs.length === 0 ? (
+
             <div className="text-center py-6 sm:py-8">
               <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-3 sm:mb-4" />
               <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No jobs found</h3>
