@@ -18,7 +18,6 @@ import {
   Home,
   Search,
   Star,
-  RefreshCw,
   MapPin,
   DollarSign,
   Filter,
@@ -320,7 +319,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
       const handleJobApproved = (event: Event) => {
         const customEvent = event as CustomEvent<{ jobId?: string }>;
         console.log('🎉 New job approved:', customEvent.detail);
-        apiService.getStudentDashboardJobs(true, 1000).then((jobsData: JobsResponse) => {
+        apiService.getStudentDashboardJobs().then((jobsData: JobsResponse) => {
           const responseData = jobsData as any;
           if (!responseData.kycRequired) {
             setJobs(jobsData.jobs || []);
@@ -374,7 +373,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
           });
           
           // Refresh jobs immediately
-          apiService.getStudentDashboardJobs(true, 1000).then((jobsData: JobsResponse) => {
+          apiService.getStudentDashboardJobs().then((jobsData: JobsResponse) => {
             setJobs(Array.isArray(jobsData.jobs) ? jobsData.jobs : []);
           }).catch(console.error);
         }
@@ -737,6 +736,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {filteredJobs
               .filter(job => job.highlighted === true)
+              .slice(0, 6)
               .map((job) => {
               const isApplied = Array.isArray(appliedJobs) ? appliedJobs.some(aj => aj.job._id === job._id) : false;
               const isSaved = Array.isArray(savedJobs) ? savedJobs.some(sj => sj.job._id === job._id) : false;
@@ -855,6 +855,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {filteredJobs
               .filter(job => job.highlighted !== true)
+              .slice(0, 6)
               .map((job) => {
               const isApplied = Array.isArray(appliedJobs) ? appliedJobs.some(aj => aj.job._id === job._id) : false;
               const isSaved = Array.isArray(savedJobs) ? savedJobs.some(sj => sj.job._id === job._id) : false;
@@ -936,6 +937,18 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
               );
             })}
         </div>
+        
+          {filteredJobs.filter(job => job.highlighted !== true).length > 6 && (
+            <div className="text-center mt-4">
+              <Link 
+                href="/jobs"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              >
+                <Eye className="w-4 h-4" />
+                View All Jobs
+              </Link>
+            </div>
+          )}
         </motion.div>
       ) : null}
 
@@ -1023,44 +1036,13 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
               <p className="text-gray-600 text-sm sm:text-base mb-6 max-w-md mx-auto">
                 Complete your KYC to view and apply for jobs.
               </p>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Link 
-                  href="/kyc-profile"
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium text-sm sm:text-base"
-                >
-                  <Shield className="w-5 h-5" />
-                  Complete KYC Now
-                </Link>
-                <button
-                  onClick={async () => {
-                    try {
-                      console.log('🔄 Refreshing KYC status...');
-                      const profile = await apiService.getProfile();
-                      console.log('📊 Fresh profile:', profile);
-                      
-                      if (!profile) {
-                        console.error('❌ Profile is undefined');
-                        alert('Error: Could not fetch profile. Please try logging in again.');
-                        return;
-                      }
-                      
-                      if (profile.isVerified || profile.kycStatus === 'approved') {
-                        alert('Your KYC is approved! Refreshing page...');
-                        window.location.reload();
-                      } else {
-                        alert(`KYC Status: ${profile.kycStatus || 'not submitted'}`);
-                      }
-                    } catch (error: any) {
-                      console.error('Error refreshing KYC:', error);
-                      alert(`Error checking KYC status: ${error.message || 'Please try again.'}`);
-                    }
-                  }}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm sm:text-base"
-                >
-                  <RefreshCw className="w-5 h-5" />
-                  Refresh Status
-                </button>
-              </div>
+              <Link 
+                href="/kyc-profile"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium text-sm sm:text-base"
+              >
+                <Shield className="w-5 h-5" />
+                Complete KYC Now
+              </Link>
               {kycStatus.status === 'pending' && (
                 <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
                   <div className="flex items-center gap-2 justify-center text-blue-700">

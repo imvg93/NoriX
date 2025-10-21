@@ -51,7 +51,7 @@ router.post('/', authenticateToken, requireEmployer, asyncHandler(async (req: Au
   }
 
   // Create job with only essential fields
-  const jobData = {
+  const job = await Job.create({
     jobId: new mongoose.Types.ObjectId(),
     employerId: req.user!._id,
     jobTitle,
@@ -72,16 +72,11 @@ router.post('/', authenticateToken, requireEmployer, asyncHandler(async (req: Au
     
     // System fields
     status: 'active',
-    // approvalStatus will be set by schema default: 'approved'
 
     highlighted: true, // Jobs stay highlighted until assigned
 
     createdAt: new Date()
-  };
-
-  console.log('📝 Creating job with data:', jobData);
-  const job = await Job.create(jobData);
-  console.log('✅ Job created with approvalStatus:', job.approvalStatus);
+  });
 
   // Populate employer info
   await job.populate('employerId', 'name email companyName');
@@ -150,12 +145,32 @@ router.get('/student-dashboard', authenticateToken, requireStudent, asyncHandler
       isKYCApproved
     });
     
-    // BUILD QUERY - Show jobs regardless of KYC status
-    // Students can VIEW jobs, but need KYC to APPLY
+    // If KYC not approved, return empty jobs list with KYC status
+    if (!isKYCApproved) {
+      console.log(`⚠️ Student ${studentId} KYC not approved - hiding job listings`);
+      
+      return sendSuccessResponse(res, {
+        jobs: [],
+        pagination: {
+          current: Number(page),
+          pages: 0,
+          total: 0
+        },
+        kycRequired: true,
+        kycStatus: kycStatus,
+        message: 'Complete KYC to get your first job'
+      }, 'KYC approval required to view jobs');
+    }
+    
+    // KYC approved - return jobs
     const filter: any = {
-      status: 'active',
-      approvalStatus: 'approved'
+      status: 'active'
     };
+    // Be tolerant if some legacy jobs lack approvalStatus; show only approved when present
+    filter.$or = [
+      { approvalStatus: 'approved' },
+      { approvalStatus: { $exists: false } }
+    ];
 
     const jobs = await Job.find(filter)
       .populate('employerId', 'name companyName email')

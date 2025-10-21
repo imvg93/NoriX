@@ -32,7 +32,7 @@ dotenv.config();
 
 const app = express();
 const server = createServer(app);
-const PORT = parseInt(process.env.PORT || '5001', 10);
+const PORT = process.env.PORT || 5001;
 // Initialize Socket.IO
 const socketManager = new SocketManager(server);
 
@@ -144,111 +144,19 @@ app._router.stack.forEach((middleware: any) => {
 app.use(notFound);
 app.use(errorHandler);
 
-// Helper function to find available port
-const findAvailablePort = async (startPort: number): Promise<number> => {
-  const net = require('net');
-  
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    
-    server.listen(startPort, () => {
-      const port = server.address()?.port;
-      server.close(() => {
-        resolve(port || startPort);
-      });
-    });
-    
-    server.on('error', (err: any) => {
-      if (err.code === 'EADDRINUSE') {
-        // Try next port
-        findAvailablePort(startPort + 1).then(resolve).catch(reject);
-      } else {
-        reject(err);
-      }
-    });
-  });
-};
-
-// Helper function to kill processes on specific port
-const killProcessOnPort = async (port: number): Promise<void> => {
-  const { exec } = require('child_process');
-  const util = require('util');
-  const execAsync = util.promisify(exec);
-  
-  try {
-    // Find process using the port
-    const { stdout } = await execAsync(`netstat -ano | findstr :${port}`);
-    const lines = stdout.trim().split('\n');
-    
-    for (const line of lines) {
-      if (line.includes('LISTENING')) {
-        const parts = line.trim().split(/\s+/);
-        const pid = parts[parts.length - 1];
-        
-        if (pid && !isNaN(parseInt(pid))) {
-          console.log(`🔧 Killing process ${pid} using port ${port}`);
-          try {
-            await execAsync(`taskkill /PID ${pid} /F`);
-            console.log(`✅ Process ${pid} terminated`);
-          } catch (killErr: any) {
-            console.log(`⚠️ Could not kill process ${pid}:`, killErr.message);
-          }
-        }
-      }
-    }
-  } catch (error) {
-    // No process found or command failed - that's okay
-    console.log(`ℹ️ No process found on port ${port}`);
-  }
-};
-
-// Start server with automatic port handling
+// Start server
 const startServer = async (): Promise<void> => {
   try {
     await connectDB();
     
-    let actualPort = PORT;
-    
-    // Try to start on the preferred port
-    const serverInstance = server.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${actualPort}`);
+    server.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📱 Environment: ${process.env.NODE_ENV}`);
-      console.log(`🔗 Health check: http://localhost:${actualPort}/health`);
-      console.log(`📚 API Documentation: http://localhost:${actualPort}/api`);
+      console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+      console.log(`📚 API Documentation: http://localhost:${PORT}/api`);
       console.log(`🔌 Socket.IO enabled for real-time updates`);
       console.log(`🔒 CORS: ENABLED - Environment-aware configuration`);
       console.log(`   Allowed origins: ${allowedOrigins.join(', ')}`);
-    });
-    
-    serverInstance.on('error', async (err: any) => {
-      if (err.code === 'EADDRINUSE') {
-        console.log(`⚠️ Port ${PORT} is already in use`);
-        
-        // Try to kill existing process
-        await killProcessOnPort(PORT);
-        
-        // Wait a moment for cleanup
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Find next available port
-        try {
-          actualPort = await findAvailablePort(PORT);
-          console.log(`🔄 Trying port ${actualPort}...`);
-          
-          // Start server on new port
-          server.listen(actualPort, () => {
-            console.log(`✅ Server started successfully on port ${actualPort}`);
-            console.log(`🔗 Health check: http://localhost:${actualPort}/health`);
-            console.log(`📚 API Documentation: http://localhost:${actualPort}/api`);
-          });
-        } catch (portError) {
-          console.error('❌ Failed to find available port:', portError);
-          process.exit(1);
-        }
-      } else {
-        console.error('❌ Server error:', err);
-        process.exit(1);
-      }
     });
 
     // Verify email configuration
