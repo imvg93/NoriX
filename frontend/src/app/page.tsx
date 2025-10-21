@@ -3,7 +3,10 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import Footer from '@/components/Footer';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
+import { apiService } from '@/services/api';
 
 // Job statistics data with Indian prices
 const jobStats = {
@@ -55,9 +58,15 @@ const jobStats = {
 };
 
 export default function Home() {
+  const { user, isAuthenticated, loading } = useAuth();
+  const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [showPopup, setShowPopup] = useState(false);
+  const [userJobs, setUserJobs] = useState<any[]>([]);
+  const [userApplications, setUserApplications] = useState<any[]>([]);
+  const [userStats, setUserStats] = useState(null);
+  const [jobsLoading, setJobsLoading] = useState(false);
 
   const handleJobClick = (jobName: string) => {
     setSelectedJob(jobName);
@@ -69,102 +78,42 @@ export default function Home() {
     setSelectedJob(null);
   };
 
+  // Fetch user data when authenticated
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      fetchUserData();
+    }
+  }, [isAuthenticated, user]);
+
+  const fetchUserData = async () => {
+    setJobsLoading(true);
+    try {
+      if (user?.userType === 'student') {
+        // Fetch student applications
+        const applications = await apiService.getStudentApplications();  
+        setUserApplications(applications.applications || []);
+        
+        // Fetch recent jobs for student
+        const jobs = await apiService.getJobs();
+        setUserJobs(jobs.jobs?.slice(0, 6) || []);
+      } else if (user?.userType === 'employer') {
+        // Fetch employer jobs
+        const jobs = await apiService.getEmployerJobs();
+        setUserJobs(jobs.jobs || []);
+        
+        // Fetch employer applications
+        const applications = await apiService.getEmployerApplications();
+        setUserApplications(applications.applications || []);
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    } finally {
+      setJobsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <Link href="/" className="flex items-center">
-                <div className="relative h-12 w-40 sm:h-16 sm:w-56">
-                  <Image
-                    src="/img/norixgreen.png"
-                    alt="NoriX logo"
-                    fill
-                    sizes="(max-width: 640px) 160px, 224px"
-                    priority
-                    className="object-contain"
-                  />
-                </div>
-              </Link>
-            </div>
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center space-x-6 lg:space-x-8">
-              <Link href="/jobs" className="text-gray-700 hover:text-gray-900 font-medium">
-                Jobs
-              </Link>
-              <Link href="/services" className="text-gray-700 hover:text-gray-900 font-medium">
-                Services
-              </Link>
-              <Link href="/about" className="text-gray-700 hover:text-gray-900 font-medium">
-                AboutUs
-              </Link>
-              <Link href="/how-it-works" className="text-gray-700 hover:text-gray-900 font-medium">
-                How It Works
-              </Link>
-              <Link href="/careers" className="text-gray-700 hover:text-gray-900 font-medium">
-                Careers
-              </Link>
-              <Link href="/signup" className="text-gray-700 hover:text-gray-900 font-medium">
-                Sign up
-              </Link>
-              <Link href="/login" className="text-gray-700 hover:text-gray-900 font-medium">
-                Log in
-              </Link>
-             
-              
-            </nav>
-
-            {/* Mobile Navigation */}
-            <div className="md:hidden flex items-center space-x-3">
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="p-2 text-gray-600 hover:text-gray-900"
-              >
-                <div className="w-6 h-6 flex flex-col justify-center space-y-1">
-                  <div className="w-full h-0.5 bg-[#32A4A6]"></div>
-                  <div className="w-full h-0.5 bg-[#32A4A6]"></div>
-                  <div className="w-full h-0.5 bg-[#32A4A6]"></div>
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Mobile Menu Dropdown */}
-      {mobileMenuOpen && (
-        <div className="md:hidden bg-white border-b border-gray-200 shadow-lg">
-          <div className="px-4 py-3 space-y-3">
-            <Link href="/jobs" className="block text-gray-700 hover:text-gray-900 font-medium py-2">
-              Jobs
-            </Link>
-            <Link href="/services" className="block text-gray-700 hover:text-gray-900 font-medium py-2">
-              Services
-            </Link>
-            <Link href="/about" className="block text-gray-700 hover:text-gray-900 font-medium py-2">
-              About
-            </Link>
-            <Link href="/how-it-works" className="block text-gray-700 hover:text-gray-900 font-medium py-2">
-              How It Works
-            </Link>
-            <Link href="/careers" className="block text-gray-700 hover:text-gray-900 font-medium py-2">
-              Careers
-            </Link>
-            <Link href="/signup" className="block text-gray-700 hover:text-gray-900 font-medium py-2">
-              Sign up
-            </Link>
-            <Link href="/login" className="block text-gray-700 hover:text-gray-900 font-medium py-2">
-              Log in
-            </Link>
-            
-            <Link href="/login" className="block bg-[#32A4A6] text-white px-4 py-2 rounded-lg font-medium hover:bg-[#32A4A6] transition-colors text-center">
-              Post Jobs
-            </Link>
-          </div>
-        </div>
-      )}
 
       {/* Hero Section */}
       <section className="relative py-12 sm:py-16 lg:py-20 bg-white overflow-hidden">
@@ -192,9 +141,37 @@ export default function Home() {
         </div>
 
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-[#32A4A6] mb-6 sm:mb-8 leading-tight">
-            Find trusted student works
-          </h1>
+          {!loading && (
+            <>
+              {isAuthenticated && user ? (
+                <>
+                  {/* Authenticated User Hero */}
+                  {user?.userType === 'student' && (
+                    <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-[#32A4A6] mb-6 sm:mb-8 leading-tight">
+                      Welcome back, {user?.name}! 🎓
+                    </h1>
+                  )}
+                  {user?.userType === 'employer' && (
+                    <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-[#32A4A6] mb-6 sm:mb-8 leading-tight">
+                      Find the best student talent, {user?.name}! 👥
+                    </h1>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* Unauthenticated User Hero */}
+                  <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-[#32A4A6] mb-6 sm:mb-8 leading-tight">
+                    Find trusted student works
+                  </h1>
+                </>
+              )}
+            </>
+          )}
+          {loading && (
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-[#32A4A6] mb-6 sm:mb-8 leading-tight">
+              Find trusted student works
+            </h1>
+          )}
           
           {/* Search Bar */}
           <div className="max-w-2xl mx-auto mb-6 sm:mb-8">
@@ -212,6 +189,44 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Role-specific Action Buttons */}
+          {!loading && isAuthenticated && user && (
+            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6 sm:mb-8">
+              {user?.userType === 'student' && (
+                <>
+                  <Link 
+                    href="/student/jobs"
+                    className="bg-[#32A4A6] text-white px-8 py-3 rounded-lg font-semibold hover:bg-[#2a8a8c] transition-colors text-center"
+                  >
+                    Browse Jobs
+                  </Link>
+                  <Link 
+                    href="/student/dashboard"
+                    className="bg-white border-2 border-[#32A4A6] text-[#32A4A6] px-8 py-3 rounded-lg font-semibold hover:bg-[#32A4A6] hover:text-white transition-colors text-center"
+                  >
+                    My Dashboard
+                  </Link>
+                </>
+              )}
+              {user?.userType === 'employer' && (
+                <>
+                  <Link 
+                    href="/employer/post-job"
+                    className="bg-[#32A4A6] text-white px-8 py-3 rounded-lg font-semibold hover:bg-[#2a8a8c] transition-colors text-center"
+                  >
+                    Post a Job
+                  </Link>
+                  <Link 
+                    href="/employer/dashboard"
+                    className="bg-white border-2 border-[#32A4A6] text-[#32A4A6] px-8 py-3 rounded-lg font-semibold hover:bg-[#32A4A6] hover:text-white transition-colors text-center"
+                  >
+                    My Dashboard
+                  </Link>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Service box - Responsive */}
           <div className="inline-block bg-white border-2 border-gray-300 rounded-lg px-4 sm:px-6 py-2 sm:py-3 mb-6 sm:mb-8">
             <p className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Remote work service provided for</p>
@@ -223,6 +238,227 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* User Dashboard Section */}
+      {!loading && isAuthenticated && user && (
+        <section className="py-8 sm:py-12 bg-gradient-to-r from-[#32A4A6]/5 to-[#32A4A6]/10">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            
+            {/* User Profile Card */}
+            <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+                {/* Profile Avatar */}
+                <div className="flex-shrink-0">
+                  <div className="w-20 h-20 bg-[#32A4A6] rounded-full flex items-center justify-center text-white text-2xl font-bold">
+                    {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                  </div>
+                </div>
+                
+                {/* User Info */}
+                <div className="flex-1">
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                    Welcome back, {user?.name}! 👋
+                  </h2>
+                  <p className="text-gray-600 mb-4">
+                    {user?.userType === 'student' ? '🎓 Student' : '💼 Employer'} • {user?.email}
+                  </p>
+                  
+                  {/* Quick Stats */}
+                  <div className="flex flex-wrap gap-4">
+                    <div className="bg-[#32A4A6]/10 px-4 py-2 rounded-lg">
+                      <span className="text-sm text-gray-600">Applications:</span>
+                      <span className="ml-2 font-semibold text-[#32A4A6]">{userApplications.length}</span>
+                    </div>
+                    <div className="bg-[#32A4A6]/10 px-4 py-2 rounded-lg">
+                      <span className="text-sm text-gray-600">Jobs:</span>
+                      <span className="ml-2 font-semibold text-[#32A4A6]">{userJobs.length}</span>
+                    </div>
+                    {user?.userType === 'student' && (
+                      <div className="bg-green-100 px-4 py-2 rounded-lg">
+                        <span className="text-sm text-gray-600">Active Applications:</span>
+                        <span className="ml-2 font-semibold text-green-700">
+                          {userApplications.filter((app: any) => app.status === 'pending').length}
+                        </span>
+                      </div>
+                    )}
+                    {user?.userType === 'employer' && (
+                      <div className="bg-blue-100 px-4 py-2 rounded-lg">
+                        <span className="text-sm text-gray-600">Active Jobs:</span>
+                        <span className="ml-2 font-semibold text-blue-700">
+                          {userJobs.filter((job: any) => job.status === 'active').length}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Action Buttons */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  {user?.userType === 'student' && (
+                    <>
+                      <Link 
+                        href="/student/jobs"
+                        className="bg-[#32A4A6] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#2a8a8c] transition-colors text-center"
+                      >
+                        Browse Jobs
+                      </Link>
+                      <Link 
+                        href="/student/approved-applications"
+                        className="bg-white border-2 border-[#32A4A6] text-[#32A4A6] px-6 py-3 rounded-lg font-semibold hover:bg-[#32A4A6] hover:text-white transition-colors text-center"
+                      >
+                        My Applications
+                      </Link>
+                    </>
+                  )}
+                  {user?.userType === 'employer' && (
+                    <>
+                      <Link 
+                        href="/employer/post-job"
+                        className="bg-[#32A4A6] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#2a8a8c] transition-colors text-center"
+                      >
+                        Post Job
+                      </Link>
+                      <Link 
+                        href="/employer/applications"
+                        className="bg-white border-2 border-[#32A4A6] text-[#32A4A6] px-6 py-3 rounded-lg font-semibold hover:bg-[#32A4A6] hover:text-white transition-colors text-center"
+                      >
+                        Review Applications
+                      </Link>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Activity */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              
+              {/* Recent Jobs */}
+              <div className="bg-white rounded-2xl shadow-lg p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-gray-900">
+                    {user?.userType === 'student' ? '💼 Recent Jobs' : '📝 My Posted Jobs'}
+                  </h3>
+                  <Link 
+                    href={user?.userType === 'student' ? '/student/jobs' : '/employer/dashboard'}
+                    className="text-[#32A4A6] hover:text-[#2a8a8c] font-medium"
+                  >
+                    View All
+                  </Link>
+                </div>
+                
+                {jobsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#32A4A6]"></div>
+                  </div>
+                ) : userJobs.length > 0 ? (
+                  <div className="space-y-4">
+                    {userJobs.slice(0, 3).map((job: any) => (
+                      <div key={job._id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-gray-900 mb-1">{job.jobTitle || job.title}</h4>
+                            <p className="text-sm text-gray-600 mb-2">{job.companyName || job.company}</p>
+                            <div className="flex items-center gap-4 text-sm text-gray-500">
+                              <span>📍 {job.location}</span>
+                              <span>💰 {job.salaryRange || job.salary}</span>
+                            </div>
+                          </div>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            job.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {job.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>No jobs found</p>
+                    {user?.userType === 'employer' && (
+                      <Link 
+                        href="/employer/post-job"
+                        className="text-[#32A4A6] hover:text-[#2a8a8c] font-medium mt-2 inline-block"
+                      >
+                        Post your first job
+                      </Link>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Recent Applications */}
+              <div className="bg-white rounded-2xl shadow-lg p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-gray-900">
+                    {user?.userType === 'student' ? '📋 My Applications' : '👥 Recent Applications'}
+                  </h3>
+                  <Link 
+                    href={user?.userType === 'student' ? '/student/approved-applications' : '/employer/applications'}
+                    className="text-[#32A4A6] hover:text-[#2a8a8c] font-medium"
+                  >
+                    View All
+                  </Link>
+                </div>
+                
+                {jobsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#32A4A6]"></div>
+                  </div>
+                ) : userApplications.length > 0 ? (
+                  <div className="space-y-4">
+                    {userApplications.slice(0, 3).map((application: any) => (
+                      <div key={application._id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-gray-900 mb-1">
+                              {user?.userType === 'student' 
+                                ? application.job?.jobTitle || application.job?.title 
+                                : application.student?.name || 'Student Application'
+                              }
+                            </h4>
+                            <p className="text-sm text-gray-600 mb-2">
+                              {user?.userType === 'student' 
+                                ? application.job?.companyName || application.job?.company
+                                : application.job?.jobTitle || application.job?.title
+                              }
+                            </p>
+                            <div className="flex items-center gap-4 text-sm text-gray-500">
+                              <span>📅 {new Date(application.appliedAt).toLocaleDateString()}</span>
+                              <span>📍 {application.job?.location}</span>
+                            </div>
+                          </div>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            application.status === 'approved' ? 'bg-green-100 text-green-800' :
+                            application.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                            application.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {application.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>{user?.userType === 'student' ? 'No applications yet' : 'No applications received'}</p>
+                    {user?.userType === 'student' && (
+                      <Link 
+                        href="/student/jobs"
+                        className="text-[#32A4A6] hover:text-[#2a8a8c] font-medium mt-2 inline-block"
+                      >
+                        Browse available jobs
+                      </Link>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Job Categories */}
       <section className="py-8 sm:py-12 bg-white">

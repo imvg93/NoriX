@@ -1,40 +1,62 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // output: 'export', // Commented out to allow dynamic routes
-  trailingSlash: false, // Changed to false for Vercel compatibility
+  // Vercel-optimized configuration
+  trailingSlash: false,
   images: {
-    unoptimized: true
+    unoptimized: true,
+    domains: ['localhost'],
   },
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // Vercel-specific configuration
-  env: {
-    PORT: process.env.PORT || '3000',
+  typescript: {
+    ignoreBuildErrors: false,
   },
-  // Add configuration to handle clientReferenceManifest issues
+  // Enable React strict mode
   reactStrictMode: true,
-  // Simplified webpack configuration for Vercel compatibility
-  webpack: (config, { isServer }) => {
+  // Webpack configuration for better compatibility
+  webpack: (config, { isServer, dev }) => {
+    // Handle client-side fallbacks
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
         net: false,
         tls: false,
+        crypto: false,
+        stream: false,
+        url: false,
+        zlib: false,
+        http: false,
+        https: false,
+        assert: false,
+        os: false,
+        path: false,
       };
     }
+    
+    // Optimize bundle size
+    if (!dev) {
+      config.optimization.splitChunks = {
+        chunks: 'all',
+        cacheGroups: {
+          default: false,
+          vendors: false,
+          vendor: {
+            name: 'vendor',
+            chunks: 'all',
+            test: /node_modules/,
+          },
+        },
+      };
+    }
+    
     return config;
   },
-  // Turbopack configuration
-  turbopack: {
-    rules: {
-      '*.svg': {
-        loaders: ['@svgr/webpack'],
-        as: '*.js',
-      },
-    },
+  // Experimental features for better performance (removed optimizeCss)
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'framer-motion'],
   },
 };
 

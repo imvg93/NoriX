@@ -12,6 +12,7 @@ import {
   Shield,
   Star,
   ArrowRight,
+  ArrowLeft,
   CheckCircle,
   MapPin,
   Clock,
@@ -198,56 +199,19 @@ const CareersPage = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Navigation */}
-      <nav className="fixed top-0 w-full bg-white/95 backdrop-blur-sm border-b border-gray-200 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center space-x-2">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-green-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">NX</span>
-              </div>
-              <span className="text-xl font-bold text-gray-900">NoriX</span>
-            </Link>
-            
-            <div className="hidden md:flex items-center space-x-8">
-              <a href="#opportunities" className="text-gray-600 hover:text-gray-900 transition-colors">Opportunities</a>
-              <a href="#how-it-works" className="text-gray-600 hover:text-gray-900 transition-colors">How It Works</a>
-              <a href="#success-stories" className="text-gray-600 hover:text-gray-900 transition-colors">Success Stories</a>
-              <a href="#about" className="text-gray-600 hover:text-gray-900 transition-colors">About</a>
-              <Link href="/login" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                Get Started
-              </Link>
-            </div>
-
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="md:hidden p-2 rounded-lg hover:bg-gray-100"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile menu */}
-        {isMenuOpen && (
-          <div className="md:hidden bg-white border-t border-gray-200">
-            <div className="px-4 py-4 space-y-3">
-              <a href="#opportunities" className="block text-gray-600 hover:text-gray-900 transition-colors">Opportunities</a>
-              <a href="#how-it-works" className="block text-gray-600 hover:text-gray-900 transition-colors">How It Works</a>
-              <a href="#success-stories" className="block text-gray-600 hover:text-gray-900 transition-colors">Success Stories</a>
-              <a href="#about" className="block text-gray-600 hover:text-gray-900 transition-colors">About</a>
-              <Link href="/login" className="block bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-center">
-                Get Started
-              </Link>
-            </div>
-          </div>
-        )}
-      </nav>
+      {/* Back Button */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <Link 
+          href="/"
+          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors font-medium mb-8"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          Back to Home
+        </Link>
+      </div>
 
       {/* Hero Section */}
-      <section ref={heroRef} className="pt-20 pb-16 bg-gradient-to-br from-blue-50 via-white to-green-50">
+      <section ref={heroRef} className="pt-8 pb-16 bg-gradient-to-br from-blue-50 via-white to-green-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 30 }}

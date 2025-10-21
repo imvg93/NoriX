@@ -28,6 +28,7 @@ import {
   Filter,
   MapPin,
   Clock,
+  ArrowLeft,
   DollarSign,
   Star,
   ArrowRight,
@@ -533,42 +534,19 @@ const ServicesPage = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Navigation */}
-      <nav className="fixed top-0 w-full bg-white/95 backdrop-blur-sm border-b border-gray-200 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center">
-              <div className="relative h-12 w-40 sm:h-12 sm:w-40">
-                <Image
-                  src="/img/norixgreen.png"
-                  alt="NoriX logo"
-                  fill
-                  sizes="(max-width: 640px) 160px, 224px"
-                  priority
-                  className="object-contain"
-                />
-              </div>
-            </Link>
-            
-            <div className="hidden md:flex items-center space-x-8">
-              
-              <Link href="/login" className="bg-[#32A4A6] text-white px-4 py-2 rounded-lg hover:bg-[#ee3cd6a9] transition-colors">
-                Get Started
-              </Link>
-            </div>
-
-            {/* Mobile CTA */}
-            <div className="md:hidden">
-              <Link href="/login" className="bg-[#32A4A6] text-white px-3 py-2 rounded-lg text-sm hover:bg-[#ee3cd6a9] transition-colors">
-                Get Started
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
+      {/* Back Button */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <Link 
+          href="/"
+          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors font-medium mb-8"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          Back to Home
+        </Link>
+      </div>
 
       {/* Hero Section */}
-      <section ref={heroRef} className="pt-20 pb-16 bg-gradient-to-br from-blue-50 via-white to-green-50">
+      <section ref={heroRef} className="pt-8 pb-16 bg-gradient-to-br from-blue-50 via-white to-green-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 30 }}

@@ -93,7 +93,11 @@ const jobSchema = new Schema<IJob>({
     required: [true, 'Application deadline is required'],
     validate: {
       validator: function(this: IJob, value: Date) {
-        return value >= new Date();
+        // Only validate deadline for new documents or when explicitly updating the deadline field
+        if (this.isNew || this.isModified('applicationDeadline')) {
+          return value >= new Date();
+        }
+        return true; // Allow past deadlines for existing documents when deadline is not being modified
       },
       message: 'Application deadline must be in the future'
     }
@@ -199,6 +203,12 @@ jobSchema.index({ approvalStatus: 1 });
 jobSchema.virtual('duration').get(function(this: IJob) {
   const now = new Date();
   const created = this.createdAt;
+  
+  // Check if createdAt exists and is a valid date
+  if (!created || !(created instanceof Date) || isNaN(created.getTime())) {
+    return 'Unknown';
+  }
+  
   const diffTime = Math.abs(now.getTime() - created.getTime());
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   
@@ -210,6 +220,9 @@ jobSchema.virtual('duration').get(function(this: IJob) {
 
 // Virtual to check if job is expired
 jobSchema.virtual('isExpired').get(function(this: IJob) {
+  if (!this.applicationDeadline || !(this.applicationDeadline instanceof Date) || isNaN(this.applicationDeadline.getTime())) {
+    return false; // If no deadline or invalid date, consider it not expired
+  }
   return new Date() > this.applicationDeadline;
 });
 
@@ -221,9 +234,14 @@ jobSchema.methods.updateStatus = async function(this: IJob, newStatus: 'active' 
 
 // Pre-save middleware to handle status updates
 jobSchema.pre('save', function(this: IJob) {
-  // Auto-expire jobs past their deadline
-  if (this.isExpired && this.status === 'active') {
-    this.status = 'expired';
+  // Auto-expire jobs past their deadline (safely check isExpired virtual)
+  try {
+    if (this.isExpired && this.status === 'active') {
+      this.status = 'expired';
+    }
+  } catch (error) {
+    // If isExpired virtual fails, skip the auto-expire logic
+    console.warn('Could not check job expiration status:', error);
   }
 });
 

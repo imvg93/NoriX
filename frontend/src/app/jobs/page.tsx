@@ -19,6 +19,7 @@ import {
 
 import { apiService } from "../../services/api";
 import { useAuth } from "../../contexts/AuthContext";
+import { useSafeNavigation } from "../../hooks/useSafeNavigation";
 
 interface Job {
   _id: string;
@@ -62,6 +63,7 @@ interface ApplicationsResponse {
 const JobsPage = () => {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
+  const { navigateBack } = useSafeNavigation();
 
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,21 +77,27 @@ const JobsPage = () => {
       try {
         setLoading(true);
 
-        const jobsResponse = await apiService.getJobs() as JobsResponse;
-        console.log('📊 Fetched jobs from /api/jobs:', jobsResponse.jobs?.length || 0, jobsResponse);
-        console.log('📊 Sample job data:', jobsResponse.jobs?.[0]);
-        setJobs(jobsResponse.jobs || []);
+        // Only fetch jobs if user is authenticated
+        if (isAuthenticated) {
+          const jobsResponse = await apiService.getJobs() as JobsResponse;
+          console.log('📊 Fetched jobs from /api/jobs:', jobsResponse.jobs?.length || 0, jobsResponse);
+          console.log('📊 Sample job data:', jobsResponse.jobs?.[0]);
+          setJobs(jobsResponse.jobs || []);
 
-        if (isAuthenticated && user?.userType === "student") {
-          try {
-            const applicationsResponse = await apiService.getUserApplications() as ApplicationsResponse;
-            const appliedJobIds = (applicationsResponse.applications || []).map(app =>
-              typeof app.job === "string" ? app.job : app.job._id
-            );
-            setAppliedJobs(appliedJobIds);
-          } catch (error) {
-            console.error("Error fetching applications:", error);
+          if (user?.userType === "student") {
+            try {
+              const applicationsResponse = await apiService.getUserApplications() as ApplicationsResponse;
+              const appliedJobIds = (applicationsResponse.applications || []).map(app =>
+                typeof app.job === "string" ? app.job : app.job._id
+              );
+              setAppliedJobs(appliedJobIds);
+            } catch (error) {
+              console.error("Error fetching applications:", error);
+            }
           }
+        } else {
+          // If not authenticated, don't show any jobs
+          setJobs([]);
         }
       } catch (error) {
         console.error("Error fetching jobs:", error);
@@ -188,217 +196,251 @@ const JobsPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200">
-        
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-       
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative h-10 w-32">
-            <Link  href="/">
-              
-                <Image
-                  src="/img/norixgreen.png"
-                  alt="NoriX logo"
-                  fill
-                  sizes="128px"
-                  className="object-contain"
-                  priority
-                />
-                  </Link>
-              </div>
-            
-              
-          
-
-            <div className="flex items-center gap-4">
-              
-              <div>
-                <h1 className="text-2xl font-bold text-black-900">Currently Available Works</h1>
-                <p className="text-gray-600">Find your next opportunity</p>
-              </div>
-              <span className="text-sm text-gray-500 hidden sm:inline">
-                {filteredJobs.length} works found
-              </span>
-            </div>
-          </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Back Button */}
+        <div className="mb-6">
+          <button
+            onClick={() => router.back()}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors group"
+          >
+            <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+            <span className="font-medium">Back</span>
+          </button>
         </div>
-      </header>
+        
+        {/* Page Title */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">
+            {isAuthenticated ? 'Currently Available Works' : 'Job Opportunities'}
+          </h1>
+          <p className="text-gray-600 mt-2">
+            {isAuthenticated ? 'Find your next opportunity' : 'Connect students with employers'}
+          </p>
+          {isAuthenticated && (
+            <span className="text-sm text-gray-500 mt-2 inline-block">
+              {filteredJobs.length} works found
+            </span>
+          )}
+        </div>
+      </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                placeholder="Search jobs..."
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-              />
-            </div>
-
-            <select
-              value={selectedLocation}
-              onChange={(event) => setSelectedLocation(event.target.value)}
-              className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-            >
-              <option value="">All Locations</option>
-              {locations.map(location => (
-                <option key={location} value={location}>{location}</option>
-              ))}
-            </select>
-
-            <select
-              value={selectedType}
-              onChange={(event) => setSelectedType(event.target.value)}
-              className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-            >
-              <option value="">All Types</option>
-              {workTypes.map(type => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
-
-            <button
-              onClick={() => {
-                setSearchTerm("");
-                setSelectedLocation("");
-                setSelectedType("");
-              }}
-              className="px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors"
-            >
-              Clear Filters
-            </button>
-          </div>
-        </section>
-
-        <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {filteredJobs.map((job, index) => (
-            <motion.article
-              key={job._id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: index * 0.05 }}
-              className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
-            >
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="flex items-start gap-3">
-                    <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden">
-                      <Building className="w-6 h-6 text-gray-400" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 text-lg">{job.title}</h3>
-                      <p className="text-gray-600">{job.company}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-3 text-sm text-gray-500">
-                    <span className="inline-flex items-center gap-1">
-                      <MapPin className="w-4 h-4" />
-                      {job.location}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <Clock className="w-4 h-4" />
-                      {job.type}
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-green-600 font-semibold">
-                      <IndianRupee className="w-4 h-4" />
-                      {getSalaryRange(job.title)}
-                    </span>
-                  </div>
-                </div>
-
-                <p className="text-gray-700 line-clamp-3">{job.description}</p>
-
-                {job.requirements && job.requirements.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {job.requirements.slice(0, 3).map((requirement, requirementIndex) => (
-                      <span key={requirementIndex} className="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-xs">
-                        {requirement}
-                      </span>
-                    ))}
-                    {job.requirements.length > 3 && (
-                      <span className="text-gray-500 text-xs px-2 py-1">
-                        +{job.requirements.length - 3} more
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex flex-col gap-4 border-t border-gray-200 pt-4 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex flex-wrap items-center gap-4">
-                    <span>Posted {new Date(job.createdAt).toLocaleDateString()}</span>
-                    <span>Views: {job.views || 0}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => router.push(`/jobs/${job._id}`)}
-                      className="px-3 py-2 text-gray-600 hover:text-gray-900 transition-colors"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-                    {isAuthenticated && user?.userType === "student" ? (
-                      appliedJobs.includes(job._id) ? (
-                        <span className="px-4 py-2 bg-green-100 text-green-600 rounded-xl text-sm font-medium">
-                          Applied
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => handleApply(job._id)}
-                          className="px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-colors"
-                        >
-                          Apply Now
-                        </button>
-                      )
-                    ) : (
-                      <button
-                        onClick={() => router.push("/login")}
-                        className="px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-colors"
-                      >
-                        Login to Apply
-                      </button>
-                    )}
-                  </div>
-                </div>
+        {isAuthenticated && (
+          <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type="text"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="Search jobs..."
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                />
               </div>
-            </motion.article>
-          ))}
-        </section>
 
-        <section className="py-16 rounded-3xl">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+              <select
+                value={selectedLocation}
+                onChange={(event) => setSelectedLocation(event.target.value)}
+                className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              >
+                <option value="">All Locations</option>
+                {locations.map(location => (
+                  <option key={location} value={location}>{location}</option>
+                ))}
+              </select>
+
+              <select
+                value={selectedType}
+                onChange={(event) => setSelectedType(event.target.value)}
+                className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              >
+                <option value="">All Types</option>
+                {workTypes.map(type => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+
+              <button
+                onClick={() => {
+                  setSearchTerm("");
+                  setSelectedLocation("");
+                  setSelectedType("");
+                }}
+                className="px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors"
+              >
+                Clear Filters
+              </button>
+            </div>
+          </section>
+        )}
+
+        {!isAuthenticated ? (
+          // Show login prompt for unauthenticated users
+          <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
-              viewport={{ once: true }}
-              className="space-y-6"
+              className="max-w-2xl mx-auto space-y-6"
             >
-              <h2 className="text-3xl sm:text-4xl font-bold text-black">
-                Ready to Start Your Journey?
-              </h2>
-              <p className="text-xl text-[#32A4A6] max-w-2xl mx-auto">
-                Join thousands of students who are already earning while studying.
-                Find flexible work that fits your schedule.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <div className="w-20 h-20 bg-[#32A4A6] rounded-full flex items-center justify-center mx-auto">
+                <Building className="w-10 h-10 text-white" />
+              </div>
+              
+              <div className="space-y-4">
+                <h2 className="text-3xl font-bold text-gray-900">
+                  Discover Amazing Job Opportunities
+                </h2>
+                <p className="text-lg text-gray-600">
+                  Join thousands of students and employers who are already using NoriX to connect and grow.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                {/* Student Card */}
+                <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="w-12 h-12 bg-[#32A4A6] rounded-lg flex items-center justify-center mx-auto mb-4">
+                    <span className="text-white text-xl">🎓</span>
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">I'm a Student</h3>
+                  <p className="text-gray-600 mb-4">
+                    Find flexible part-time jobs that fit your schedule. Earn while you learn!
+                  </p>
+                  <Link
+                    href="/signup?type=student"
+                    className="inline-block w-full bg-[#32A4A6] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#2a8a8c] transition-colors"
+                  >
+                    Find Jobs
+                  </Link>
+                </div>
+
+                {/* Employer Card */}
+                <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="w-12 h-12 bg-[#32A4A6] rounded-lg flex items-center justify-center mx-auto mb-4">
+                    <span className="text-white text-xl">💼</span>
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">I'm an Employer</h3>
+                  <p className="text-gray-600 mb-4">
+                    Post job opportunities and find talented students to join your team.
+                  </p>
+                  <Link
+                    href="/signup?type=employer"
+                    className="inline-block w-full bg-[#32A4A6] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#2a8a8c] transition-colors"
+                  >
+                    Post Jobs
+                  </Link>
+                </div>
+              </div>
+
+              <div className="pt-6 border-t border-gray-200">
+                <p className="text-gray-500 mb-4">Already have an account?</p>
                 <Link
                   href="/login"
-                  className="bg-white text-black-600 px-8 py-4 rounded-xl font-semibold hover:bg-gray-100 transition-colors"
+                  className="inline-block bg-[#32A4A6] text-white px-8 py-3 rounded-lg font-semibold hover:bg-[#2a8a8c] transition-colors"
                 >
-                  Find Jobs
-                </Link>
-                <Link
-                  href="/login"
-                  className=" text-black px-8 py-4 rounded-xl font-semibold hover:bg-green-100 transition-colors border "
-                >
-                  Post Jobs
+                  Sign In
                 </Link>
               </div>
             </motion.div>
-          </div>
-        </section>
+          </section>
+        ) : (
+          // Show jobs for authenticated users
+          <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {filteredJobs.map((job, index) => (
+              <motion.article
+                key={job._id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: index * 0.05 }}
+                className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
+              >
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden">
+                        <Building className="w-6 h-6 text-gray-400" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900 text-lg">{job.title}</h3>
+                        <p className="text-gray-600">{job.company}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-3 text-sm text-gray-500">
+                      <span className="inline-flex items-center gap-1">
+                        <MapPin className="w-4 h-4" />
+                        {job.location}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="w-4 h-4" />
+                        {job.type}
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-green-600 font-semibold">
+                        <IndianRupee className="w-4 h-4" />
+                        {getSalaryRange(job.title)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-gray-700 line-clamp-3">{job.description}</p>
+
+                  {job.requirements && job.requirements.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {job.requirements.slice(0, 3).map((requirement, requirementIndex) => (
+                        <span key={requirementIndex} className="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-xs">
+                          {requirement}
+                        </span>
+                      ))}
+                      {job.requirements.length > 3 && (
+                        <span className="text-gray-500 text-xs px-2 py-1">
+                          +{job.requirements.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-4 border-t border-gray-200 pt-4 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-wrap items-center gap-4">
+                      <span>Posted {new Date(job.createdAt).toLocaleDateString()}</span>
+                      <span>Views: {job.views || 0}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => router.push(`/jobs/${job._id}`)}
+                        className="px-3 py-2 text-gray-600 hover:text-gray-900 transition-colors"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      {user?.userType === "student" ? (
+                        appliedJobs.includes(job._id) ? (
+                          <span className="px-4 py-2 bg-green-100 text-green-600 rounded-xl text-sm font-medium">
+                            Applied
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => router.push(`/jobs/${job._id}`)}
+                            className="px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-colors"
+                          >
+                            Apply Now
+                          </button>
+                        )
+                      ) : (
+                        <button
+                          onClick={() => router.push(`/jobs/${job._id}`)}
+                          className="px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-colors"
+                        >
+                          View Details
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </motion.article>
+            ))}
+          </section>
+        )}
+
+       
       </main>
 
       <Footer />

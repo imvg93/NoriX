@@ -174,7 +174,7 @@ router.post('/', authenticateToken, requireStudent, asyncHandler(async (req: Aut
           coverLetter: coverLetter,
           expectedPay: expectedPay,
           status: 'applied',
-          appliedAt: application.appliedAt || application.createdAt
+          appliedAt: application.appliedAt || application.createdAt || new Date().toISOString()
         }, job.employerId.toString());
       }
     } catch (socketErr) {
@@ -193,7 +193,7 @@ router.post('/', authenticateToken, requireStudent, asyncHandler(async (req: Aut
             jobTitle: job.jobTitle,
             companyName: job.companyName,
             status: 'applied',
-            appliedAt: application.appliedAt || application.createdAt
+            appliedAt: application.appliedAt || application.createdAt || new Date().toISOString()
           },
           {
             name: student.name || student.email,
@@ -223,7 +223,7 @@ router.post('/', authenticateToken, requireStudent, asyncHandler(async (req: Aut
         jobId: application.jobId,
         studentId: application.studentId,
         status: application.status,
-        appliedAt: application.appliedAt,
+        appliedAt: application.appliedAt || application.createdAt || new Date().toISOString(),
         coverLetter: application.coverLetter,
         expectedPay: application.expectedPay,
         availability: application.availability
@@ -377,6 +377,29 @@ router.get('/:id', authenticateToken, asyncHandler(async (req: AuthRequest, res:
   }
 
   sendSuccessResponse(res, { application }, 'Application retrieved successfully');
+}));
+
+// @route   PATCH /api/applications/:id/close
+// @desc    Close an application (employer only)
+// @access  Private (Job owner only)
+router.patch('/:id/close', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const application = await Application.findById(req.params.id)
+    .populate('jobId', 'employerId jobTitle companyName');
+  
+  if (!application) {
+    throw new ValidationError('Application not found');
+  }
+
+  // Check if user owns the job
+  const job = await Job.findById(application.jobId);
+  if (!job || job.employerId.toString() !== req.user!._id.toString()) {
+    throw new ValidationError('Access denied');
+  }
+
+  // Update application status to closed
+  await application.updateStatus('closed', 'Application closed by employer');
+
+  sendSuccessResponse(res, { application }, 'Application closed successfully');
 }));
 
 // @route   PUT /api/applications/:id/status

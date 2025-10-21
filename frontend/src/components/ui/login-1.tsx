@@ -155,10 +155,7 @@ const Login1 = ({
         setSuccess('Login successful! Redirecting to your dashboard...');
         
         // Redirect immediately to appropriate dashboard based on user type
-        const redirectPath = user.userType === 'student' ? '/student-home' 
-                           : user.userType === 'employer' ? '/employer-home'
-                           : user.userType === 'admin' ? '/admin-home'
-                           : '/';
+        const redirectPath = user.userType === 'admin' ? '/admin' : '/';
         
         console.log('🚀 Redirecting to:', redirectPath);
         
@@ -242,10 +239,7 @@ const Login1 = ({
         setSuccess('Login successful! Redirecting to your dashboard...');
         
         // Redirect immediately to appropriate dashboard based on user type
-        const redirectPath = user.userType === 'student' ? '/student-home' 
-                           : user.userType === 'employer' ? '/employer-home'
-                           : user.userType === 'admin' ? '/admin-home'
-                           : '/';
+        const redirectPath = user.userType === 'admin' ? '/admin' : '/';
         
         console.log('🚀 Redirecting to:', redirectPath); // Debug log
         
