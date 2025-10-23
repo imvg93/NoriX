@@ -20,19 +20,19 @@ const getApiBaseUrl = () => {
     
     // For development, check if we're on localhost
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      const localUrl = 'http://localhost:5000/api';
+      const localUrl = 'http://localhost:5001/api';
       console.log('🔧 Local development detected, using local backend:', localUrl);
       return localUrl;
     }
     
     // Default fallback for other environments
-    const fallbackUrl = 'http://localhost:5000/api';
+    const fallbackUrl = 'http://localhost:5001/api';
     console.log('🔧 Using fallback URL:', fallbackUrl);
     return fallbackUrl;
   }
   
   // Server-side rendering fallback
-  const ssrUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+  const ssrUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
   console.log('🔧 Server-side rendering, using:', ssrUrl);
   return ssrUrl;
 };
