@@ -26,7 +26,7 @@ export default function StudentJobsPage() {
         setError('');
         
         // Fetch jobs using the student dashboard API
-        const response = await apiService.getStudentDashboardJobs(true, 1000);
+        const response = await apiService.getStudentDashboardJobs(true);
         setJobs(response.jobs || []);
         
         console.log('✅ Fetched jobs from API:', response.jobs?.length || 0);

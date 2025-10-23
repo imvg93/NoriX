@@ -641,7 +641,7 @@ const AdminHome: React.FC = () => {
               Home
             </Link>
             <Link 
-              href="/admin-dashboard" 
+              href="/admin-home" 
               className="flex items-center gap-1 px-2 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-xs font-medium"
             >
               <FileText className="w-3 h-3" />
@@ -668,7 +668,7 @@ const AdminHome: React.FC = () => {
               Home
             </Link>
             <Link 
-              href="/admin-dashboard" 
+              href="/admin-home" 
               className="flex items-center gap-2 px-3 py-2 sm:px-4 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-xs sm:text-sm font-medium"
             >
               <FileText className="w-4 h-4" />
@@ -1587,7 +1587,7 @@ const AdminHome: React.FC = () => {
             Dashboard
           </a>
           <a 
-            href="/admin-dashboard" 
+            href="/admin-home" 
             className="flex items-center justify-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
           >
             <FileText className="w-4 h-4 mr-2" />
@@ -1608,7 +1608,7 @@ const AdminHome: React.FC = () => {
             Manage Courses
           </a>
           <a 
-            href="/admin/reports" 
+            href="/admin-home" 
             className="flex items-center justify-center px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
           >
             <Eye className="w-4 h-4 mr-2" />

@@ -201,7 +201,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
         
         // Try enhanced jobs endpoint first (for authenticated students)
         try {
-          jobsData = await apiService.getStudentDashboardJobs(true, 1000);
+          jobsData = await apiService.getStudentDashboardJobs(true);
           console.log('✅ Fetched jobs from enhanced endpoint:', jobsData.jobs?.length || 0);
         } catch (error) {
           console.log('⚠️ Enhanced jobs endpoint failed, falling back to regular jobs endpoint');
