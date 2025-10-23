@@ -4,7 +4,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import StudentHome from './StudentHome';
 import AdminHome from './AdminHome';
-import EmployerHome from './EmployerHome';
+import Link from 'next/link';
 
 interface User {
   name: string;
@@ -25,7 +25,13 @@ const HomePage: React.FC = () => {
       case 'admin':
         return <AdminHome />;
       case 'employer':
-        return <EmployerHome user={user} />;
+        return (
+          <div className="text-center py-12">
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Employer Portal</h2>
+            <p className="text-gray-600 mb-4">Go to your dashboard to manage jobs and applications.</p>
+            <Link href="/employer" className="inline-flex items-center px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">Open Employer Dashboard</Link>
+          </div>
+        );
       default:
         return (
           <div className="text-center py-12">

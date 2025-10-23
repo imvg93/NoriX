@@ -7,29 +7,33 @@ import { Briefcase, MapPin, DollarSign, Clock, Star, Filter, Search, ArrowLeft, 
 import RoleProtectedRoute from '../../../components/auth/RoleProtectedRoute';
 import { apiService } from '../../../services/api';
 import { useSafeNavigation } from '../../../hooks/useSafeNavigation';
+import { useAuth } from '../../../contexts/AuthContext';
 
 export default function StudentJobsPage() {
   const router = useRouter();
   const { navigateBack } = useSafeNavigation();
-  const [jobs, setJobs] = useState<any[]>([]);
+  const { user } = useAuth();
+  const [jobs, setJobs] = useState<any[]>([]); // applied jobs only
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
-  // Fetch jobs from API
+  // Fetch student's applied jobs from API
   useEffect(() => {
     const fetchJobs = async () => {
       try {
         setLoading(true);
         setError('');
-        
-        // Fetch jobs using the student dashboard API
-        const response = await apiService.getStudentDashboardJobs(true);
-        setJobs(response.jobs || []);
-        
-        console.log('✅ Fetched jobs from API:', response.jobs?.length || 0);
+        // Get user's applications and map to job data
+        const applications = await apiService.getStudentApplications();
+        const apps = applications.applications || [];
+        const appliedJobs = apps
+          .map((app: any) => app.job)
+          .filter((j: any) => j && typeof j === 'object');
+        setJobs(appliedJobs);
+        console.log('✅ Fetched applied jobs:', appliedJobs.length);
       } catch (error: any) {
         console.error('❌ Error fetching jobs:', error);
         setError(error?.message || 'Failed to load jobs. Please try again.');
@@ -40,7 +44,7 @@ export default function StudentJobsPage() {
     };
 
     fetchJobs();
-  }, []);
+  }, [user]);
 
   // Filter jobs based on search and filters
   const filteredJobs = jobs.filter(job => {
@@ -97,9 +101,9 @@ export default function StudentJobsPage() {
             <span className="font-medium">Back</span>
           </button>
           
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">Find Your Perfect Job</h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">Your Applied Jobs</h1>
           <p className="text-xl text-gray-600">
-            Browse through available job opportunities and apply for positions that match your skills
+            These are the jobs you have applied for. {jobs.length === 0 ? 'You have not applied to any jobs yet.' : 'Use search and filters to find a specific application.'}
           </p>
         </motion.div>
 
@@ -187,7 +191,34 @@ export default function StudentJobsPage() {
           </motion.div>
         )}
 
-        {/* Featured Jobs */}
+        {/* Empty State for no applications */}
+        {!loading && !error && jobs.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center py-16 bg-white rounded-2xl border border-gray-200"
+          >
+            <Briefcase className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-2xl font-semibold text-gray-900 mb-2">No applications yet</h3>
+            <p className="text-gray-600 mb-6">Start applying to jobs to see them listed here.</p>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={() => router.push('/student')}
+                className="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              >
+                Go to Student Dashboard
+              </button>
+              <button
+                onClick={() => router.push('/jobs')}
+                className="px-5 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Browse Jobs
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Featured Jobs (from applied) */}
         {!loading && !error && featuredJobs.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -197,7 +228,7 @@ export default function StudentJobsPage() {
           >
             <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
               <Star className="w-6 h-6 text-yellow-500 fill-current" />
-              Featured Jobs
+              Featured Applied Jobs
             </h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {featuredJobs.map((job, index) => (

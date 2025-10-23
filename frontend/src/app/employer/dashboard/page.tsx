@@ -1,15 +1,14 @@
 "use client";
 
-import EmployerHome from '../../../components/EmployerHome';
-import { useAuth } from '../../../contexts/AuthContext';
-import RoleProtectedRoute from '../../../components/auth/RoleProtectedRoute';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function EmployerDashboardPage() {
-  const { user } = useAuth();
+  const router = useRouter();
 
-  return (
-    <RoleProtectedRoute allowedRoles={['employer']}>
-      <EmployerHome user={user} />
-    </RoleProtectedRoute>
-  );
+  useEffect(() => {
+    router.replace('/employer');
+  }, [router]);
+
+  return null;
 }

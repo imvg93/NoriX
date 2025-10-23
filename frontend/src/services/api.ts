@@ -20,19 +20,19 @@ const getApiBaseUrl = () => {
     
     // For development, check if we're on localhost
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      const localUrl = 'http://localhost:5001/api';
+      const localUrl = 'http://localhost:5000/api';
       console.log('🔧 Local development detected, using local backend:', localUrl);
       return localUrl;
     }
     
     // Default fallback for other environments
-    const fallbackUrl = 'http://localhost:5001/api';
+    const fallbackUrl = 'http://localhost:5000/api';
     console.log('🔧 Using fallback URL:', fallbackUrl);
     return fallbackUrl;
   }
   
   // Server-side rendering fallback
-  const ssrUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+  const ssrUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
   console.log('🔧 Server-side rendering, using:', ssrUrl);
   return ssrUrl;
 };
@@ -342,18 +342,20 @@ class ApiService {
   // Authentication APIs
   async login(email: string, password: string, userType: string): Promise<AuthResponse> {
     console.log('🔐 Login API call:', { email, userType, apiUrl: API_BASE_URL });
-    return this.request('/auth/login', {
+    const raw = await this.request('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password, userType }),
     });
+    return this.unwrap<AuthResponse>(raw);
   }
 
   async loginAuto(email: string, password: string): Promise<AuthResponse> {
     console.log('🔐 Auto-login API call:', { email, apiUrl: API_BASE_URL });
-    return this.request('/auth/login-auto', {
+    const raw = await this.request('/auth/login-auto', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
+    return this.unwrap<AuthResponse>(raw);
   }
 
   async loginRequestOTP(email: string, userType: string): Promise<{ message: string; email: string; userType: string }> {
@@ -759,10 +761,8 @@ class ApiService {
   }
 
   async getEmployerJobs(): Promise<JobsResponse> {
-
     // Route through enhanced dashboard endpoint to ensure we fetch the employer's own jobs
     return this.getEmployerDashboardJobs();
-
   }
 
   async updateJobStatus(id: string, status: string) {
@@ -858,7 +858,7 @@ class ApiService {
   // User Management APIs (Admin)
   async getAllUsers(filters?: any) {
     const queryParams = filters ? new URLSearchParams(filters).toString() : '';
-    const endpoint = queryParams ? `/users?${queryParams}` : '/users';
+    const endpoint = queryParams ? `/admin/users?${queryParams}` : '/admin/users';
     return this.request(endpoint);
   }
 
