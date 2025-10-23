@@ -206,6 +206,9 @@ export default function Home() {
                   >
                     My Dashboard
                   </Link>
+                  <p className="text-sm text-gray-600 text-center sm:text-left" style={{marginTop: '4px'}}>
+                    To apply for a job, visit your Student Dashboard.
+                  </p>
                 </>
               )}
               {user?.userType === 'employer' && (
@@ -573,9 +576,9 @@ export default function Home() {
               'Event helper',
               'Event helper',
               'Library assistant'
-            ].map((subcategory) => (
+            ].map((subcategory, idx) => (
               <button 
-                key={subcategory} 
+                key={`${subcategory}-${idx}`} 
                 onClick={() => handleJobClick(subcategory)}
                 className="px-3 sm:px-6 py-2 sm:py-3 border-2 border-gray-300 rounded-lg text-gray-700 font-medium hover:border-gray-400 hover:bg-gray-50 transition-colors text-sm sm:text-base cursor-pointer"
               >
@@ -586,94 +589,28 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Everything you need to hire top talent */}
-      <section className="py-16 sm:py-20 bg-white">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12 sm:mb-16">
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 mb-6">
-              Everything you need to hire top talent
-            </h2>
+      {/* Essentials for hiring - simplified clean cards */}
+      <section className="py-12 bg-white">
+        <div className="max-w-5xl mx-auto px-4">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">Hire smarter with NoriX</h2>
+            <p className="text-gray-600">Three simple tools to find and manage the right students</p>
           </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-6 lg:gap-8">
-            {/* Build your brand */}
-            <div className="text-center">
-              <div className="mb-6">
-                <div className="w-full h-48 sm:h-56 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="w-16 h-16 bg-[#32A4A6] rounded-lg flex items-center justify-center mx-auto mb-3">
-                      <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                      </svg>
-                    </div>
-                    <p className="text-sm text-gray-500">Professional workspace</p>
-                  </div>
-                </div>
-              </div>
-              <h3 className="text-xl font-bold text-[#32A4A6] mb-3">Build your brand</h3>
-              <p className="text-gray-600 leading-relaxed">
-                Create a professional company profile that attracts the best student talent and showcases your culture.
-              </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <div className="w-10 h-10 bg-[#32A4A6] text-white rounded-lg flex items-center justify-center mb-3">🏷️</div>
+              <h3 className="font-semibold text-gray-900 mb-1">Branded profile</h3>
+              <p className="text-sm text-gray-600">Show your culture and stand out to students.</p>
             </div>
-
-            {/* Find the right candidates */}
-            <div className="text-center">
-              <div className="mb-6">
-                <div className="w-full h-48 sm:h-56 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="w-16 h-16 bg-[#32A4A6] rounded-lg flex items-center justify-center mx-auto mb-3">
-                      <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </div>
-                    <p className="text-sm text-gray-500">Smart filtering</p>
-                  </div>
-                </div>
-              </div>
-              <h3 className="text-xl font-bold text-[#32A4A6] mb-3">Find the right candidates</h3>
-              <p className="text-gray-600 leading-relaxed">
-                Use advanced filters to find students with the exact skills, experience, and qualifications you need.
-              </p>
+            <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <div className="w-10 h-10 bg-[#32A4A6] text-white rounded-lg flex items-center justify-center mb-3">🔎</div>
+              <h3 className="font-semibold text-gray-900 mb-1">Smart filtering</h3>
+              <p className="text-sm text-gray-600">Match candidates by skills and availability.</p>
             </div>
-
-            {/* Connect with Gen Z */}
-            <div className="text-center">
-              <div className="mb-6">
-                <div className="w-full h-48 sm:h-56 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="w-16 h-16 bg-[#32A4A6] rounded-lg flex items-center justify-center mx-auto mb-3">
-                      <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                      </svg>
-                    </div>
-                    <p className="text-sm text-gray-500">Mobile-first platform</p>
-                  </div>
-                </div>
-              </div>
-                  <h3 className="text-xl font-bold text-[#32A4A6] mb-3">Connect with Gen Z</h3>
-              <p className="text-gray-600 leading-relaxed">
-                Reach students where they are with our mobile-optimized platform designed for the next generation.
-              </p>
-            </div>
-
-            {/* Reduce time to hire */}
-            <div className="text-center">
-              <div className="mb-6">
-                <div className="w-full h-48 sm:h-56 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="w-16 h-16 bg-[#32A4A6] rounded-lg flex items-center justify-center mx-auto mb-3">
-                      <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <p className="text-sm text-gray-500">Fast hiring process</p>
-                  </div>
-                </div>
-              </div>
-              <h3 className="text-xl font-bold text-[#32A4A6] mb-3">Reduce time to hire</h3>
-              <p className="text-gray-600 leading-relaxed">
-                Streamline your hiring process with automated screening, instant messaging, and quick decision tools.
-              </p>
+            <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <div className="w-10 h-10 bg-[#32A4A6] text-white rounded-lg flex items-center justify-center mb-3">⚡</div>
+              <h3 className="font-semibold text-gray-900 mb-1">Fast hiring</h3>
+              <p className="text-sm text-gray-600">Shortlist and message in minutes, not days.</p>
             </div>
           </div>
         </div>

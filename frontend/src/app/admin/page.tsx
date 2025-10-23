@@ -453,13 +453,13 @@ export default function AdminDashboard() {
         const statsResponse = await apiService.getAdminStats() as any;
         const stats = statsResponse.data || statsResponse;
         
-        // Fetch all data
+        // Fetch all real data from live MongoDB (comprehensive)
         const [studentsResponse, employersResponse, jobsResponse, kycResponse, kycStatsResponse] = await Promise.all([
-          apiService.getPendingUsers('student'),
-          apiService.getPendingUsers('employer'),
-          apiService.getPendingJobs(),
-          apiService.getKYCSubmissions('all', 1, 50),
-          apiService.getKYCStats()
+          apiService.getAllUsers({ userType: 'student', page: 1, limit: 1000 }) as any,
+          apiService.getAllUsers({ userType: 'employer', page: 1, limit: 1000 }) as any,
+          apiService.getAllJobsForAdmin('all', 'all', 1, 1000) as any,
+          apiService.getKYCSubmissions('all', 1, 1000) as any,
+          apiService.getKYCStats() as any
         ]);
         
         const studentsRaw = (studentsResponse as any).data?.users || (studentsResponse as any).users || [];

@@ -194,6 +194,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                               <span>Dashboard</span>
                             </Link>
                             <Link
+                              href="/employer/dashboard"
+                              className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
+                              onClick={() => setProfileDropdownOpen(false)}
+                            >
+                              <BarChart3 className="w-5 h-5" />
+                              <span>Employer Dashboard</span>
+                            </Link>
+                            <Link
                               href="/employer/post-job"
                               className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
                               onClick={() => setProfileDropdownOpen(false)}

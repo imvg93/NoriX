@@ -483,9 +483,9 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res, next) => {
       { new: true, runValidators: true }
     );
 
-    res.json(updatedJob);
+    return res.json(updatedJob);
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -563,7 +563,7 @@ router.get('/location/:location', async (req, res, next) => {
 });
 
 // Update job status (admin or owning employer)
-router.patch('/:id/status', authenticateToken, async (req: AuthRequest, res, next) => {
+router.patch('/:id/status', authenticateToken, async (req: AuthRequest, res, next): Promise<void> => {
   try {
     const { status } = req.body;
     
@@ -589,15 +589,18 @@ router.patch('/:id/status', authenticateToken, async (req: AuthRequest, res, nex
     );
 
     if (!updatedJob) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'Job not found after update'
       });
+      return;
     }
 
     res.json(updatedJob);
+    return;
   } catch (error) {
     next(error);
+    return;
   }
 });
 

@@ -59,7 +59,8 @@ export default function EmployerDashboard() {
     totalJobs: 0,
     activeJobs: 0,
     totalApplications: 0,
-    pendingApplications: 0
+    pendingApplications: 0,
+    approvedJobs: 0
   });
 
   useEffect(() => {
@@ -85,17 +86,19 @@ export default function EmployerDashboard() {
           const jobsResponse = await apiService.getEmployerDashboardJobs();
           const jobsData = jobsResponse.jobs || [];
           setJobs(jobsData);
-          
+
           // Calculate stats
           const totalJobs = jobsData.length;
           const activeJobs = jobsData.filter((job: any) => job.status === 'active').length;
           const totalApplications = jobsData.reduce((sum: number, job: any) => sum + (job.applicationsCount || 0), 0);
-          
+          const approvedJobs = jobsData.filter((job: any) => (job.approvalStatus || '').toLowerCase() === 'approved').length;
+
           setStats({
             totalJobs,
             activeJobs,
             totalApplications,
-            pendingApplications: 0 // Will be updated when we fetch applications
+            pendingApplications: 0, // Will be updated when we fetch applications
+            approvedJobs
           });
         } catch (e) {
           console.error('❌ Error loading jobs:', e);
@@ -209,199 +212,163 @@ export default function EmployerDashboard() {
 
   const renderOverview = () => (
     <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-2xl font-bold text-indigo-600">{stats.totalJobs}</div>
-          <div className="text-sm text-gray-600">Total Jobs</div>
+      {/* Header banner */}
+      <div className="bg-gradient-to-r from-indigo-50 to-cyan-50 border border-gray-200 rounded-xl p-4 sm:p-5 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Employer Overview</h2>
+          <p className="text-sm text-gray-600">Manage jobs, applications and company information</p>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-2xl font-bold text-green-600">{stats.activeJobs}</div>
-          <div className="text-sm text-gray-600">Active Jobs</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-2xl font-bold text-blue-600">{stats.totalApplications}</div>
-          <div className="text-sm text-gray-600">Total Applications</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-2xl font-bold text-yellow-600">{stats.pendingApplications}</div>
-          <div className="text-sm text-gray-600">Pending Review</div>
+        <div className="hidden sm:flex gap-2">
+          <Link href="/employer/post-job" className="px-3 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">Post Job</Link>
+          <Link href="/employer/applications" className="px-3 py-2 bg-white border border-gray-300 text-gray-800 rounded-md text-sm hover:bg-gray-100">View Applications</Link>
         </div>
       </div>
 
-      {/* Applications by Job */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-medium text-gray-900">Applications by Job</h3>
-            <button
-              onClick={() => router.push('/employer/applications')}
-              className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
-            >
-              View All Applications
-            </button>
+      {/* 2-column layout: left content + right sidebar */}
+      <div className="grid md:grid-cols-3 gap-6">
+        {/* Left (main) */}
+        <div className="md:col-span-2 space-y-6">
+          {/* Approval summary */}
+          {Array.isArray(jobs) && jobs.filter(j => (j.approvalStatus || '').toLowerCase() === 'pending').length > 0 && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium text-yellow-800">Approval Pending</h3>
+                <p className="text-sm text-yellow-700">
+                  {jobs.filter(j => (j.approvalStatus || '').toLowerCase() === 'pending').length} job(s) are awaiting approval.
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveTab('myJobs')}
+                className="text-sm bg-yellow-600 text-white px-3 py-1.5 rounded-md hover:bg-yellow-700"
+              >
+                Review Jobs
+              </button>
+            </div>
+          )}
+
+          {/* Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white p-4 rounded-lg border border-gray-200">
+              <div className="text-2xl font-bold text-indigo-600">{stats.totalJobs}</div>
+              <div className="text-sm text-gray-600">Total Jobs</div>
+            </div>
+            <div className="bg-white p-4 rounded-lg border border-gray-200">
+              <div className="text-2xl font-bold text-green-600">{stats.activeJobs}</div>
+              <div className="text-sm text-gray-600">Active Jobs</div>
+            </div>
+            <div className="bg-white p-4 rounded-lg border border-gray-200">
+              <div className="text-2xl font-bold text-blue-600">{stats.totalApplications}</div>
+              <div className="text-sm text-gray-600">Total Applications</div>
+            </div>
+            <div className="bg-white p-4 rounded-lg border border-gray-200">
+              <div className="text-2xl font-bold text-emerald-600">{stats.approvedJobs}</div>
+              <div className="text-sm text-gray-600">Approved Jobs</div>
+            </div>
+          </div>
+
+          {/* Applications by Job */}
+          <div className="bg-white rounded-lg border border-gray-200">
+            <div className="p-4 border-b border-gray-200">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium text-gray-900">Applications by Job</h3>
+                <button
+                  onClick={() => router.push('/employer/applications')}
+                  className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+                >
+                  View All Applications
+                </button>
+              </div>
+            </div>
+            <div className="divide-y divide-gray-200">
+              {(() => {
+                const applicationsByJob = applications.reduce((acc: any, app: any) => {
+                  const jobId = app.job?._id || app.jobId?._id || app.jobId;
+                  const jobTitle = app.job?.title || app.jobId?.jobTitle || app.job?.jobTitle || 'Unknown Job';
+                  if (!acc[jobId]) acc[jobId] = { jobTitle, applications: [] };
+                  acc[jobId].applications.push(app);
+                  return acc;
+                }, {});
+
+                const jobEntries = Object.entries(applicationsByJob);
+                if (jobEntries.length === 0) {
+                  return (
+                    <div className="p-4 text-center text-gray-500">
+                      <div className="mb-4">
+                        <Users className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                        <h4 className="text-lg font-medium text-gray-900 mb-2">No Applications Yet</h4>
+                        <p className="text-gray-600 mb-2">You haven't received any applications for your job postings yet.</p>
+                      </div>
+                      <button onClick={() => router.push('/employer/post-job')} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Post a New Job</button>
+                    </div>
+                  );
+                }
+
+                return jobEntries.slice(0, 3).map(([jobId, jobData]: [string, any]) => (
+                  <div key={jobId} className="p-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-900">{jobData.jobTitle}</h4>
+                        <p className="text-xs text-gray-500">{jobData.applications.length} application{jobData.applications.length !== 1 ? 's' : ''}</p>
+                      </div>
+                      <button onClick={() => router.push(`/employer/applications?job=${jobId}`)} className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">View All</button>
+                    </div>
+                    <div className="space-y-2">
+                      {jobData.applications.slice(0, 2).map((app: any) => (
+                        <div key={app._id} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">{app.student?.name || app.studentId?.name || 'Unknown Student'}</p>
+                            <p className="text-xs text-gray-500">Applied: {new Date(app.appliedAt || app.appliedDate).toLocaleDateString()}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${app.status === 'applied' ? 'bg-blue-100 text-blue-800' : app.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : app.status === 'approved' ? 'bg-green-100 text-green-800' : app.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>{app.status}</span>
+                            <button onClick={() => router.push(`/employer/applications/${app._id}`)} className="text-xs bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700">View</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
           </div>
         </div>
-        <div className="divide-y divide-gray-200">
-          {(() => {
-            // Group applications by job
-            const applicationsByJob = applications.reduce((acc: any, app: any) => {
-              const jobId = app.job?._id || app.jobId?._id || app.jobId;
-              const jobTitle = app.job?.title || app.jobId?.jobTitle || app.job?.jobTitle || 'Unknown Job';
-              
-              if (!acc[jobId]) {
-                acc[jobId] = {
-                  jobTitle,
-                  applications: []
-                };
-              }
-              acc[jobId].applications.push(app);
-              return acc;
-            }, {});
 
-            const jobEntries = Object.entries(applicationsByJob);
-            
-            if (jobEntries.length === 0) {
-              return (
-                <div className="p-4 text-center text-gray-500">
-                  <div className="mb-4">
-                    <Users className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                    <h4 className="text-lg font-medium text-gray-900 mb-2">No Applications Yet</h4>
-                    <p className="text-gray-600 mb-4">
-                      You haven't received any applications for your job postings yet.
-                    </p>
-                    <div className="space-y-2">
-                      <p className="text-sm text-gray-500">
-                        • Make sure your jobs are approved and active
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        • Share your job postings with students
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        • Check that your job descriptions are clear and attractive
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => router.push('/employer/post-job')}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Post a New Job
-                  </button>
-                </div>
-              );
-            }
+        {/* Right sidebar */}
+        <div className="space-y-6">
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Quick Actions</h3>
+            <div className="space-y-3">
+              {kycStatus === 'approved' ? (
+                <Link href="/employer/post-job" className="w-full block bg-indigo-600 text-white py-2 px-4 rounded-md text-center hover:bg-indigo-700">Post New Job</Link>
+              ) : (
+                <button className="w-full bg-gray-200 text-gray-700 py-2 px-4 rounded-md cursor-not-allowed" onClick={() => alert('Your employer KYC must be Approved before posting jobs.')}>Post New Job (KYC Required)</button>
+              )}
+              <Link href="/employer/applications" className="w-full block bg-green-600 text-white py-2 px-4 rounded-md text-center hover:bg-green-700">Review Applications</Link>
+              {kycStatus !== 'approved' && (
+                <button className="w-full bg-white border border-gray-300 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-50" onClick={() => setShowKycModal(true)}>Complete KYC</button>
+              )}
+            </div>
+          </div>
 
-            return jobEntries.slice(0, 3).map(([jobId, jobData]: [string, any]) => (
-              <div key={jobId} className="p-4">
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-900">{jobData.jobTitle}</h4>
-                    <p className="text-xs text-gray-500">
-                      {jobData.applications.length} application{jobData.applications.length !== 1 ? 's' : ''}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => router.push(`/employer/applications?job=${jobId}`)}
-                    className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
-                  >
-                    View All
-                  </button>
-                </div>
-                
-                <div className="space-y-2">
-                  {jobData.applications.slice(0, 2).map((app: any) => (
-                    <div key={app._id} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-900">
-                          {app.student?.name || app.studentId?.name || 'Unknown Student'}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Applied: {new Date(app.appliedAt || app.appliedDate).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          app.status === 'applied' ? 'bg-blue-100 text-blue-800' :
-                          app.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                          app.status === 'approved' ? 'bg-green-100 text-green-800' :
-                          app.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {app.status}
-                        </span>
-                        <button 
-                          onClick={() => {
-                            if (app._id && app._id.length > 10) {
-                              router.push(`/employer/applications/${app._id}`);
-                            } else {
-                              alert('Invalid application ID. Please refresh the page and try again.');
-                            }
-                          }}
-                          className="text-xs bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700"
-                        >
-                          View
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {jobData.applications.length > 2 && (
-                    <div className="text-center pt-2">
-                      <button
-                        onClick={() => router.push(`/employer/applications?job=${jobId}`)}
-                        className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
-                      >
-                        +{jobData.applications.length - 2} more application{jobData.applications.length - 2 !== 1 ? 's' : ''}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ));
-          })()}
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
-        <div className="space-y-3">
-          {kycStatus === 'approved' ? (
-            <Link href="/employer/post-job" className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 text-center block">
-              Post New Job
-            </Link>
-          ) : (
-            <button
-              className="w-full bg-gray-300 text-gray-700 py-2 px-4 rounded-md cursor-not-allowed text-center block"
-              onClick={() => alert('Your employer KYC must be Approved before posting jobs.')}
-            >
-              Post New Job (KYC Required)
-            </button>
-          )}
-          {kycStatus !== 'approved' && (
-            <button
-              className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 text-center block"
-              onClick={() => setShowKycModal(true)}
-            >
-              Complete KYC
-            </button>
-          )}
-          <Link href="/employer/applications" className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 text-center block">
-            Review Applications
-          </Link>
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <h4 className="text-sm font-semibold text-gray-900 mb-1">Tips</h4>
+            <p className="text-sm text-gray-600">Use clear job titles and add 3–5 key requirements for better matches.</p>
+          </div>
         </div>
       </div>
     </div>
   );
 
   const renderMyJobs = () => (
-    <div className="space-y-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {jobs.map((job) => (
-        <div key={job._id} className="bg-white rounded-lg shadow p-4">
-          <div className="flex justify-between items-start mb-3">
-            <h4 className="text-sm font-medium text-gray-900">{job.jobTitle}</h4>
-            <div className="flex flex-col items-end gap-1">
+        <div key={job._id} className="bg-white rounded-xl shadow border border-gray-200 p-4">
+          <div className="flex justify-between items-start mb-2">
+            <div>
+              <h4 className="text-base font-semibold text-gray-900">{job.jobTitle}</h4>
+              <p className="text-xs text-gray-500">{job.companyName} • {job.location}</p>
+            </div>
+            <div className="flex items-center gap-2">
               <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                 job.status === 'active' ? 'bg-green-100 text-green-800' :
                 job.status === 'paused' ? 'bg-yellow-100 text-yellow-800' :
@@ -409,17 +376,16 @@ export default function EmployerDashboard() {
               }`}>
                 {job.status}
               </span>
-              {job.approvalStatus === 'pending' && (
-                <button 
-                  onClick={() => handleJobApproval(job._id)}
-                  className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700"
-                >
-                  Approve Job
-                </button>
-              )}
+              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                (job.approvalStatus || '').toLowerCase() === 'approved' ? 'bg-emerald-100 text-emerald-800' :
+                (job.approvalStatus || '').toLowerCase() === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                'bg-red-100 text-red-800'
+              }`}>
+                {(job.approvalStatus || 'pending')}
+              </span>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-3 gap-4 text-center text-xs text-gray-600 mb-3">
             <div>
               <div className="font-medium text-indigo-600">{job.applicationsCount || 0}</div>
@@ -435,19 +401,24 @@ export default function EmployerDashboard() {
             </div>
           </div>
 
-          <div className="flex space-x-2">
-            <button className="flex-1 text-xs bg-indigo-600 text-white py-1 px-2 rounded hover:bg-indigo-700">
+          <div className="flex gap-2">
+            <button className="flex-1 text-xs bg-indigo-600 text-white py-1.5 px-2 rounded hover:bg-indigo-700">
               Edit
             </button>
             <button 
               onClick={() => setActiveTab('applications')}
-              className="flex-1 text-xs bg-green-600 text-white py-1 px-2 rounded hover:bg-green-700"
+              className="flex-1 text-xs bg-green-600 text-white py-1.5 px-2 rounded hover:bg-green-700"
             >
               View Apps ({job.applicationsCount || 0})
             </button>
-            <button className="flex-1 text-xs bg-gray-600 text-white py-1 px-2 rounded hover:bg-gray-700">
-              {job.status === 'active' ? 'Pause' : 'Activate'}
-            </button>
+            {job.approvalStatus === 'pending' && (
+              <button 
+                onClick={() => handleJobApproval(job._id)}
+                className="flex-1 text-xs bg-blue-600 text-white py-1.5 px-2 rounded hover:bg-blue-700"
+              >
+                Approve
+              </button>
+            )}
           </div>
         </div>
       ))}
@@ -465,14 +436,13 @@ export default function EmployerDashboard() {
   );
 
   const renderApplications = () => (
-    <div className="space-y-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {applications.map((app) => (
-        <div key={app._id} className="bg-white rounded-lg shadow p-4">
-          <div className="flex justify-between items-start mb-3">
+        <div key={app._id} className="bg-white rounded-xl shadow border border-gray-200 p-4">
+          <div className="flex justify-between items-start mb-2">
             <div>
-              <h4 className="text-sm font-medium text-gray-900">{app.jobId.jobTitle}</h4>
-              <p className="text-sm text-gray-600">{app.studentId.name}</p>
-              <p className="text-xs text-gray-500">{app.studentId.email}</p>
+              <h4 className="text-base font-semibold text-gray-900">{app.jobId.jobTitle}</h4>
+              <p className="text-xs text-gray-500">{app.studentId.name} • {app.studentId.email}</p>
               <p className="text-xs text-gray-500">Skills: {app.studentId.skills?.join(', ') || 'Not specified'}</p>
               {app.expectedPay && (
                 <p className="text-xs text-gray-500">Expected Pay: ₹{app.expectedPay}</p>
@@ -498,27 +468,27 @@ export default function EmployerDashboard() {
             </div>
           )}
 
-          <div className="flex space-x-2">
-            <button className="flex-1 text-xs bg-indigo-600 text-white py-1 px-2 rounded hover:bg-indigo-700">
+          <div className="flex gap-2">
+            <button className="flex-1 text-xs bg-indigo-600 text-white py-1.5 px-2 rounded hover:bg-indigo-700">
               View Profile
             </button>
             {app.status === 'applied' || app.status === 'pending' ? (
               <>
                 <button 
                   onClick={() => handleApplicationAction(app._id, 'approve')}
-                  className="flex-1 text-xs bg-green-600 text-white py-1 px-2 rounded hover:bg-green-700"
+                  className="flex-1 text-xs bg-green-600 text-white py-1.5 px-2 rounded hover:bg-green-700"
                 >
                   Approve
                 </button>
                 <button 
                   onClick={() => handleApplicationAction(app._id, 'reject')}
-                  className="flex-1 text-xs bg-red-600 text-white py-1 px-2 rounded hover:bg-red-700"
+                  className="flex-1 text-xs bg-red-600 text-white py-1.5 px-2 rounded hover:bg-red-700"
                 >
                   Reject
                 </button>
               </>
             ) : (
-              <button className="flex-1 text-xs bg-gray-400 text-white py-1 px-2 rounded cursor-not-allowed">
+              <button className="flex-1 text-xs bg-gray-400 text-white py-1.5 px-2 rounded cursor-not-allowed">
                 {app.status === 'accepted' ? 'Approved' : 'Rejected'}
               </button>
             )}
@@ -526,7 +496,7 @@ export default function EmployerDashboard() {
         </div>
       ))}
       {applications.length === 0 && (
-        <div className="bg-white rounded-lg shadow p-8 text-center">
+        <div className="bg-white rounded-xl shadow border border-gray-200 p-8 text-center">
           <p className="text-gray-500">No applications received yet</p>
           <p className="text-sm text-gray-400 mt-2">Applications will appear here when students apply to your jobs</p>
         </div>
@@ -601,7 +571,7 @@ export default function EmployerDashboard() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="px-4 py-4">
+        <div className="max-w-6xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-semibold text-gray-900">Employer Dashboard</h1>
             <div className="flex items-center space-x-4">
@@ -625,7 +595,7 @@ export default function EmployerDashboard() {
 
       {/* Navigation Tabs */}
       <div className="bg-white border-b border-gray-200">
-        <div className="px-4">
+        <div className="max-w-6xl mx-auto px-4">
           <nav className="flex space-x-8 overflow-x-auto">
             {[
               { id: 'overview', label: 'Overview', icon: '📊' },
@@ -651,7 +621,7 @@ export default function EmployerDashboard() {
       </div>
 
       {/* Content */}
-      <div className="px-4 py-6">
+      <div className="max-w-6xl mx-auto px-4 py-6 pb-24">
         {/* Employer KYC Banner */}
         {user && user.userType === 'employer' && kycStatus !== 'approved' && (
           <div className="mb-6 bg-white rounded-lg shadow p-4 border border-gray-200">
