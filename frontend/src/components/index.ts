@@ -5,4 +5,3 @@ export { default as TaskCard } from './TaskCard';
 export { default as NotificationCard } from './NotificationCard';
 export { default as HomePage } from './HomePage';
 export { default as StudentHome } from './StudentHome';
-export { default as AdminHome } from './AdminHome';

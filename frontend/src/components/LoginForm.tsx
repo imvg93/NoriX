@@ -38,7 +38,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ compact = false }) => {
         
         // Redirect based on user type
         if (response.user.userType === 'admin') {
-          router.push('/admin-home');
+          router.push('/admin/dashboard');
         } else {
           router.push('/');
         }

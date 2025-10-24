@@ -14,7 +14,8 @@ import {
   Plus,
   ChevronDown,
   UserCircle,
-  HelpCircle
+  HelpCircle,
+  Shield
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import NotificationDropdown from './NotificationDropdown';
@@ -53,8 +54,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     };
   }, [profileDropdownOpen]);
 
-  // Don't show layout for login/signup pages, admin pages
-  if (pathname.startsWith('/login') || pathname.startsWith('/signup') || pathname.startsWith('/admin')) {
+  // Don't show layout for login/signup pages, admin pages, and KYC management pages
+  if (pathname.startsWith('/login') || pathname.startsWith('/signup') || pathname.startsWith('/admin') || pathname.startsWith('/kyc-')) {
     return <>{children}</>;
   }
 
@@ -216,6 +217,47 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                             >
                               <Users className="w-5 h-5" />
                               <span>Applications</span>
+                            </Link>
+                          </>
+                        )}
+                        
+                        {user?.userType === 'admin' && (
+                          <>
+                            <div className="border-t border-gray-100 my-2"></div>
+                            <div className="px-4 py-2">
+                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Admin</p>
+                            </div>
+                            <Link
+                              href="/admin/dashboard"
+                              className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
+                              onClick={() => setProfileDropdownOpen(false)}
+                            >
+                              <Shield className="w-5 h-5" />
+                              <span>Admin Dashboard</span>
+                            </Link>
+                            <Link
+                              href="/kyc-management"
+                              className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
+                              onClick={() => setProfileDropdownOpen(false)}
+                            >
+                              <Users className="w-5 h-5" />
+                              <span>KYC Management</span>
+                            </Link>
+                            <Link
+                              href="/kyc-direct-view"
+                              className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
+                              onClick={() => setProfileDropdownOpen(false)}
+                            >
+                              <FileText className="w-5 h-5" />
+                              <span>Direct KYC View</span>
+                            </Link>
+                            <Link
+                              href="/kyc-test"
+                              className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
+                              onClick={() => setProfileDropdownOpen(false)}
+                            >
+                              <HelpCircle className="w-5 h-5" />
+                              <span>KYC Test</span>
                             </Link>
                           </>
                         )}

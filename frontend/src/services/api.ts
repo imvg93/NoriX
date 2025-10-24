@@ -2,40 +2,33 @@
 import { ApiErrorHandler, withErrorHandling } from '../utils/errorHandler';
 
 const getApiBaseUrl = () => {
-  // Check if we're running in browser (client-side)
+  // Use NEXT_PUBLIC_API_URL if set
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    console.log('🔧 Using NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+
+  // Detect environment
   if (typeof window !== 'undefined') {
-    // If NEXT_PUBLIC_API_URL is set, use it (highest priority)
-    if (process.env.NEXT_PUBLIC_API_URL) {
-      console.log('🔧 Using NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
-      return process.env.NEXT_PUBLIC_API_URL as string;
-    }
-    
-    // Check if we're on Vercel (production deployment)
     if (window.location.hostname.includes('vercel.app')) {
-      // For Vercel deployment, use Railway backend
       const railwayUrl = 'https://studentjobs-backend-production.up.railway.app/api';
       console.log('🔧 Vercel deployment detected, using Railway backend:', railwayUrl);
       return railwayUrl;
     }
-    
-    // For development, check if we're on localhost
+
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
       const localUrl = 'http://localhost:5000/api';
       console.log('🔧 Local development detected, using local backend:', localUrl);
       return localUrl;
     }
-    
-    // Default fallback for other environments
-    const fallbackUrl = 'http://localhost:5000/api';
-    console.log('🔧 Using fallback URL:', fallbackUrl);
-    return fallbackUrl;
   }
-  
-  // Server-side rendering fallback
-  const ssrUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-  console.log('🔧 Server-side rendering, using:', ssrUrl);
-  return ssrUrl;
+
+  // Server-side or fallback
+  const fallbackUrl = 'http://localhost:5000/api';
+  console.log('🔧 Fallback API URL:', fallbackUrl);
+  return fallbackUrl;
 };
+
 
 const API_BASE_URL = getApiBaseUrl();
 
@@ -569,9 +562,15 @@ class ApiService {
     } as unknown as JobsResponse;
   }
 
-  async getEmployerDashboardJobs(): Promise<JobsResponse> {
-    const raw = await this.request<any>('/enhanced-jobs/employer-dashboard');
+  async getEmployerDashboardJobs(employerId: string, page = 1, limit = 1000): Promise<JobsResponse> {
+    // Backend gets employerId from JWT token, not from URL path
+    const query = new URLSearchParams({ page: String(page), limit: String(limit) });
+    const endpoint = `/enhanced-jobs/employer-dashboard?${query.toString()}`;
+    console.log('🔍 API: Fetching employer dashboard jobs from:', endpoint);
+    const raw = await this.request<any>(endpoint);
+    console.log('🔍 API: Raw response:', raw);
     const payload = this.unwrap<any>(raw);
+    console.log('🔍 API: Unwrapped payload:', payload);
     // Employer dashboard returns structured jobs with applicants
     const jobs = Array.isArray(payload?.jobs) ? payload.jobs : [];
     // Normalize to frontend Job shape while preserving applicants on the object
@@ -598,7 +597,7 @@ class ApiService {
       jobs: normalized as any,
       pagination: {
         page: payload?.pagination?.current || 1,
-        limit: 10,
+        limit: payload?.pagination?.limit || limit || 10,
         total: payload?.pagination?.total || normalized.length,
         pages: payload?.pagination?.pages || 1,
       }
@@ -663,17 +662,39 @@ class ApiService {
     };
   }
 
-  async getEmployerApplications(status?: string, jobId?: string): Promise<ApplicationsResponse> {
+  async getEmployerApplications(status?: string, jobId?: string, page = 1, limit = 1000): Promise<ApplicationsResponse> {
     const queryParams = new URLSearchParams();
     if (status) queryParams.append('status', status);
     if (jobId) queryParams.append('jobId', jobId);
+    if (page) queryParams.append('page', String(page));
+    if (limit) queryParams.append('limit', String(limit));
     const endpoint = queryParams.toString() ? `/enhanced-jobs/applications/employer?${queryParams}` : '/enhanced-jobs/applications/employer';
     const raw = await this.request<any>(endpoint);
     const payload = this.unwrap<any>(raw);
     const applications = Array.isArray(payload?.applications) ? payload.applications.map((a: any) => this.mapEnhancedApplicationToFrontend(a)) : [];
     return {
       applications,
-      pagination: payload?.pagination || { current: 1, pages: 1, total: applications.length },
+      pagination: payload?.pagination || { current: page, pages: 1, total: applications.length },
+    } as ApplicationsResponse;
+  }
+
+  // Explicit employer applications fetch - backend gets employerId from JWT token
+  async getEmployerApplicationsForEmployer(employerId: string, page = 1, limit = 1000, status?: string): Promise<ApplicationsResponse> {
+    const queryParams = new URLSearchParams();
+    queryParams.append('page', String(page));
+    queryParams.append('limit', String(limit));
+    if (status) queryParams.append('status', status);
+    // Backend gets employerId from JWT token, not from query params
+    const endpoint = `/enhanced-jobs/applications/employer?${queryParams.toString()}`;
+    console.log('🔍 API: Fetching employer applications from:', endpoint);
+    const raw = await this.request<any>(endpoint);
+    console.log('🔍 API: Raw applications response:', raw);
+    const payload = this.unwrap<any>(raw);
+    console.log('🔍 API: Unwrapped applications payload:', payload);
+    const applications = Array.isArray(payload?.applications) ? payload.applications.map((a: any) => this.mapEnhancedApplicationToFrontend(a)) : [];
+    return {
+      applications,
+      pagination: payload?.pagination || { current: page, pages: 1, total: applications.length },
     } as ApplicationsResponse;
   }
 
@@ -717,7 +738,8 @@ class ApiService {
       if (error.status === 400 && error.message?.includes('Application deadline')) {
         console.log('Job validation error, trying to fetch from jobs list...');
         try {
-          const jobsResponse = await this.getJobs();
+          // Fallback to fetching all jobs if we have no current user context
+          const jobsResponse = await this.getEmployerDashboardJobs("", 1, 1000);
           const job = jobsResponse.jobs.find((j: any) => j._id === jobId);
           if (job) {
             console.log('Found job in jobs list');
@@ -762,7 +784,18 @@ class ApiService {
 
   async getEmployerJobs(): Promise<JobsResponse> {
     // Route through enhanced dashboard endpoint to ensure we fetch the employer's own jobs
-    return this.getEmployerDashboardJobs();
+    // Try to get employerId from localStorage if not provided
+    let employerId = '';
+    try {
+      const storedUser = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+      if (storedUser) {
+        const parsed = JSON.parse(storedUser);
+        employerId = parsed?._id || parsed?.id || '';
+      }
+    } catch {
+      // ignore parse errors and proceed with empty id
+    }
+    return this.getEmployerDashboardJobs(employerId);
   }
 
   async updateJobStatus(id: string, status: string) {
@@ -1248,6 +1281,211 @@ class ApiService {
       return response;
     } catch (error) {
       console.error('❌ Error fetching comprehensive statistics:', error);
+      throw error;
+    }
+  }
+
+  // ==================== COMPREHENSIVE ADMIN DATA APIs ====================
+
+  // Get comprehensive admin dashboard data
+  async getComprehensiveAdminData(params?: {
+    userPage?: number;
+    userLimit?: number;
+    userType?: string;
+    userStatus?: string;
+    jobPage?: number;
+    jobLimit?: number;
+    jobStatus?: string;
+    jobApprovalStatus?: string;
+    appPage?: number;
+    appLimit?: number;
+    appStatus?: string;
+    kycPage?: number;
+    kycLimit?: number;
+    kycStatus?: string;
+  }) {
+    try {
+      console.log('🔍 Fetching comprehensive admin data...');
+      const queryParams = new URLSearchParams();
+      
+      if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            queryParams.append(key, String(value));
+          }
+        });
+      }
+
+      const endpoint = queryParams.toString() 
+        ? `/admin/comprehensive-data?${queryParams.toString()}`
+        : '/admin/comprehensive-data';
+      
+      const response = await this.request(endpoint, {
+        method: 'GET',
+      });
+      
+      console.log('📊 Comprehensive admin data response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error fetching comprehensive admin data:', error);
+      throw error;
+    }
+  }
+
+  // Get dashboard summary statistics
+  async getDashboardSummary() {
+    try {
+      console.log('📊 Fetching dashboard summary...');
+      const response = await this.request('/admin/dashboard-summary', {
+        method: 'GET',
+      });
+      console.log('📊 Dashboard summary response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error fetching dashboard summary:', error);
+      throw error;
+    }
+  }
+
+  // Get all users with filtering and pagination
+  async getAllUsersAdmin(params?: {
+    page?: number;
+    limit?: number;
+    userType?: string;
+    status?: string;
+    search?: string;
+  }) {
+    try {
+      console.log('🔍 Fetching all users for admin...');
+      const queryParams = new URLSearchParams();
+      
+      if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            queryParams.append(key, String(value));
+          }
+        });
+      }
+
+      const endpoint = queryParams.toString() 
+        ? `/admin/users/all?${queryParams.toString()}`
+        : '/admin/users/all';
+      
+      const response = await this.request(endpoint, {
+        method: 'GET',
+      });
+      
+      console.log('📊 All users admin response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error fetching all users for admin:', error);
+      throw error;
+    }
+  }
+
+  // Get all jobs with filtering and pagination
+  async getAllJobsAdmin(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    approvalStatus?: string;
+    search?: string;
+  }) {
+    try {
+      console.log('🔍 Fetching all jobs for admin...');
+      const queryParams = new URLSearchParams();
+      
+      if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            queryParams.append(key, String(value));
+          }
+        });
+      }
+
+      const endpoint = queryParams.toString() 
+        ? `/admin/jobs/all?${queryParams.toString()}`
+        : '/admin/jobs/all';
+      
+      const response = await this.request(endpoint, {
+        method: 'GET',
+      });
+      
+      console.log('📊 All jobs admin response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error fetching all jobs for admin:', error);
+      throw error;
+    }
+  }
+
+  // Get all applications with filtering and pagination
+  async getAllApplicationsAdmin(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    search?: string;
+  }) {
+    try {
+      console.log('🔍 Fetching all applications for admin...');
+      const queryParams = new URLSearchParams();
+      
+      if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            queryParams.append(key, String(value));
+          }
+        });
+      }
+
+      const endpoint = queryParams.toString() 
+        ? `/admin/applications/all?${queryParams.toString()}`
+        : '/admin/applications/all';
+      
+      const response = await this.request(endpoint, {
+        method: 'GET',
+      });
+      
+      console.log('📊 All applications admin response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error fetching all applications for admin:', error);
+      throw error;
+    }
+  }
+
+  // Get all KYC records with filtering and pagination
+  async getAllKYCAdmin(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    search?: string;
+    type?: 'student' | 'employer';
+  }) {
+    try {
+      console.log('🔍 Fetching all KYC records for admin...');
+      const queryParams = new URLSearchParams();
+      
+      if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            queryParams.append(key, String(value));
+          }
+        });
+      }
+
+      const endpoint = queryParams.toString() 
+        ? `/admin/kyc/all?${queryParams.toString()}`
+        : '/admin/kyc/all';
+      
+      const response = await this.request(endpoint, {
+        method: 'GET',
+      });
+      
+      console.log('📊 All KYC admin response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error fetching all KYC records for admin:', error);
       throw error;
     }
   }

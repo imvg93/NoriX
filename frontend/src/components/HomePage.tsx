@@ -3,7 +3,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import StudentHome from './StudentHome';
-import AdminHome from './AdminHome';
 import Link from 'next/link';
 
 interface User {
@@ -23,7 +22,13 @@ const HomePage: React.FC = () => {
       case 'student':
         return <StudentHome user={user} />;
       case 'admin':
-        return <AdminHome />;
+        return (
+          <div className="text-center py-12">
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Admin Portal</h2>
+            <p className="text-gray-600 mb-4">Open the unified admin dashboard.</p>
+            <Link href="/admin/dashboard" className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Open Admin Dashboard</Link>
+          </div>
+        );
       case 'employer':
         return (
           <div className="text-center py-12">

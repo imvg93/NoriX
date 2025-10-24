@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Users } from 'lucide-react';
+import { Users, Shield, ChevronDown, LayoutDashboard, User, Settings } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 
@@ -65,71 +65,92 @@ export default function EmployerDashboard() {
 
   useEffect(() => {
     const init = async () => {
-      if (!user || user.userType !== 'employer') return;
-      
+      if (!user || user.userType !== 'employer' || !user._id) return;
+
       try {
         setLoading(true);
-        
-        // Fetch KYC status
+
+        // Ensure company name prefill
+        setKycForm(prev => ({ ...prev, companyName: (user as any).companyName || '' }));
+
+        const employerId = user._id as string;
+
+        // 1) Fetch KYC status
         try {
-          const res = await apiService.getEmployerKYCStatus(user._id);
+          const res = await apiService.getEmployerKYCStatus(employerId);
           setKycStatus((res?.status as 'not-submitted' | 'pending' | 'approved' | 'rejected' | null) || 'not-submitted');
         } catch (e) {
           console.error('❌ Error loading KYC status:', e);
           setKycStatus('not-submitted');
         }
-        
-        setKycForm(prev => ({ ...prev, companyName: (user as any).companyName || '' }));
-        
-        // Fetch jobs data
+
+        // 2) Fetch employer jobs with correct API call
+        let jobsData: any[] = [];
         try {
-          const jobsResponse = await apiService.getEmployerDashboardJobs();
-          const jobsData = jobsResponse.jobs || [];
+          console.log('🔍 Fetching jobs for employerId:', employerId);
+          const jobsResponse = await apiService.getEmployerDashboardJobs(employerId, 1, 1000);
+          jobsData = jobsResponse?.jobs || [];
           setJobs(jobsData);
-
-          // Calculate stats
-          const totalJobs = jobsData.length;
-          const activeJobs = jobsData.filter((job: any) => job.status === 'active').length;
-          const totalApplications = jobsData.reduce((sum: number, job: any) => sum + (job.applicationsCount || 0), 0);
-          const approvedJobs = jobsData.filter((job: any) => (job.approvalStatus || '').toLowerCase() === 'approved').length;
-
-          setStats({
-            totalJobs,
-            activeJobs,
-            totalApplications,
-            pendingApplications: 0, // Will be updated when we fetch applications
-            approvedJobs
-          });
+          console.log('📊 Fetched jobs:', jobsData.length, 'jobs');
+          console.log('📊 Jobs data:', jobsData);
         } catch (e) {
           console.error('❌ Error loading jobs:', e);
+          console.error('❌ Error details:', e);
+          // Don't crash the app, continue with empty jobs array
         }
-        
-        // Fetch applications data
+
+        // 3) Fetch employer applications (keep existing logic)
+        let applicationsData: any[] = [];
         try {
-          const applicationsResponse = await apiService.getEmployerApplications();
-          const applicationsData = applicationsResponse.applications || [];
+          console.log('🔍 Fetching applications for employerId:', employerId);
+          const applicationsResponse = await apiService.getEmployerApplicationsForEmployer(employerId, 1, 1000);
+          applicationsData = applicationsResponse?.applications || [];
           setApplications(applicationsData);
-          
-          // Update pending applications count
-          const pendingApplications = applicationsData.filter((app: any) => 
-            app.status === 'applied' || app.status === 'pending'
-          ).length;
-          
-          setStats(prev => ({
-            ...prev,
-            pendingApplications
-          }));
+          console.log('📊 Fetched applications:', applicationsData.length, 'applications');
+          console.log('📊 Applications data:', applicationsData);
         } catch (e) {
           console.error('❌ Error loading applications:', e);
+          console.error('❌ Error details:', e);
+          // Don't crash the app, continue with empty applications array
         }
+
+        // 4) Calculate stats based on fetched jobs
+        const totalJobs = jobsData.length;
+        const activeJobs = jobsData.filter((job: any) => (job.status || '').toLowerCase() === 'active').length;
+        const approvedJobs = jobsData.filter((job: any) => (job.approvalStatus || '').toLowerCase() === 'approved').length;
         
+        // Calculate total applications from applications data (preferred) or fallback to job counts
+        const totalApplications = applicationsData.length > 0
+          ? applicationsData.length
+          : jobsData.reduce((sum: number, job: any) => sum + (Number(job.applicationsCount) || 0), 0);
+        
+        const pendingApplications = applicationsData.filter((app: any) => 
+          app.status === 'applied' || app.status === 'pending'
+        ).length;
+
+        console.log('📊 Dashboard stats:', {
+          totalJobs,
+          activeJobs,
+          approvedJobs,
+          totalApplications,
+          pendingApplications
+        });
+
+        setStats({
+          totalJobs,
+          activeJobs,
+          totalApplications,
+          pendingApplications,
+          approvedJobs
+        });
       } catch (error) {
         console.error('❌ Error initializing dashboard:', error);
+        // Don't crash the app, just log the error
       } finally {
         setLoading(false);
       }
     };
-    
+
     init();
   }, [user]);
 
@@ -168,7 +189,7 @@ export default function EmployerDashboard() {
       }
       
       // Refresh applications data
-      const applicationsResponse = await apiService.getEmployerApplications();
+      const applicationsResponse = await apiService.getEmployerApplicationsForEmployer(user!._id);
       setApplications(applicationsResponse.applications || []);
       
       // Update stats
@@ -193,7 +214,7 @@ export default function EmployerDashboard() {
       alert('Job approved successfully!');
       
       // Refresh jobs data
-      const jobsResponse = await apiService.getEmployerDashboardJobs();
+      const jobsResponse = await apiService.getEmployerDashboardJobs(user!._id);
       setJobs(jobsResponse.jobs || []);
       
     } catch (error: any) {

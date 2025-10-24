@@ -82,10 +82,10 @@ export default function SimpleKYCTest() {
           <h2 className="text-xl font-semibold mb-4">Direct Links</h2>
           <div className="space-y-2">
             <a 
-              href="/admin-home" 
+              href="/admin/dashboard" 
               className="block px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
             >
-              Go to Admin Home
+              Go to Admin Dashboard
             </a>
             <a 
               href="/kyc-management" 
