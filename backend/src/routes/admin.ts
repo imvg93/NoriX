@@ -3,6 +3,8 @@ import mongoose from 'mongoose';
 import User from '../models/User';
 import Job from '../models/Job';
 import KYC from '../models/KYC';
+import Application from '../models/Application';
+import { EmployerKYC } from '../models/EmployerKYC';
 import { KYCAudit } from '../models/KYCAudit';
 import { AdminLogin } from '../models/AdminLogin';
 import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth';
@@ -117,7 +119,7 @@ router.get('/jobs/pending', authenticateToken, requireRole(['admin']), asyncHand
   const { page = 1, limit = 10 } = req.query;
 
   const jobs = await Job.find({ status: 'active' })
-    .populate('employerId', 'name email companyName')
+    .populate('employer', 'name email companyName')
     .sort({ createdAt: -1 })
     .limit(Number(limit) * 1)
     .skip((Number(page) - 1) * Number(limit));
@@ -344,6 +346,79 @@ router.get('/kyc/stats', authenticateToken, requireRole(['admin']), asyncHandler
     approved: approvedKYC,
     rejected: rejectedKYC
   }, 'KYC statistics retrieved successfully');
+}));
+
+// @route   GET /api/admin/kyc/all
+// @desc    Get all KYC records with filtering and pagination
+// @access  Private (Admin only)
+router.get('/kyc/all', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  try {
+    const { page = 1, limit = 50, status, search, type = 'student' } = req.query;
+    
+    if (type === 'employer') {
+      const query: any = {};
+      if (status && status !== 'all') query.status = status;
+      if (search) {
+        query.$or = [
+          { companyName: { $regex: search, $options: 'i' } },
+          { 'employerId.name': { $regex: search, $options: 'i' } },
+          { 'employerId.email': { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      const employerKYC = await EmployerKYC.find(query)
+        .populate('employerId', 'name email companyName')
+        .sort({ createdAt: -1 })
+        .limit(Number(limit))
+        .skip((Number(page) - 1) * Number(limit))
+        .lean();
+
+      const total = await EmployerKYC.countDocuments(query);
+
+      return sendSuccessResponse(res, {
+        kyc: employerKYC,
+        pagination: {
+          current: Number(page),
+          total: Math.ceil(total / Number(limit)),
+          count: employerKYC.length,
+          totalRecords: total
+        }
+      }, 'All employer KYC records retrieved successfully');
+    } else {
+      const query: any = {};
+      if (status && status !== 'all') query.verificationStatus = status;
+      if (search) {
+        query.$or = [
+          { fullName: { $regex: search, $options: 'i' } },
+          { college: { $regex: search, $options: 'i' } },
+          { 'userId.name': { $regex: search, $options: 'i' } },
+          { 'userId.email': { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      const studentKYC = await KYC.find(query)
+        .populate('userId', 'name email phone college')
+        .sort({ submittedAt: -1 })
+        .limit(Number(limit))
+        .skip((Number(page) - 1) * Number(limit))
+        .lean();
+
+      const total = await KYC.countDocuments(query);
+
+      return sendSuccessResponse(res, {
+        kyc: studentKYC,
+        pagination: {
+          current: Number(page),
+          total: Math.ceil(total / Number(limit)),
+          count: studentKYC.length,
+          totalRecords: total
+        }
+      }, 'All student KYC records retrieved successfully');
+    }
+  } catch (error) {
+    console.error('❌ Error fetching all KYC records:', error);
+    throw new ValidationError('Failed to fetch KYC records');
+  }
 }));
 
 // @route   GET /api/admin/kyc/:id
@@ -1020,6 +1095,458 @@ router.get('/employers/:employerId/details', authenticateToken, requireRole(['ad
       record: latestKYC
     }
   }, 'Employer details retrieved successfully');
+}));
+
+// ==================== COMPREHENSIVE ADMIN DATA ENDPOINTS ====================
+
+// @route   GET /api/admin/comprehensive-data
+// @desc    Get all data for admin dashboard (users, jobs, applications, KYC)
+// @access  Private (Admin only)
+router.get('/comprehensive-data', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  try {
+    console.log('🔍 Fetching comprehensive admin data...');
+    
+    // Fetch all users with pagination
+    const { userPage = 1, userLimit = 50, userType, userStatus } = req.query;
+    const userQuery: any = {};
+    if (userType && userType !== 'all') userQuery.userType = userType;
+    if (userStatus && userStatus !== 'all') {
+      if (userStatus === 'active') userQuery.isActive = true;
+      if (userStatus === 'inactive') userQuery.isActive = false;
+    }
+
+    const users = await User.find(userQuery)
+      .select('-password -refreshToken -resetToken')
+      .sort({ createdAt: -1 })
+      .limit(Number(userLimit))
+      .skip((Number(userPage) - 1) * Number(userLimit))
+      .lean();
+
+    const totalUsers = await User.countDocuments(userQuery);
+
+    // Fetch all jobs with pagination
+    const { jobPage = 1, jobLimit = 50, jobStatus, jobApprovalStatus } = req.query;
+    const jobQuery: any = {};
+    if (jobStatus && jobStatus !== 'all') jobQuery.status = jobStatus;
+    if (jobApprovalStatus && jobApprovalStatus !== 'all') jobQuery.approvalStatus = jobApprovalStatus;
+
+    const jobs = await Job.find(jobQuery)
+      .populate('employerId', 'name email companyName')
+      .sort({ createdAt: -1 })
+      .limit(Number(jobLimit))
+      .skip((Number(jobPage) - 1) * Number(jobLimit))
+      .lean();
+
+    const totalJobs = await Job.countDocuments(jobQuery);
+
+    // Fetch all applications with pagination
+    const { appPage = 1, appLimit = 50, appStatus } = req.query;
+    const appQuery: any = {};
+    if (appStatus && appStatus !== 'all') appQuery.status = appStatus;
+
+    const applications = await Application.find(appQuery)
+      .populate('studentId', 'name email phone college')
+      .populate({
+        path: 'jobId',
+        select: 'title company location employerId',
+        populate: {
+          path: 'employerId',
+          select: 'name email companyName'
+        }
+      })
+      .sort({ createdAt: -1 })
+      .limit(Number(appLimit))
+      .skip((Number(appPage) - 1) * Number(appLimit))
+      .lean();
+
+    const totalApplications = await Application.countDocuments(appQuery);
+
+    // Fetch all KYC records with pagination
+    const { kycPage = 1, kycLimit = 50, kycStatus } = req.query;
+    const kycQuery: any = {};
+    if (kycStatus && kycStatus !== 'all') kycQuery.verificationStatus = kycStatus;
+
+    const kycRecords = await KYC.find(kycQuery)
+      .populate('userId', 'name email phone college')
+      .sort({ submittedAt: -1 })
+      .limit(Number(kycLimit))
+      .skip((Number(kycPage) - 1) * Number(kycLimit))
+      .lean();
+
+    const totalKYC = await KYC.countDocuments(kycQuery);
+
+    // Fetch all employer KYC records
+    const employerKYC = await EmployerKYC.find({})
+      .populate('employerId', 'name email companyName')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Get comprehensive statistics
+    const [
+      totalStudents,
+      totalEmployers,
+      totalAdmins,
+      activeUsers,
+      pendingJobs,
+      approvedJobs,
+      rejectedJobs,
+      pendingKYC,
+      approvedKYC,
+      rejectedKYC,
+      pendingApplications,
+      approvedApplications,
+      rejectedApplications
+    ] = await Promise.all([
+      User.countDocuments({ userType: 'student' }),
+      User.countDocuments({ userType: 'employer' }),
+      User.countDocuments({ userType: 'admin' }),
+      User.countDocuments({ isActive: true }),
+      Job.countDocuments({ approvalStatus: 'pending' }),
+      Job.countDocuments({ approvalStatus: 'approved' }),
+      Job.countDocuments({ approvalStatus: 'rejected' }),
+      KYC.countDocuments({ verificationStatus: 'pending' }),
+      KYC.countDocuments({ verificationStatus: 'approved' }),
+      KYC.countDocuments({ verificationStatus: 'rejected' }),
+      Application.countDocuments({ status: 'pending' }),
+      Application.countDocuments({ status: 'approved' }),
+      Application.countDocuments({ status: 'rejected' })
+    ]);
+
+    const comprehensiveData = {
+      users: {
+        data: users,
+        pagination: {
+          current: Number(userPage),
+          total: Math.ceil(totalUsers / Number(userLimit)),
+          count: users.length,
+          totalRecords: totalUsers
+        },
+        stats: {
+          total: totalUsers,
+          students: totalStudents,
+          employers: totalEmployers,
+          admins: totalAdmins,
+          active: activeUsers,
+          inactive: totalUsers - activeUsers
+        }
+      },
+      jobs: {
+        data: jobs,
+        pagination: {
+          current: Number(jobPage),
+          total: Math.ceil(totalJobs / Number(jobLimit)),
+          count: jobs.length,
+          totalRecords: totalJobs
+        },
+        stats: {
+          total: totalJobs,
+          pending: pendingJobs,
+          approved: approvedJobs,
+          rejected: rejectedJobs,
+          active: approvedJobs
+        }
+      },
+      applications: {
+        data: applications,
+        pagination: {
+          current: Number(appPage),
+          total: Math.ceil(totalApplications / Number(appLimit)),
+          count: applications.length,
+          totalRecords: totalApplications
+        },
+        stats: {
+          total: totalApplications,
+          pending: pendingApplications,
+          approved: approvedApplications,
+          rejected: rejectedApplications
+        }
+      },
+      kyc: {
+        studentKYC: {
+          data: kycRecords,
+          pagination: {
+            current: Number(kycPage),
+            total: Math.ceil(totalKYC / Number(kycLimit)),
+            count: kycRecords.length,
+            totalRecords: totalKYC
+          },
+          stats: {
+            total: totalKYC,
+            pending: pendingKYC,
+            approved: approvedKYC,
+            rejected: rejectedKYC
+          }
+        },
+        employerKYC: {
+          data: employerKYC,
+          stats: {
+            total: employerKYC.length,
+            pending: employerKYC.filter(k => k.status === 'pending').length,
+            approved: employerKYC.filter(k => k.status === 'approved').length,
+            rejected: employerKYC.filter(k => k.status === 'rejected').length
+          }
+        }
+      },
+      summary: {
+        totalUsers,
+        totalJobs,
+        totalApplications,
+        totalKYC: totalKYC + employerKYC.length,
+        activeEmployers: totalEmployers,
+        pendingApprovals: pendingJobs + pendingKYC + pendingApplications
+      }
+    };
+
+    console.log('📊 Comprehensive admin data fetched successfully');
+    sendSuccessResponse(res, comprehensiveData, 'Comprehensive admin data retrieved successfully');
+  } catch (error) {
+    console.error('❌ Error fetching comprehensive admin data:', error);
+    throw new ValidationError('Failed to fetch comprehensive admin data');
+  }
+}));
+
+// @route   GET /api/admin/users/all
+// @desc    Get all users with filtering and pagination
+// @access  Private (Admin only)
+router.get('/users/all', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  try {
+    const { page = 1, limit = 50, userType, status, search } = req.query;
+    
+    const query: any = {};
+    if (userType && userType !== 'all') query.userType = userType;
+    if (status && status !== 'all') {
+      if (status === 'active') query.isActive = true;
+      if (status === 'inactive') query.isActive = false;
+    }
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { phone: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const users = await User.find(query)
+      .select('-password -refreshToken -resetToken')
+      .sort({ createdAt: -1 })
+      .limit(Number(limit))
+      .skip((Number(page) - 1) * Number(limit))
+      .lean();
+
+    const total = await User.countDocuments(query);
+
+    sendSuccessResponse(res, {
+      users,
+      pagination: {
+        current: Number(page),
+        total: Math.ceil(total / Number(limit)),
+        count: users.length,
+        totalRecords: total
+      }
+    }, 'All users retrieved successfully');
+  } catch (error) {
+    console.error('❌ Error fetching all users:', error);
+    throw new ValidationError('Failed to fetch users');
+  }
+}));
+
+// @route   GET /api/admin/jobs/all
+// @desc    Get all jobs with filtering and pagination
+// @access  Private (Admin only)
+router.get('/jobs/all', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  try {
+    const { page = 1, limit = 50, status, approvalStatus, search } = req.query;
+    
+    const query: any = {};
+    if (status && status !== 'all') query.status = status;
+    if (approvalStatus && approvalStatus !== 'all') query.approvalStatus = approvalStatus;
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { company: { $regex: search, $options: 'i' } },
+        { location: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const jobs = await Job.find(query)
+      .populate('employer', 'name email companyName')
+      .sort({ createdAt: -1 })
+      .limit(Number(limit))
+      .skip((Number(page) - 1) * Number(limit))
+      .lean();
+
+    const total = await Job.countDocuments(query);
+
+    sendSuccessResponse(res, {
+      jobs,
+      pagination: {
+        current: Number(page),
+        total: Math.ceil(total / Number(limit)),
+        count: jobs.length,
+        totalRecords: total
+      }
+    }, 'All jobs retrieved successfully');
+  } catch (error) {
+    console.error('❌ Error fetching all jobs:', error);
+    throw new ValidationError('Failed to fetch jobs');
+  }
+}));
+
+// @route   GET /api/admin/applications/all
+// @desc    Get all applications with filtering and pagination
+// @access  Private (Admin only)
+router.get('/applications/all', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  try {
+    const { page = 1, limit = 50, status, search } = req.query;
+    
+    const query: any = {};
+    if (status && status !== 'all') query.status = status;
+    if (search) {
+      query.$or = [
+        { 'studentId.name': { $regex: search, $options: 'i' } },
+        { 'jobId.title': { $regex: search, $options: 'i' } },
+        { 'jobId.employerId.name': { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const applications = await Application.find(query)
+      .populate('studentId', 'name email phone college')
+      .populate({
+        path: 'jobId',
+        select: 'title company location employerId',
+        populate: {
+          path: 'employerId',
+          select: 'name email companyName'
+        }
+      })
+      .sort({ createdAt: -1 })
+      .limit(Number(limit))
+      .skip((Number(page) - 1) * Number(limit))
+      .lean();
+
+    const total = await Application.countDocuments(query);
+
+    sendSuccessResponse(res, {
+      applications,
+      pagination: {
+        current: Number(page),
+        total: Math.ceil(total / Number(limit)),
+        count: applications.length,
+        totalRecords: total
+      }
+    }, 'All applications retrieved successfully');
+  } catch (error) {
+    console.error('❌ Error fetching all applications:', error);
+    throw new ValidationError('Failed to fetch applications');
+  }
+}));
+
+// @route   GET /api/admin/dashboard-summary
+// @desc    Get dashboard summary statistics
+// @access  Private (Admin only)
+router.get('/dashboard-summary', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  try {
+    console.log('🔍 Fetching dashboard summary...');
+    
+    const [
+      totalUsers,
+      totalStudents,
+      totalEmployers,
+      totalAdmins,
+      activeUsers,
+      totalJobs,
+      pendingJobs,
+      approvedJobs,
+      rejectedJobs,
+      totalApplications,
+      pendingApplications,
+      approvedApplications,
+      rejectedApplications,
+      totalStudentKYC,
+      pendingStudentKYC,
+      approvedStudentKYC,
+      rejectedStudentKYC,
+      totalEmployerKYC,
+      pendingEmployerKYC,
+      approvedEmployerKYC,
+      rejectedEmployerKYC
+    ] = await Promise.all([
+      User.countDocuments(),
+      User.countDocuments({ userType: 'student' }),
+      User.countDocuments({ userType: 'employer' }),
+      User.countDocuments({ userType: 'admin' }),
+      User.countDocuments({ isActive: true }),
+      Job.countDocuments(),
+      Job.countDocuments({ approvalStatus: 'pending' }),
+      Job.countDocuments({ approvalStatus: 'approved' }),
+      Job.countDocuments({ approvalStatus: 'rejected' }),
+      Application.countDocuments(),
+      Application.countDocuments({ status: 'pending' }),
+      Application.countDocuments({ status: 'approved' }),
+      Application.countDocuments({ status: 'rejected' }),
+      KYC.countDocuments(),
+      KYC.countDocuments({ verificationStatus: 'pending' }),
+      KYC.countDocuments({ verificationStatus: 'approved' }),
+      KYC.countDocuments({ verificationStatus: 'rejected' }),
+      EmployerKYC.countDocuments(),
+      EmployerKYC.countDocuments({ status: 'pending' }),
+      EmployerKYC.countDocuments({ status: 'approved' }),
+      EmployerKYC.countDocuments({ status: 'rejected' })
+    ]);
+
+    const summary = {
+      users: {
+        total: totalUsers,
+        students: totalStudents,
+        employers: totalEmployers,
+        admins: totalAdmins,
+        active: activeUsers,
+        inactive: totalUsers - activeUsers
+      },
+      jobs: {
+        total: totalJobs,
+        pending: pendingJobs,
+        approved: approvedJobs,
+        rejected: rejectedJobs,
+        active: approvedJobs
+      },
+      applications: {
+        total: totalApplications,
+        pending: pendingApplications,
+        approved: approvedApplications,
+        rejected: rejectedApplications
+      },
+      kyc: {
+        student: {
+          total: totalStudentKYC,
+          pending: pendingStudentKYC,
+          approved: approvedStudentKYC,
+          rejected: rejectedStudentKYC
+        },
+        employer: {
+          total: totalEmployerKYC,
+          pending: pendingEmployerKYC,
+          approved: approvedEmployerKYC,
+          rejected: rejectedEmployerKYC
+        },
+        total: totalStudentKYC + totalEmployerKYC
+      },
+      overview: {
+        totalUsers,
+        totalJobs,
+        totalApplications,
+        totalKYC: totalStudentKYC + totalEmployerKYC,
+        activeEmployers: totalEmployers,
+        pendingApprovals: pendingJobs + pendingStudentKYC + pendingEmployerKYC + pendingApplications
+      }
+    };
+
+    console.log('📊 Dashboard summary fetched successfully');
+    sendSuccessResponse(res, summary, 'Dashboard summary retrieved successfully');
+  } catch (error) {
+    console.error('❌ Error fetching dashboard summary:', error);
+    throw new ValidationError('Failed to fetch dashboard summary');
+  }
 }));
 
 export default router;

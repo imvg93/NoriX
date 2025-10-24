@@ -192,7 +192,7 @@ export default function KYCManagementPage() {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
             <Link 
-              href="/admin-home"
+              href="/admin/dashboard"
               className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />

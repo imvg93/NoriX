@@ -227,7 +227,7 @@ export default function DirectKYCView() {
           </div>
           <div className="flex gap-3">
             <a 
-              href="/admin-home"
+              href="/admin/dashboard"
               className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
             >
               Back to Admin

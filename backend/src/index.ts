@@ -50,7 +50,7 @@ setApplicationServices(socketManager, emailService);
 const isProduction = process.env.NODE_ENV === 'production';
 const allowedOrigins = isProduction 
   ? ['https://me-work.vercel.app']
-  : ['http://localhost:3000'];
+  : ['http://localhost:3000', 'http://localhost:3001'];
 
 const corsOptions = {
   origin: allowedOrigins,

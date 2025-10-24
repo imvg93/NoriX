@@ -36,13 +36,13 @@ async function createWorkingAdmin() {
     await User.deleteMany({ userType: 'admin' });
     console.log('🗑️ Removed existing admin users');
     
-    // Create working admin with correct password hash
-    const hashedPassword = await bcrypt.hash('admin123', 12);
+    // Create super admin with your specific credentials
+    const hashedPassword = await bcrypt.hash('admin1234', 12);
     const admin = new User({
-      name: 'Admin User',
-      email: 'admin@studentjobs.com',
+      name: 'Super Admin',
+      email: 'mework2003@gmail.com',
       password: hashedPassword,
-      phone: '1234567890',
+      phone: '+1234567890',
       userType: 'admin',
       isActive: true,
       emailVerified: true,
@@ -51,13 +51,15 @@ async function createWorkingAdmin() {
     });
 
     await admin.save();
-    console.log('✅ Created working admin account');
+    console.log('✅ Created super admin account');
     
-    console.log('\n🎯 LOGIN CREDENTIALS:');
-    console.log('Email: admin@studentjobs.com');
-    console.log('Password: admin123');
+    console.log('\n🎯 SUPER ADMIN CREDENTIALS:');
+    console.log('Email: mework2003@gmail.com');
+    console.log('Password: admin1234');
     console.log('User Type: admin');
-    console.log('\n🔗 Login URL: http://localhost:3000/login (use admin credentials)');
+    console.log('Status: Active with full access');
+    console.log('\n🔗 Login URL: http://localhost:3000/login');
+    console.log('🔗 Admin Dashboard: http://localhost:3000/admin/dashboard');
 
   } catch (error) {
     console.error('❌ Error:', error.message);
