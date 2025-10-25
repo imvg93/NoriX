@@ -116,6 +116,19 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       setIsConnected(socketService.isSocketConnected());
     };
 
+    const handleKycStatusUpdate = (data: any) => {
+      const status = data?.status;
+      const title = status === 'approved' ? 'KYC Approved ✅' : status === 'rejected' ? 'KYC Rejected ❌' : 'KYC Update';
+      const message = data?.message || (status === 'approved' ? 'Your KYC has been approved. All features are enabled.' : status === 'rejected' ? 'Your KYC was rejected. Please review and resubmit.' : 'Your KYC status was updated.');
+      addNotification({
+        type: 'kyc',
+        title,
+        message,
+        timestamp: new Date().toISOString(),
+        data
+      });
+    };
+
     // Register event listeners
     socketService.onJobApproved(handleJobApproved);
     socketService.onJobRejected(handleJobRejected);
@@ -123,6 +136,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     socketService.onApplicationStatusUpdate(handleApplicationStatusUpdate);
     socketService.on('connect', handleConnectionStatus);
     socketService.on('disconnect', handleConnectionStatus);
+    socketService.on('kyc:status:update', handleKycStatusUpdate);
 
     // Check initial connection status
     handleConnectionStatus();
@@ -135,6 +149,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       socketService.off('application_status_update', handleApplicationStatusUpdate);
       socketService.off('connect', handleConnectionStatus);
       socketService.off('disconnect', handleConnectionStatus);
+      socketService.off('kyc:status:update', handleKycStatusUpdate);
     };
   }, []);
 

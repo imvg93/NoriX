@@ -21,6 +21,7 @@ import {
   X
 } from 'lucide-react';
 import { apiService } from '../../../services/api';
+import { kycStatusService } from '../../../services/kycStatusService';
 
 const PostJobPage = () => {
   const router = useRouter();
@@ -37,10 +38,17 @@ const PostJobPage = () => {
     applicationDeadline: ''
   });
 
-  // Simplified - just enable job posting without complex checks
+  // Check employer KYC status and gate job posting
   useEffect(() => {
-    console.log('🔍 Post Job page loaded - enabling job posting');
-    setKycOK(true); // Allow job posting without complex KYC checks
+    const checkKYC = async () => {
+      try {
+        const status = await kycStatusService.checkKYCStatus();
+        setKycOK(status.status === 'approved');
+      } catch (e) {
+        setKycOK(false);
+      }
+    };
+    checkKYC();
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -90,6 +98,11 @@ const PostJobPage = () => {
         applicationDeadline: formData.applicationDeadline
       };
 
+      if (!kycOK) {
+        alert('Complete and get your KYC approved before posting jobs');
+        setLoading(false);
+        return;
+      }
       await apiService.createJob(jobData);
       
       alert('Job posted successfully! Your job will stay highlighted until you delete it, helping it stand out to applicants.');
@@ -364,10 +377,10 @@ const PostJobPage = () => {
               {kycOK ? 'KYC Approved - Ready to Post Jobs' : 'Checking KYC Status...'}
             </h3>
             <p className={`text-sm ${kycOK ? 'text-green-700' : 'text-yellow-700'}`}>
-              {kycOK 
-                ? 'Your employer verification is complete and you can post jobs.'
-                : 'Please wait while we verify your KYC status...'
-              }
+          {kycOK 
+            ? 'Your employer verification is complete and you can post jobs.'
+            : 'Complete KYC to post jobs.'
+          }
             </p>
           </div>
         </div>

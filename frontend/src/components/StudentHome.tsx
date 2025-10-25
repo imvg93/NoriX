@@ -28,7 +28,8 @@ import {
   ChevronDown,
   ChevronUp,
   LogOut,
-  Shield
+  Shield,
+  AlertCircle
 } from 'lucide-react';
 import StatsCard from './StatsCard';
 import TaskCard from './TaskCard';
@@ -167,6 +168,16 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [filteredJobs, setFilteredJobs] = useState<Job[]>([]);
   const [kycStatus, setKycStatus] = useState<{isCompleted: boolean, status: string}>({isCompleted: true, status: 'approved'});
+  const [showKycPendingModal, setShowKycPendingModal] = useState(false);
+
+  const handleKycClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (kycStatus.status === 'pending') {
+      setShowKycPendingModal(true);
+    } else {
+      router.push('/kyc-profile');
+    }
+  };
 
   const getJobIdFromRef = (jobRef: any): string | null => {
     if (!jobRef) return null;
@@ -203,23 +214,37 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
         try {
           jobsData = await apiService.getStudentDashboardJobs(true);
           console.log('✅ Fetched jobs from enhanced endpoint:', jobsData.jobs?.length || 0);
-        } catch (error) {
-          console.log('⚠️ Enhanced jobs endpoint failed, falling back to regular jobs endpoint');
-          // Fallback to regular jobs endpoint if authentication fails
+        } catch (error: any) {
+          console.log('⚠️ Enhanced jobs endpoint failed:', error);
+          
+          // Check if it's a KYC-related error
+          if (error?.status === 403 && error?.data?.kycRequired) {
+            const kycStatus = error.data.kycStatus || 'not_submitted';
+            setKycStatus({
+              isCompleted: false,
+              status: kycStatus
+            });
+            setJobs([]);
+            setErrorMessage(error.message || 'Please complete your KYC verification to browse and apply for jobs.');
+            console.log(`⚠️ KYC required - status: ${kycStatus}`);
+            return; // Don't fallback to regular endpoint if KYC is required
+          }
+          
+          // Fallback to regular jobs endpoint if not KYC-related
+          console.log('⚠️ Falling back to regular jobs endpoint');
           jobsData = await apiService.getJobs();
           console.log('✅ Fetched jobs from regular endpoint:', jobsData.jobs?.length || 0);
         }
         
-        // Always set jobs - students can VIEW and APPLY to jobs regardless of KYC status
+        // KYC check already handled in error handling above
+        // Show jobs if we got here successfully
         setJobs(Array.isArray(jobsData.jobs) ? jobsData.jobs : []);
-        
-        // Always set KYC as completed to bypass all KYC checks
         setKycStatus({
           isCompleted: true,
           status: 'approved'
         });
-        setErrorMessage(''); // Clear any error messages
-        console.log(`✅ Showing ${jobsData.jobs?.length || 0} jobs - KYC bypassed`);
+        setErrorMessage('');
+        console.log(`✅ Showing ${jobsData.jobs?.length || 0} jobs - KYC approved`);
         
         // Fetch user applications
         try {
@@ -542,7 +567,15 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
               <Home className="w-4 h-4" />
               Home
             </Link>
-            {/* KYC buttons removed - no longer needed */}
+            {!kycStatus.isCompleted && (
+              <button
+                onClick={handleKycClick}
+                className="flex items-center gap-1 px-3 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium animate-pulse"
+              >
+                <Shield className="w-4 h-4" />
+                Complete KYC
+              </button>
+            )}
             <button 
               onClick={() => window.history.back()} 
               className="flex items-center gap-1 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
@@ -933,24 +966,63 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
               <div className="w-16 h-16 sm:w-20 sm:h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Shield className="w-8 h-8 sm:w-10 sm:h-10 text-orange-600" />
               </div>
-              <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Complete KYC to get your first job</h3>
-              <p className="text-gray-600 text-sm sm:text-base mb-6 max-w-md mx-auto">
-                Complete your KYC to view and apply for jobs.
-              </p>
-              <Link 
-                href="/kyc-profile"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium text-sm sm:text-base"
-              >
-                <Shield className="w-5 h-5" />
-                Complete KYC Now
-              </Link>
+              {kycStatus.status === 'not_submitted' && (
+                <>
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Complete KYC to get your first job</h3>
+                  <p className="text-gray-600 text-sm sm:text-base mb-6 max-w-md mx-auto">
+                    Please complete your KYC verification to browse and apply for jobs.
+                  </p>
+                  <button
+                    onClick={handleKycClick}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium text-sm sm:text-base"
+                  >
+                    <Shield className="w-5 h-5" />
+                    Complete KYC Now
+                  </button>
+                </>
+              )}
               {kycStatus.status === 'pending' && (
-                <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
-                  <div className="flex items-center gap-2 justify-center text-blue-700">
-                    <Clock className="w-5 h-5" />
-                    <span className="text-sm font-medium">Your KYC is under review. Jobs will appear once approved.</span>
+                <>
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Your KYC is Pending Approval</h3>
+                  <p className="text-gray-600 text-sm sm:text-base mb-6 max-w-md mx-auto">
+                    Your KYC is pending approval. Please wait for admin verification.
+                  </p>
+                  <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
+                    <div className="flex items-center gap-2 justify-center text-blue-700">
+                      <Clock className="w-5 h-5" />
+                      <span className="text-sm font-medium">Your KYC is under review. Jobs will appear once approved.</span>
+                    </div>
                   </div>
-                </div>
+                </>
+              )}
+              {kycStatus.status === 'rejected' && (
+                <>
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Your KYC was Rejected</h3>
+                  <p className="text-gray-600 text-sm sm:text-base mb-6 max-w-md mx-auto">
+                    Your KYC was rejected. Please submit your KYC again with correct details.
+                  </p>
+                  <Link 
+                    href="/kyc-profile"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium text-sm sm:text-base"
+                  >
+                    <Shield className="w-5 h-5" />
+                    Submit KYC Again
+                  </Link>
+                </>
+              )}
+              {kycStatus.status === 'suspended' && (
+                <>
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Your KYC is Suspended</h3>
+                  <p className="text-gray-600 text-sm sm:text-base mb-6 max-w-md mx-auto">
+                    Your KYC has been suspended. Contact admin for support.
+                  </p>
+                  <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 max-w-md mx-auto">
+                    <div className="flex items-center gap-2 justify-center text-red-700">
+                      <AlertCircle className="w-5 h-5" />
+                      <span className="text-sm font-medium">Contact admin to resolve this issue.</span>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           ) : filteredJobs.length === 0 ? (
@@ -1387,6 +1459,66 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
           ))}
         </div>
       </motion.div>
+
+      {/* KYC Pending Modal */}
+      {showKycPendingModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 relative">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowKycPendingModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            
+            {/* Modal Content */}
+            <div className="p-6 text-center">
+              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
+                <svg className="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-2xl font-semibold text-gray-900 mb-2">KYC Submitted Successfully! ✅</h3>
+              <p className="text-gray-600 mb-6 text-lg">
+                You have submitted your KYC. It's pending review. We will update you shortly.
+              </p>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                <div className="flex items-center gap-2 justify-center">
+                  <svg className="h-5 w-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm text-green-800">
+                    <strong>Status:</strong> Pending Review - Our team is checking your data
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                  onClick={() => {
+                    setShowKycPendingModal(false);
+                    router.push('/');
+                  }}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Go to Home
+                </button>
+                <button
+                  onClick={() => {
+                    setShowKycPendingModal(false);
+                    router.push('/student/dashboard');
+                  }}
+                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                >
+                  Go to Dashboard
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

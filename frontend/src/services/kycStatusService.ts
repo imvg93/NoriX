@@ -2,7 +2,7 @@ import { apiService } from './api';
 
 export interface KYCStatus {
   isCompleted: boolean;
-  status: 'not_submitted' | 'pending' | 'approved' | 'rejected';
+  status: 'not_submitted' | 'pending' | 'approved' | 'rejected' | 'suspended';
   submittedAt?: string;
   verifiedAt?: string;
   rejectedAt?: string;
@@ -98,6 +98,8 @@ class KYCStatusService {
         return '✅ Your profile is verified. You can now explore and apply for jobs.';
       case 'rejected':
         return `❌ Your KYC was rejected. Please re-submit with proper details.${status.rejectionReason ? ` Reason: ${status.rejectionReason}` : ''}`;
+      case 'suspended':
+        return '⏸️ Your KYC has been suspended. Contact admin for support.';
       default:
         return 'KYC status unknown.';
     }

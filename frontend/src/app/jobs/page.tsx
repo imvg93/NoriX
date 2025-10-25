@@ -14,10 +14,12 @@ import {
   Clock,
   IndianRupee,
   Eye,
-  ArrowLeft
+  ArrowLeft,
+  Shield
 } from "lucide-react";
 
 import { apiService } from "../../services/api";
+import { kycStatusService } from "../../services/kycStatusService";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSafeNavigation } from "../../hooks/useSafeNavigation";
 
@@ -71,6 +73,7 @@ const JobsPage = () => {
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedType, setSelectedType] = useState("");
   const [appliedJobs, setAppliedJobs] = useState<string[]>([]);
+  const [kycStatus, setKycStatus] = useState<'not_submitted' | 'pending' | 'approved' | 'rejected' | 'suspended'>('not_submitted');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -108,6 +111,23 @@ const JobsPage = () => {
     };
 
     fetchData();
+  }, [isAuthenticated, user]);
+
+  // Load KYC status for students to gate Apply buttons
+  useEffect(() => {
+    const loadKYC = async () => {
+      try {
+        if (isAuthenticated && user?.userType === 'student') {
+          const status = await kycStatusService.checkKYCStatus();
+          setKycStatus(status.status);
+        } else {
+          setKycStatus('not_submitted');
+        }
+      } catch (_) {
+        // ignore
+      }
+    };
+    loadKYC();
   }, [isAuthenticated, user]);
 
   const filteredJobs = jobs.filter(job => {
@@ -213,6 +233,39 @@ const JobsPage = () => {
           <h1 className="text-3xl font-bold text-gray-900">
             {isAuthenticated ? 'Currently Available Works' : 'Job Opportunities'}
           </h1>
+          
+          {/* KYC Banner */}
+          {isAuthenticated && user?.userType === 'student' && kycStatus !== 'approved' && (
+            <div className="mt-4 bg-orange-50 border-2 border-orange-300 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-orange-100 rounded-full">
+                    <Shield className="w-6 h-6 text-orange-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">
+                      {kycStatus === 'not_submitted' && 'Complete KYC to Apply for Jobs'}
+                      {kycStatus === 'pending' && 'KYC Pending Approval'}
+                      {kycStatus === 'rejected' && 'KYC Rejected - Please Resubmit'}
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      {kycStatus === 'not_submitted' && 'Please complete your KYC verification to apply for jobs.'}
+                      {kycStatus === 'pending' && 'Your KYC is pending approval. Jobs will appear once approved.'}
+                      {kycStatus === 'rejected' && 'Your KYC was rejected. Please submit again with correct details.'}
+                    </p>
+                  </div>
+                </div>
+                {(kycStatus === 'not_submitted' || kycStatus === 'rejected') && (
+                  <Link
+                    href="/kyc-profile"
+                    className="bg-orange-600 text-white px-6 py-2 rounded-lg hover:bg-orange-700 transition-colors font-medium"
+                  >
+                    {kycStatus === 'not_submitted' ? 'Complete KYC' : 'Resubmit KYC'}
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
           <p className="text-gray-600 mt-2">
             {isAuthenticated ? 'Find your next opportunity' : 'Connect students with employers'}
           </p>
@@ -419,9 +472,10 @@ const JobsPage = () => {
                         ) : (
                           <button
                             onClick={() => router.push(`/jobs/${job._id}`)}
-                            className="px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-colors"
+                            disabled={kycStatus !== 'approved'}
+                            className={`px-4 py-2 rounded-xl transition-colors ${kycStatus === 'approved' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-gray-300 text-gray-600 cursor-not-allowed'}`}
                           >
-                            Apply Now
+                            {kycStatus === 'approved' ? 'Apply Now' : 'Complete KYC first'}
                           </button>
                         )
                       ) : (

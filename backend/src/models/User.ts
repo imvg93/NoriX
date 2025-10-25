@@ -31,8 +31,11 @@ export interface IUser extends Document {
   emailVerified: boolean;
   phoneVerified: boolean;
   
+  // Admin status control
+  status?: 'pending' | 'approved' | 'suspended' | 'rejected';
+  
   // KYC Status fields
-  kycStatus?: 'not-submitted' | 'pending' | 'approved' | 'rejected';
+  kycStatus?: 'not-submitted' | 'pending' | 'approved' | 'rejected' | 'suspended';
   kycVerifiedAt?: Date;
   kycRejectedAt?: Date;
   kycPendingAt?: Date;
@@ -191,10 +194,17 @@ const userSchema = new Schema<IUser>({
     default: false
   },
   
+  // Admin status control
+  status: {
+    type: String,
+    enum: ['pending', 'approved', 'suspended', 'rejected'],
+    default: 'pending'
+  },
+  
   // KYC Status fields
   kycStatus: {
     type: String,
-    enum: ['not-submitted', 'pending', 'approved', 'rejected'],
+    enum: ['not-submitted', 'pending', 'approved', 'rejected', 'suspended'],
     default: 'not-submitted'
   },
   kycVerifiedAt: Date,

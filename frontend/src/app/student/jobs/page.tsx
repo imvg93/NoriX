@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { kycStatusService } from '../../../services/kycStatusService';
 import { Briefcase, MapPin, DollarSign, Clock, Star, Filter, Search, ArrowLeft, Loader2 } from 'lucide-react';
 import RoleProtectedRoute from '../../../components/auth/RoleProtectedRoute';
 import { apiService } from '../../../services/api';
@@ -19,6 +20,7 @@ export default function StudentJobsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [kycStatus, setKycStatus] = useState<'not_submitted' | 'pending' | 'approved' | 'rejected' | 'suspended'>('not_submitted');
 
   // Fetch student's applied jobs from API
   useEffect(() => {
@@ -45,6 +47,16 @@ export default function StudentJobsPage() {
 
     fetchJobs();
   }, [user]);
+
+  useEffect(() => {
+    const loadKYC = async () => {
+      try {
+        const status = await kycStatusService.checkKYCStatus();
+        setKycStatus(status.status);
+      } catch (_) {}
+    };
+    loadKYC();
+  }, []);
 
   // Filter jobs based on search and filters
   const filteredJobs = jobs.filter(job => {

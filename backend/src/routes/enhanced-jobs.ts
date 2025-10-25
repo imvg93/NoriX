@@ -94,6 +94,25 @@ router.post('/', authenticateToken, requireEmployer, asyncHandler(async (req: Au
     throw new ValidationError('Only employers can post jobs');
   }
 
+  // Enforce employer KYC gating
+  try {
+    const employerUser = await User.findById(req.user!._id).select('kycStatus isVerified');
+    const kycRecord = await KYC.findOne({ userId: req.user!._id, isActive: true });
+    const kycStatus = (employerUser?.kycStatus as any) || kycRecord?.verificationStatus || 'not_submitted';
+    const isSuspended = employerUser?.kycStatus === 'suspended';
+    const isApproved = kycStatus === 'approved' || !!employerUser?.isVerified;
+
+    if (isSuspended) {
+      return sendErrorResponse(res, 403, 'Your KYC is suspended. Contact admin.');
+    }
+    if (!isApproved) {
+      return sendErrorResponse(res, 403, 'Please complete and get your KYC approved before posting jobs');
+    }
+  } catch (kycErr) {
+    console.error('❌ Employer KYC check failed:', kycErr);
+    return sendErrorResponse(res, 500, 'Failed to validate KYC status');
+  }
+
   // Create job with only essential fields
   const job = await Job.create({
     jobId: new mongoose.Types.ObjectId(),
@@ -248,24 +267,29 @@ router.get('/student-dashboard', authenticateToken, requireStudent, asyncHandler
       isKYCApproved
     });
     
-    // If KYC not approved, return empty jobs list with KYC status
+    // Block access to jobs if KYC is not approved
     if (!isKYCApproved) {
-      console.log(`⚠️ Student ${studentId} KYC not approved - hiding job listings`);
+      let message = '';
       
-      return sendSuccessResponse(res, {
-        jobs: [],
-        pagination: {
-          current: Number(page),
-          pages: 0,
-          total: 0
-        },
+      if (kycStatus === 'suspended') {
+        message = 'Your KYC is suspended. Contact admin for support.';
+      } else if (kycStatus === 'pending') {
+        message = 'Your KYC is pending approval. Please wait for admin verification.';
+      } else if (kycStatus === 'rejected') {
+        message = 'Your KYC was rejected. Please submit your KYC again with correct details.';
+      } else {
+        // not-submitted or any other status
+        message = 'Please complete your KYC verification to browse and apply for jobs.';
+      }
+      
+      return sendErrorResponse(res, 403, message, {
+        kycStatus,
         kycRequired: true,
-        kycStatus: kycStatus,
-        message: 'Complete KYC to get your first job'
-      }, 'KYC approval required to view jobs');
+        canApply: false
+      });
     }
     
-    // KYC approved - return jobs
+    // Only approved KYC users can see jobs
     const filter: any = {
       status: 'active'
     };
@@ -309,8 +333,7 @@ router.get('/student-dashboard', authenticateToken, requireStudent, asyncHandler
 
     console.log(`✅ Returning ${normalizedJobs.length} jobs to student (KYC: ${isKYCApproved ? 'approved' : 'not approved'})`);
 
-    // Return jobs with KYC status flag
-    // kycRequired indicates if KYC is needed to APPLY (not to view)
+    // Return jobs with KYC status flag and whether applying is allowed
     sendSuccessResponse(res, {
       jobs: normalizedJobs,
       pagination: {
@@ -318,11 +341,11 @@ router.get('/student-dashboard', authenticateToken, requireStudent, asyncHandler
         pages: Math.ceil(total / Number(limit)),
         total
       },
-      kycRequired: false,  // Always allow applying - no KYC restrictions
+      kycRequired: false,
       kycStatus: kycStatus,
-      canApply: true, // Always allow applying
-      message: 'Jobs retrieved successfully - you can view and apply to all jobs'
-    }, 'Jobs retrieved successfully');
+      canApply: true,
+      message: 'Your KYC is approved. You can now apply for jobs!'
+    }, 'Your KYC is approved. You can now apply for jobs!');
   } catch (e: any) {
     console.error('❌ Failed to fetch student dashboard jobs:', e?.message);
     return sendErrorResponse(res, 500, 'Failed to fetch jobs', process.env.NODE_ENV !== 'production' ? e?.message : undefined);
@@ -345,9 +368,19 @@ router.post('/:jobId/apply', authenticateToken, requireStudent, asyncHandler(asy
       return sendErrorResponse(res, 400, 'Invalid job ID');
     }
 
-    // Allow all students to apply - no KYC restrictions
+    // Enforce student KYC approval to apply
     const studentId = req.user!._id;
-    console.log(`✅ Student ${studentId} applying for job - KYC restrictions removed`);
+    const user = await User.findById(studentId).select('kycStatus isVerified');
+    const kyc = await KYC.findOne({ userId: studentId, isActive: true });
+    const kycStatus = kyc?.verificationStatus || user?.kycStatus || 'not_submitted';
+    const isSuspended = user?.kycStatus === 'suspended';
+    const isKYCApproved = kycStatus === 'approved' || !!user?.isVerified;
+    if (isSuspended) {
+      return sendErrorResponse(res, 403, 'Your KYC is suspended. Contact admin.');
+    }
+    if (!isKYCApproved) {
+      return sendErrorResponse(res, 403, 'Please complete and get your KYC approved before applying to jobs');
+    }
 
     // Check if job exists and is active
     const job = await Job.findById(new mongoose.Types.ObjectId(jobId));
@@ -479,6 +512,40 @@ router.get('/employer-dashboard', authenticateToken, requireEmployer, asyncHandl
 
   try {
     const employerId = req.user!._id;
+    
+    // Check employer's KYC status
+    const user = await User.findById(employerId).select('kycStatus isVerified');
+    const kycRecord = await KYC.findOne({ userId: employerId, isActive: true });
+    const kycStatus = (user?.kycStatus as any) || kycRecord?.verificationStatus || 'not_submitted';
+    const isKYCApproved = kycStatus === 'approved' || !!user?.isVerified;
+    
+    console.log(`🔍 Employer ${employerId} KYC status:`, {
+      kycStatus,
+      isVerified: user?.isVerified,
+      isKYCApproved
+    });
+    
+    // Block access to dashboard if KYC is not approved
+    if (!isKYCApproved) {
+      let message = '';
+      
+      if (kycStatus === 'suspended') {
+        message = 'Your KYC is suspended. Contact admin for support.';
+      } else if (kycStatus === 'pending') {
+        message = 'Your KYC is pending approval. Please wait for admin verification.';
+      } else if (kycStatus === 'rejected') {
+        message = 'Your KYC was rejected. Please submit your KYC again with correct details.';
+      } else {
+        // not-submitted or any other status
+        message = 'Please complete your KYC verification to access your dashboard.';
+      }
+      
+      return sendErrorResponse(res, 403, message, {
+        kycStatus,
+        kycRequired: true
+      });
+    }
+    
     const currentPage = Number(page);
     const pageSize = Number(limit);
 
@@ -544,8 +611,11 @@ router.get('/employer-dashboard', authenticateToken, requireEmployer, asyncHandl
         current: currentPage,
         pages: Math.ceil(totalJobs / pageSize),
         total: totalJobs
-      }
-    }, 'Employer dashboard data retrieved successfully');
+      },
+      kycStatus: kycStatus,
+      kycApproved: true,
+      message: 'Your KYC is approved. You can now post jobs!'
+    }, 'Your KYC is approved. You can now post jobs!');
   } catch (e: any) {
     console.error('❌ Failed to fetch employer dashboard:', e);
     return sendErrorResponse(res, 500, 'Failed to fetch employer dashboard', process.env.NODE_ENV !== 'production' ? (e?.stack || e?.message || e) : undefined);

@@ -67,6 +67,8 @@ export default function Home() {
   const [userApplications, setUserApplications] = useState<any[]>([]);
   const [userStats, setUserStats] = useState(null);
   const [jobsLoading, setJobsLoading] = useState(false);
+  const [showKycPendingModal, setShowKycPendingModal] = useState(false);
+  const [kycStatus, setKycStatus] = useState<string | null>(null);
 
   const handleJobClick = (jobName: string) => {
     setSelectedJob(jobName);
@@ -76,6 +78,31 @@ export default function Home() {
   const closePopup = () => {
     setShowPopup(false);
     setSelectedJob(null);
+  };
+
+  // Fetch KYC status
+  useEffect(() => {
+    const fetchKycStatus = async () => {
+      if (isAuthenticated && user?.userType === 'student') {
+        try {
+          const { kycStatusService } = await import('@/services/kycStatusService');
+          const status = await kycStatusService.checkKYCStatus();
+          setKycStatus(status.status);
+        } catch (error) {
+          console.error('Error fetching KYC status:', error);
+        }
+      }
+    };
+    fetchKycStatus();
+  }, [isAuthenticated, user]);
+
+  const handleKycClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (kycStatus === 'pending') {
+      setShowKycPendingModal(true);
+    } else {
+      router.push('/kyc-profile');
+    }
   };
 
   // Fetch user data when authenticated
@@ -206,9 +233,13 @@ export default function Home() {
                   >
                     My Dashboard
                   </Link>
-                  <p className="text-sm text-gray-600 text-center sm:text-left" style={{marginTop: '4px'}}>
-                    To apply for a job, visit your Student Dashboard.
-                  </p>
+                  <button
+                    onClick={handleKycClick}
+                    className="bg-orange-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-orange-700 transition-colors text-center animate-pulse"
+                  >
+                    Complete KYC
+                  </button>
+                  
                 </>
               )}
               {user?.userType === 'employer' && (
@@ -1003,6 +1034,66 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* KYC Pending Modal */}
+      {showKycPendingModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 relative">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowKycPendingModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            
+            {/* Modal Content */}
+            <div className="p-6 text-center">
+              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
+                <svg className="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-2xl font-semibold text-gray-900 mb-2">KYC Submitted Successfully! ✅</h3>
+              <p className="text-gray-600 mb-6 text-lg">
+                You have submitted your KYC. It's pending review. We will update you shortly.
+              </p>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                <div className="flex items-center gap-2 justify-center">
+                  <svg className="h-5 w-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm text-green-800">
+                    <strong>Status:</strong> Pending Review - Our team is checking your data
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                  onClick={() => {
+                    setShowKycPendingModal(false);
+                    router.push('/');
+                  }}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Go to Home
+                </button>
+                <button
+                  onClick={() => {
+                    setShowKycPendingModal(false);
+                    router.push('/student/dashboard');
+                  }}
+                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                >
+                  Go to Dashboard
+                </button>
               </div>
             </div>
           </div>

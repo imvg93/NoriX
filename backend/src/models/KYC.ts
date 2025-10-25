@@ -50,7 +50,7 @@ export interface IKYCDocument extends Document {
   };
   
   // Verification Status - Canonical status enum
-  verificationStatus: 'not_submitted' | 'pending' | 'approved' | 'rejected';
+  verificationStatus: 'not_submitted' | 'pending' | 'approved' | 'rejected' | 'suspended';
   verificationNotes?: string;
   verifiedAt?: Date;
   verifiedBy?: mongoose.Types.ObjectId;
@@ -61,6 +61,11 @@ export interface IKYCDocument extends Document {
   rejectedAt?: Date;
   rejectedBy?: mongoose.Types.ObjectId;
   rejectionReason?: string;
+  
+  // Suspension Details
+  suspendedAt?: Date;
+  suspendedBy?: mongoose.Types.ObjectId;
+  suspensionReason?: string;
   
   // Metadata
   submittedAt: Date;
@@ -273,7 +278,7 @@ const kycSchema = new Schema<IKYCDocument>({
   // Verification Status - Canonical status enum
   verificationStatus: {
     type: String,
-    enum: ['not_submitted', 'pending', 'approved', 'rejected'],
+    enum: ['not_submitted', 'pending', 'approved', 'rejected', 'suspended'],
     default: 'pending'
   },
   verificationNotes: {
@@ -302,6 +307,18 @@ const kycSchema = new Schema<IKYCDocument>({
     type: String,
     trim: true,
     maxlength: [500, 'Rejection reason cannot exceed 500 characters']
+  },
+  
+  // Suspension Details
+  suspendedAt: Date,
+  suspendedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  suspensionReason: {
+    type: String,
+    trim: true,
+    maxlength: [500, 'Suspension reason cannot exceed 500 characters']
   },
   
   // Metadata

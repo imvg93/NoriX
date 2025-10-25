@@ -2,12 +2,14 @@ import { IUser } from '../models/User';
 import { IKYCDocument } from '../models/KYC';
 
 export interface CanonicalKYCStatus {
-  status: 'not_submitted' | 'pending' | 'approved' | 'rejected';
+  status: 'not_submitted' | 'pending' | 'approved' | 'rejected' | 'suspended';
   isVerified: boolean;
   submittedAt?: Date;
   verifiedAt?: Date;
   rejectedAt?: Date;
   rejectionReason?: string;
+  suspendedAt?: Date;
+  suspensionReason?: string;
   canResubmit: boolean;
 }
 
@@ -41,6 +43,8 @@ export function computeKycStatus(user: IUser, kycRecord?: IKYCDocument | null): 
     verifiedAt: kycRecord.verifiedAt,
     rejectedAt: kycRecord.rejectedAt,
     rejectionReason: kycRecord.rejectionReason,
+    suspendedAt: kycRecord.suspendedAt,
+    suspensionReason: kycRecord.suspensionReason,
     canResubmit
   };
 }
@@ -88,6 +92,8 @@ export function getKycStatusMessage(status: CanonicalKYCStatus): string {
       return '✅ Your profile is verified. You can now explore and apply for jobs.';
     case 'rejected':
       return `❌ Your KYC was rejected. Please re-submit with proper details.${status.rejectionReason ? ` Reason: ${status.rejectionReason}` : ''}`;
+    case 'suspended':
+      return `⏸️ Your KYC has been suspended. Contact admin for support.${status.suspensionReason ? ` Reason: ${status.suspensionReason}` : ''}`;
     default:
       return 'KYC status unknown.';
   }
