@@ -44,6 +44,7 @@ const KYCProfilePage: React.FC = () => {
         
         // Determine if form should be shown
         // Show form only if: not-submitted or rejected
+        // Do NOT show form if pending or in-review
         setShowForm(status.status === 'not_submitted' || status.status === 'rejected');
         
       } catch (error) {
@@ -71,10 +72,9 @@ const KYCProfilePage: React.FC = () => {
   };
 
   const handleFormSubmitted = () => {
-    // After form submission, hide form and show status
+    // After form submission, update status and show pending message
+    setKycStatus('pending');
     setShowForm(false);
-    // Refresh status
-    window.location.reload();
   };
 
   if (isLoading) {
@@ -154,33 +154,33 @@ const KYCProfilePage: React.FC = () => {
 
                   {(kycStatus === 'pending' || kycStatus === 'in-review') && (
                     <>
-                      <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-yellow-100 mb-4">
-                        <Clock className="h-8 w-8 text-yellow-600" />
+                      <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
+                        <CheckCircle className="h-8 w-8 text-green-600" />
                       </div>
-                      <h2 className="text-2xl font-semibold text-gray-900 mb-2">KYC Under Verification ⏳</h2>
-                      <p className="text-gray-600 mb-6">
-                        Your KYC submission is currently under review by our admin team. We'll notify you once the verification is complete.
+                      <h2 className="text-2xl font-semibold text-gray-900 mb-2">KYC Submitted Successfully! ✅</h2>
+                      <p className="text-gray-600 mb-6 text-lg">
+                        You have submitted your KYC. It's pending review. We will update you shortly.
                       </p>
-                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-                        <div className="flex items-center gap-2">
-                          <AlertCircle className="h-5 w-5 text-yellow-600" />
-                          <p className="text-sm text-yellow-800">
-                            <strong>Status:</strong> {kycStatus === 'pending' ? 'Pending Review' : 'Under Review'}
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                        <div className="flex items-center gap-2 justify-center">
+                          <Clock className="h-5 w-5 text-green-600" />
+                          <p className="text-sm text-green-800">
+                            <strong>Status:</strong> Pending Review - Our team is checking your data
                           </p>
                         </div>
                       </div>
                       <div className="flex flex-col sm:flex-row gap-3 justify-center">
                         <button
-                          onClick={() => router.push('/student-home')}
+                          onClick={() => router.push('/')}
                           className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
                         >
-                          Go to Dashboard
+                          Go to Home
                         </button>
                         <button
-                          onClick={handleBackNavigation}
+                          onClick={() => router.push('/student/dashboard')}
                           className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                         >
-                          Back to Previous Page
+                          Go to Dashboard
                         </button>
                       </div>
                     </>
@@ -221,7 +221,7 @@ const KYCProfilePage: React.FC = () => {
                     </>
                   )}
 
-                  {kycStatus === 'not-submitted' && (
+                  {(kycStatus === 'not_submitted' || kycStatus === 'not-submitted' || !kycStatus) && (
                     <>
                       <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-blue-100 mb-4">
                         <Shield className="h-8 w-8 text-blue-600" />

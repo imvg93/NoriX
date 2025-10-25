@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { apiService } from '../../../services/api';
+import { kycStatusService } from '../../../services/kycStatusService';
 import RoleProtectedRoute from '../../../components/auth/RoleProtectedRoute';
 import ResumeUpload from '../../../components/ResumeUpload';
 import { useSafeNavigation } from '../../../hooks/useSafeNavigation';
@@ -61,6 +62,8 @@ export default function JobDetailPage() {
   const [uploading, setUploading] = useState(false);
   const [applied, setApplied] = useState(false);
   const [showCompanyProfile, setShowCompanyProfile] = useState(false);
+  const [kycStatus, setKycStatus] = useState<'not_submitted' | 'pending' | 'approved' | 'rejected' | 'suspended'>('not_submitted');
+  const [kycMessage, setKycMessage] = useState<string>('');
 
   const jobId = params.id as string;
 
@@ -113,6 +116,20 @@ export default function JobDetailPage() {
       fetchJobDetails();
     }
   }, [jobId, user]);
+
+  // Load KYC status for gating apply button
+  useEffect(() => {
+    const loadKYC = async () => {
+      try {
+        if (user?.userType === 'student') {
+          const status = await kycStatusService.checkKYCStatus();
+          setKycStatus(status.status);
+          setKycMessage(kycStatusService.getStatusMessage(status));
+        }
+      } catch (_) {}
+    };
+    loadKYC();
+  }, [user]);
 
 
   const handleApply = async () => {
@@ -407,7 +424,7 @@ export default function JobDetailPage() {
                       {/* Apply Button */}
                       <button
                         onClick={handleApply}
-                        disabled={!resume || uploading}
+                        disabled={!resume || uploading || kycStatus !== 'approved'}
                         className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2"
                       >
                         {uploading ? (
@@ -418,10 +435,13 @@ export default function JobDetailPage() {
                         ) : (
                           <>
                             <CheckCircle className="w-4 h-4" />
-                            Apply Now
+                            {kycStatus === 'approved' ? 'Apply Now' : 'Complete KYC to Apply'}
                           </>
                         )}
                       </button>
+                      {kycStatus !== 'approved' && (
+                        <p className="text-sm text-gray-500 text-center mt-2">{kycMessage || 'Complete your KYC to apply.'}</p>
+                      )}
                     </div>
                   )}
                 </motion.div>

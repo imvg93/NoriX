@@ -20,6 +20,9 @@ import {
   Shield,
   ChevronDown,
   User,
+  Eye,
+  X,
+  Download,
 } from 'lucide-react';
 
 type AdminSection = 'overview' | 'users' | 'jobs' | 'applications' | 'kyc' | 'analytics' | 'notifications' | 'settings';
@@ -78,6 +81,11 @@ export default function AdminDashboardPage(): React.JSX.Element {
   const [announceMessage, setAnnounceMessage] = useState('');
   const [announceSending, setAnnounceSending] = useState(false);
   const [announceStatus, setAnnounceStatus] = useState<string | null>(null);
+
+  // KYC Modal state
+  const [showKYCModal, setShowKYCModal] = useState(false);
+  const [selectedKYC, setSelectedKYC] = useState<any | null>(null);
+  const [selectedKYCType, setSelectedKYCType] = useState<'student' | 'employer'>('student');
 
   const navItems: Array<{ key: AdminSection; label: string; icon: React.ReactNode }> = useMemo(
     () => [
@@ -278,7 +286,20 @@ export default function AdminDashboardPage(): React.JSX.Element {
         const jobsData = (jobsResponse as any).data;
         console.log('📊 Jobs response:', jobsData);
         
-        setJobs(jobsData.jobs || []);
+        // Map backend job structure to frontend AdminJob interface
+        const mappedJobs = (jobsData.jobs || []).map((job: any) => ({
+          _id: job._id,
+          title: job.jobTitle || job.title,
+          company: job.companyName || job.company,
+          location: job.location,
+          status: job.status,
+          approvalStatus: job.approvalStatus,
+          createdAt: job.createdAt,
+          applicationsCount: job.applicationsCount || job.applications?.length || 0,
+          description: job.description
+        }));
+        
+        setJobs(mappedJobs);
       } else {
         // Fallback to existing API
         const response = await apiService.getAllJobsForAdmin('all', 'all', 1, 50).catch((err) => {
@@ -288,7 +309,17 @@ export default function AdminDashboardPage(): React.JSX.Element {
         
         console.log('📊 Jobs response:', response);
         
-        const jobsList: AdminJob[] = (response as any)?.jobs || (Array.isArray(response) ? (response as any) : []);
+        const jobsList: AdminJob[] = ((response as any)?.jobs || (Array.isArray(response) ? (response as any) : [])).map((job: any) => ({
+          _id: job._id,
+          title: job.jobTitle || job.title,
+          company: job.companyName || job.company,
+          location: job.location,
+          status: job.status,
+          approvalStatus: job.approvalStatus,
+          createdAt: job.createdAt,
+          applicationsCount: job.applicationsCount || job.applications?.length || 0,
+          description: job.description
+        }));
         
         console.log('📋 Processed jobs:', jobsList.length);
         
@@ -393,7 +424,21 @@ export default function AdminDashboardPage(): React.JSX.Element {
         
         // Update individual state
         setAllUsers(data.users?.data || []);
-        setJobs(data.jobs?.data || []);
+        
+        // Map jobs from backend structure to frontend AdminJob interface
+        const mappedJobs = (data.jobs?.data || []).map((job: any) => ({
+          _id: job._id,
+          title: job.jobTitle || job.title,
+          company: job.companyName || job.company,
+          location: job.location,
+          status: job.status,
+          approvalStatus: job.approvalStatus,
+          createdAt: job.createdAt,
+          applicationsCount: job.applicationsCount || job.applications?.length || 0,
+          description: job.description
+        }));
+        setJobs(mappedJobs);
+        
         setApplications(data.applications?.data || []);
         setKycRecords(data.kyc?.studentKYC?.data || []);
         setEmployerKycRecords(data.kyc?.employerKYC?.data || []);
@@ -426,9 +471,15 @@ export default function AdminDashboardPage(): React.JSX.Element {
   async function handleApproveUser(userId: string): Promise<void> {
     try {
       setLoadingAction(`approve-user-${userId}`);
+      console.log('✅ Approving user:', userId);
       await apiService.approveUser(userId);
+      console.log('✅ User approved successfully');
+      alert('User approved successfully!');
       // Refresh comprehensive data and individual data
       await Promise.all([fetchComprehensiveData(), fetchUsers()]);
+    } catch (error: any) {
+      console.error('❌ Error approving user:', error);
+      alert(`Failed to approve user: ${error.message || 'Unknown error'}`);
     } finally {
       setLoadingAction(null);
     }
@@ -437,10 +488,17 @@ export default function AdminDashboardPage(): React.JSX.Element {
   async function handleRejectUser(userId: string): Promise<void> {
     try {
       const reason = window.prompt('Enter reason for rejection:') || '';
+      if (!reason) return;
       setLoadingAction(`reject-user-${userId}`);
+      console.log('❌ Rejecting user:', userId, 'Reason:', reason);
       await apiService.rejectUser(userId, reason);
+      console.log('✅ User rejected successfully');
+      alert('User rejected successfully!');
       // Refresh comprehensive data and individual data
       await Promise.all([fetchComprehensiveData(), fetchUsers()]);
+    } catch (error: any) {
+      console.error('❌ Error rejecting user:', error);
+      alert(`Failed to reject user: ${error.message || 'Unknown error'}`);
     } finally {
       setLoadingAction(null);
     }
@@ -449,9 +507,15 @@ export default function AdminDashboardPage(): React.JSX.Element {
   async function handleSuspendUser(userId: string): Promise<void> {
     try {
       setLoadingAction(`suspend-user-${userId}`);
+      console.log('⏸️ Suspending user:', userId);
       await apiService.suspendUser(userId);
+      console.log('✅ User suspended successfully');
+      alert('User suspended successfully!');
       // Refresh comprehensive data and individual data
       await Promise.all([fetchComprehensiveData(), fetchUsers()]);
+    } catch (error: any) {
+      console.error('❌ Error suspending user:', error);
+      alert(`Failed to suspend user: ${error.message || 'Unknown error'}`);
     } finally {
       setLoadingAction(null);
     }
@@ -460,9 +524,15 @@ export default function AdminDashboardPage(): React.JSX.Element {
   async function handleActivateUser(userId: string): Promise<void> {
     try {
       setLoadingAction(`activate-user-${userId}`);
+      console.log('▶️ Activating user:', userId);
       await apiService.activateUser(userId);
+      console.log('✅ User activated successfully');
+      alert('User activated successfully!');
       // Refresh comprehensive data and individual data
       await Promise.all([fetchComprehensiveData(), fetchUsers()]);
+    } catch (error: any) {
+      console.error('❌ Error activating user:', error);
+      alert(`Failed to activate user: ${error.message || 'Unknown error'}`);
     } finally {
       setLoadingAction(null);
     }
@@ -860,12 +930,13 @@ export default function AdminDashboardPage(): React.JSX.Element {
                   <th className="py-2 pr-4">College</th>
                   <th className="py-2 pr-4">Status</th>
                   <th className="py-2 pr-4">Submitted</th>
+                  <th className="py-2 pr-4">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {kycRecords.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-6 text-center text-gray-500">No student KYC records found</td>
+                    <td colSpan={5} className="py-6 text-center text-gray-500">No student KYC records found</td>
                   </tr>
                 )}
                 {kycRecords.map((kyc) => (
@@ -876,6 +947,19 @@ export default function AdminDashboardPage(): React.JSX.Element {
                     <td className="py-2 pr-4 text-gray-700">{kyc.college || '-'}</td>
                     <td className="py-2 pr-4 capitalize">{kyc.verificationStatus || 'pending'}</td>
                     <td className="py-2 pr-4">{kyc.submittedAt || kyc.createdAt || '-'}</td>
+                    <td className="py-2 pr-4">
+                      <button
+                        onClick={() => {
+                          setSelectedKYC(kyc);
+                          setSelectedKYCType('student');
+                          setShowKYCModal(true);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-white hover:bg-indigo-700"
+                      >
+                        <Eye className="w-4 h-4" />
+                        View Details
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -894,12 +978,13 @@ export default function AdminDashboardPage(): React.JSX.Element {
                   <th className="py-2 pr-4">Contact</th>
                   <th className="py-2 pr-4">Status</th>
                   <th className="py-2 pr-4">Submitted</th>
+                  <th className="py-2 pr-4">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {employerKycRecords.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-6 text-center text-gray-500">No employer KYC records found</td>
+                    <td colSpan={5} className="py-6 text-center text-gray-500">No employer KYC records found</td>
                   </tr>
                 )}
                 {employerKycRecords.map((kyc) => (
@@ -910,10 +995,296 @@ export default function AdminDashboardPage(): React.JSX.Element {
                     </td>
                     <td className="py-2 pr-4 capitalize">{kyc.verificationStatus || 'pending'}</td>
                     <td className="py-2 pr-4">{kyc.createdAt || '-'}</td>
+                    <td className="py-2 pr-4">
+                      <button
+                        onClick={() => {
+                          setSelectedKYC(kyc);
+                          setSelectedKYCType('employer');
+                          setShowKYCModal(true);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-white hover:bg-indigo-700"
+                      >
+                        <Eye className="w-4 h-4" />
+                        View Details
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+
+        {/* KYC Documentation Modal */}
+        {showKYCModal && selectedKYC && renderKYCModal()}
+      </div>
+    );
+  }
+
+  function DetailField({ label, value }: { label: string; value: string }) {
+    return (
+      <div>
+        <p className="text-sm text-gray-500 mb-1">{label}</p>
+        <p className="text-sm font-medium text-gray-900">{value}</p>
+      </div>
+    );
+  }
+
+  function renderKYCModal(): React.JSX.Element {
+    if (!selectedKYC) return <></>;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">KYC Documentation</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  Status: <span className={`font-semibold capitalize ${
+                    selectedKYC.verificationStatus === 'approved' ? 'text-green-600' :
+                    selectedKYC.verificationStatus === 'rejected' ? 'text-red-600' :
+                    selectedKYC.verificationStatus === 'suspended' ? 'text-yellow-600' :
+                    'text-blue-600'
+                  }`}>
+                    {selectedKYC.verificationStatus || 'pending'}
+                  </span>
+                </p>
+              </div>
+              <button
+                onClick={() => setShowKYCModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+          </div>
+          
+          <div className="p-6 space-y-6">
+            {/* Basic Information */}
+            <div>
+              <h4 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <DetailField label="Full Name" value={selectedKYC.fullName || 'N/A'} />
+                <DetailField label="Date of Birth" value={selectedKYC.dob ? new Date(selectedKYC.dob).toLocaleDateString() : 'N/A'} />
+                <DetailField label="Gender" value={selectedKYC.gender || 'N/A'} />
+                <DetailField label="Phone" value={selectedKYC.phone || 'N/A'} />
+                <DetailField label="Email" value={selectedKYC.email || 'N/A'} />
+                <DetailField label="Address" value={selectedKYC.address || 'N/A'} />
+              </div>
+            </div>
+
+            {/* Academic Information (for students) */}
+            {selectedKYCType === 'student' && (
+              <div>
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">Academic Information</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <DetailField label="College" value={selectedKYC.college || 'N/A'} />
+                  <DetailField label="Course & Year" value={selectedKYC.courseYear || 'N/A'} />
+                  <DetailField label="Student ID" value={selectedKYC.studentId || 'N/A'} />
+                </div>
+              </div>
+            )}
+
+            {/* Stay & Availability (for students) */}
+            {selectedKYCType === 'student' && (
+              <div>
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">Stay & Availability</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <DetailField label="Stay Type" value={selectedKYC.stayType || 'N/A'} />
+                  <DetailField label="Hours Per Week" value={selectedKYC.hoursPerWeek ? `${selectedKYC.hoursPerWeek} hours` : 'N/A'} />
+                  {selectedKYC.availableDays && selectedKYC.availableDays.length > 0 && (
+                    <div className="md:col-span-2">
+                      <p className="text-sm text-gray-500 mb-2">Available Days</p>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedKYC.availableDays.map((day: string, index: number) => (
+                          <span key={index} className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm">
+                            {day}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {selectedKYC.pgDetails && (
+                    <div className="md:col-span-2">
+                      <p className="text-sm text-gray-500 mb-2">PG Details</p>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <p className="text-sm"><strong>Name:</strong> {selectedKYC.pgDetails.name}</p>
+                        <p className="text-sm"><strong>Address:</strong> {selectedKYC.pgDetails.address}</p>
+                        <p className="text-sm"><strong>Contact:</strong> {selectedKYC.pgDetails.contact}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Emergency Contact */}
+            {selectedKYC.emergencyContact && (
+              <div>
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">Emergency Contact</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <DetailField label="Name" value={selectedKYC.emergencyContact.name || 'N/A'} />
+                  <DetailField label="Phone" value={selectedKYC.emergencyContact.phone || 'N/A'} />
+                  <DetailField label="Blood Group" value={selectedKYC.bloodGroup || 'N/A'} />
+                </div>
+              </div>
+            )}
+
+            {/* Work Preferences (for students) */}
+            {selectedKYCType === 'student' && selectedKYC.preferredJobTypes && selectedKYC.preferredJobTypes.length > 0 && (
+              <div>
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">Work Preferences</h4>
+                <div className="flex flex-wrap gap-2">
+                  {selectedKYC.preferredJobTypes.map((jobType: string, index: number) => (
+                    <span key={index} className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
+                      {jobType}
+                    </span>
+                  ))}
+                </div>
+                {selectedKYC.experienceSkills && (
+                  <div className="mt-4">
+                    <p className="text-sm text-gray-500 mb-2">Experience & Skills</p>
+                    <p className="text-sm text-gray-900">{selectedKYC.experienceSkills}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Payroll Information (for students) */}
+            {selectedKYCType === 'student' && selectedKYC.payroll && (
+              <div>
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">Payroll Information</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <DetailField label="Payroll Consent" value={selectedKYC.payroll.consent ? 'Yes' : 'No'} />
+                  <DetailField label="Bank Account" value={selectedKYC.payroll.bankAccount || 'N/A'} />
+                  <DetailField label="IFSC" value={selectedKYC.payroll.ifsc || 'N/A'} />
+                  <DetailField label="Beneficiary Name" value={selectedKYC.payroll.beneficiaryName || 'N/A'} />
+                </div>
+              </div>
+            )}
+
+            {/* Documents */}
+            <div>
+              <h4 className="text-lg font-semibold text-gray-900 mb-4">Uploaded Documents</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {selectedKYC.aadharCard && (
+                  <div className="border border-gray-200 rounded-lg p-4">
+                    <p className="text-sm font-medium text-gray-700 mb-2">Aadhar Card</p>
+                    <img
+                      src={selectedKYC.aadharCard}
+                      alt="Aadhar Card"
+                      className="w-full h-48 object-contain border border-gray-200 rounded"
+                    />
+                    <a
+                      href={selectedKYC.aadharCard}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800"
+                    >
+                      <Download className="w-4 h-4" />
+                      View Full Size
+                    </a>
+                  </div>
+                )}
+                {selectedKYC.collegeIdCard && (
+                  <div className="border border-gray-200 rounded-lg p-4">
+                    <p className="text-sm font-medium text-gray-700 mb-2">College ID Card</p>
+                    <img
+                      src={selectedKYC.collegeIdCard}
+                      alt="College ID Card"
+                      className="w-full h-48 object-contain border border-gray-200 rounded"
+                    />
+                    <a
+                      href={selectedKYC.collegeIdCard}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800"
+                    >
+                      <Download className="w-4 h-4" />
+                      View Full Size
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3 pt-4 border-t border-gray-200">
+              <button
+                onClick={async () => {
+                  try {
+                    setLoadingAction('approve-kyc');
+                    console.log('✅ Approving KYC:', selectedKYC._id);
+                    await apiService.approveKYC(selectedKYC._id);
+                    console.log('✅ KYC approved successfully');
+                    alert('KYC approved successfully!');
+                    await fetchKYCData();
+                    setShowKYCModal(false);
+                  } catch (error: any) {
+                    console.error('❌ Error approving KYC:', error);
+                    alert(`Failed to approve KYC: ${error.message || 'Unknown error'}`);
+                  } finally {
+                    setLoadingAction(null);
+                  }
+                }}
+                disabled={loadingAction === 'approve-kyc'}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                {loadingAction === 'approve-kyc' ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                Approve KYC
+              </button>
+              <button
+                onClick={async () => {
+                  const reason = prompt('Enter suspension reason:') || '';
+                  if (!reason) return;
+                  try {
+                    setLoadingAction('suspend-kyc');
+                    console.log('⏸️ Suspending KYC:', selectedKYC._id, 'Reason:', reason);
+                    await apiService.suspendKYC(selectedKYC._id, reason);
+                    console.log('✅ KYC suspended successfully');
+                    alert('KYC suspended successfully!');
+                    await fetchKYCData();
+                    setShowKYCModal(false);
+                  } catch (error: any) {
+                    console.error('❌ Error suspending KYC:', error);
+                    alert(`Failed to suspend KYC: ${error.message || 'Unknown error'}`);
+                  } finally {
+                    setLoadingAction(null);
+                  }
+                }}
+                disabled={loadingAction === 'suspend-kyc'}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-yellow-600 px-4 py-2 text-white hover:bg-yellow-700 disabled:opacity-50"
+              >
+                {loadingAction === 'suspend-kyc' ? <Loader2 className="w-5 h-5 animate-spin" /> : <PauseCircle className="w-5 h-5" />}
+                Suspend KYC
+              </button>
+              <button
+                onClick={async () => {
+                  const reason = prompt('Enter rejection reason:') || '';
+                  if (!reason) return;
+                  try {
+                    setLoadingAction('reject-kyc');
+                    console.log('❌ Rejecting KYC:', selectedKYC._id, 'Reason:', reason);
+                    await apiService.rejectKYC(selectedKYC._id, reason);
+                    console.log('✅ KYC rejected successfully');
+                    alert('KYC rejected successfully!');
+                    await fetchKYCData();
+                    setShowKYCModal(false);
+                  } catch (error: any) {
+                    console.error('❌ Error rejecting KYC:', error);
+                    alert(`Failed to reject KYC: ${error.message || 'Unknown error'}`);
+                  } finally {
+                    setLoadingAction(null);
+                  }
+                }}
+                disabled={loadingAction === 'reject-kyc'}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {loadingAction === 'reject-kyc' ? <Loader2 className="w-5 h-5 animate-spin" /> : <XCircle className="w-5 h-5" />}
+                Reject KYC
+              </button>
+            </div>
           </div>
         </div>
       </div>

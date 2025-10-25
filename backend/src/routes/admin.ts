@@ -137,7 +137,7 @@ router.get('/jobs/pending', authenticateToken, requireRole(['admin']), asyncHand
 }));
 
 // @route   PATCH /api/admin/users/:id/approve
-// @desc    Approve a user (simplified - just activate)
+// @desc    Approve a user
 // @access  Private (Admin only)
 router.patch('/users/:id/approve', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { id } = req.params;
@@ -151,6 +151,7 @@ router.patch('/users/:id/approve', authenticateToken, requireRole(['admin']), as
     throw new ValidationError('User not found');
   }
 
+  user.status = 'approved';
   user.isActive = true;
   await user.save();
 
@@ -158,7 +159,7 @@ router.patch('/users/:id/approve', authenticateToken, requireRole(['admin']), as
 }));
 
 // @route   PATCH /api/admin/users/:id/reject
-// @desc    Reject a user (simplified - just deactivate)
+// @desc    Reject a user
 // @access  Private (Admin only)
 router.patch('/users/:id/reject', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { id } = req.params;
@@ -173,6 +174,7 @@ router.patch('/users/:id/reject', authenticateToken, requireRole(['admin']), asy
     throw new ValidationError('User not found');
   }
 
+  user.status = 'rejected';
   user.isActive = false;
   await user.save();
 
@@ -489,7 +491,8 @@ router.put('/kyc/:id/approve', authenticateToken, requireRole(['admin']), asyncH
       await User.findByIdAndUpdate(kyc.userId, { 
         kycStatus: 'approved',
         isVerified: true,
-        kycVerifiedAt: new Date()
+        kycVerifiedAt: new Date(),
+        $unset: { kycRejectedAt: 1, kycPendingAt: 1 }
       }, { session });
       
       // Create audit entry
@@ -524,6 +527,20 @@ router.put('/kyc/:id/approve', authenticateToken, requireRole(['admin']), asyncH
         action: 'approved',
         reason: reason || 'Approved by admin'
       });
+    }
+
+    // Create in-app notification
+    try {
+      const { Notification } = await import('../models/Notification');
+      await (Notification as any).create({
+        userId: updatedKYC!.userId,
+        type: 'kyc',
+        title: 'KYC Approved ✅',
+        message: 'Your KYC has been approved. All features are now enabled.',
+        createdBy: req.user!._id
+      });
+    } catch (e) {
+      console.warn('⚠️ Failed to create approval notification:', (e as any)?.message);
     }
     
     // Compute canonical status
@@ -598,7 +615,8 @@ router.put('/kyc/:id/reject', authenticateToken, requireRole(['admin']), asyncHa
       await User.findByIdAndUpdate(kyc.userId, { 
         kycStatus: 'rejected',
         isVerified: false,
-        kycRejectedAt: new Date()
+        kycRejectedAt: new Date(),
+        $unset: { kycVerifiedAt: 1, kycPendingAt: 1 }
       }, { session });
       
       // Create audit entry
@@ -635,6 +653,20 @@ router.put('/kyc/:id/reject', authenticateToken, requireRole(['admin']), asyncHa
         canResubmit: true
       });
     }
+
+    // Create in-app notification
+    try {
+      const { Notification } = await import('../models/Notification');
+      await (Notification as any).create({
+        userId: updatedKYC!.userId,
+        type: 'kyc',
+        title: 'KYC Rejected ❌',
+        message: `Your KYC was rejected. Reason: ${reason}`,
+        createdBy: req.user!._id
+      });
+    } catch (e) {
+      console.warn('⚠️ Failed to create rejection notification:', (e as any)?.message);
+    }
     
     // Compute canonical status
     const canonicalStatus = computeKycStatus(updatedUser!, updatedKYC);
@@ -648,6 +680,123 @@ router.put('/kyc/:id/reject', authenticateToken, requireRole(['admin']), asyncHa
     
   } catch (error) {
     console.error('❌ Admin KYC Reject - Transaction failed:', error);
+    throw error;
+  } finally {
+    await session.endSession();
+  }
+}));
+
+// @route   PATCH /api/admin/kyc/:id/suspend
+// @desc    Suspend KYC submission (atomic transaction)
+// @access  Private (Admin only)
+router.patch('/kyc/:id/suspend', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { id } = req.params;
+  const { reason } = req.body;
+  
+  console.log('🔍 Admin KYC Suspend - Starting atomic suspension process');
+  console.log('  Admin User ID:', req.user!._id);
+  console.log('  KYC ID:', id);
+  console.log('  Suspension reason:', reason);
+  
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    console.log('❌ Admin KYC Suspend - Invalid KYC ID:', id);
+    throw new ValidationError('Invalid KYC ID');
+  }
+  
+  // Use MongoDB transaction for atomic updates
+  const session = await mongoose.startSession();
+  
+  try {
+    await session.withTransaction(async () => {
+      const kyc = await KYC.findById(id).session(session);
+      if (!kyc) {
+        console.log('❌ Admin KYC Suspend - KYC not found:', id);
+        throw new ValidationError('KYC submission not found');
+      }
+      
+      console.log('📋 Admin KYC Suspend - Found KYC:', {
+        id: kyc._id,
+        userId: kyc.userId,
+        fullName: kyc.fullName,
+        email: kyc.email,
+        currentStatus: kyc.verificationStatus
+      });
+      
+      const prevStatus = kyc.verificationStatus;
+      
+      // Update KYC status
+      (kyc as any).verificationStatus = 'suspended';
+      (kyc as any).suspendedAt = new Date();
+      (kyc as any).suspendedBy = req.user!._id;
+      (kyc as any).suspensionReason = reason || 'Suspended by admin';
+      await kyc.save({ session });
+      
+      // Update user status atomically
+      await User.findByIdAndUpdate(kyc.userId, { 
+        kycStatus: 'suspended',
+        isVerified: false
+      }, { session });
+      
+      // Create audit entry
+      const auditEntry = new KYCAudit({
+        userId: kyc.userId,
+        adminId: req.user!._id,
+        action: 'suspended',
+        reason: reason || 'Suspended by admin',
+        prevStatus,
+        newStatus: 'suspended',
+        timestamp: new Date(),
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+      
+      await auditEntry.save({ session });
+      
+      console.log('✅ Admin KYC Suspend - Atomic suspension completed');
+    });
+    
+    // Get updated data for response
+    const updatedKYC = await KYC.findById(id).populate('userId', 'name email phone');
+    const updatedUser = await User.findById(updatedKYC?.userId);
+    
+    // Emit real-time update to user
+    const socketManager = (global as any).socketManager;
+    if (socketManager && updatedKYC) {
+      socketManager.emitKYCStatusUpdate(updatedKYC.userId.toString(), {
+        status: 'suspended',
+        isVerified: false,
+        message: 'Your KYC has been suspended. Contact admin for support.',
+        action: 'suspended',
+        reason: reason || 'Suspended by admin'
+      });
+    }
+
+    // Create in-app notification
+    try {
+      const { Notification } = await import('../models/Notification');
+      await (Notification as any).create({
+        userId: updatedKYC!.userId,
+        type: 'kyc',
+        title: 'KYC Suspended ⏸️',
+        message: 'Your KYC has been suspended. Contact support for assistance.',
+        createdBy: req.user!._id
+      });
+    } catch (e) {
+      console.warn('⚠️ Failed to create suspension notification:', (e as any)?.message);
+    }
+    
+    // Compute canonical status
+    const canonicalStatus = computeKycStatus(updatedUser!, updatedKYC);
+    
+    sendSuccessResponse(res, {
+      kyc: updatedKYC,
+      user: updatedUser,
+      status: canonicalStatus,
+      message: 'KYC suspended successfully'
+    }, 'KYC suspended successfully');
+    
+  } catch (error) {
+    console.error('❌ Admin KYC Suspend - Transaction failed:', error);
     throw error;
   } finally {
     await session.endSession();
@@ -779,8 +928,25 @@ router.patch('/users/:id/suspend', authenticateToken, requireRole(['admin']), as
     throw new ValidationError('Cannot suspend your own account');
   }
 
+  user.status = 'suspended';
   user.isActive = false;
+  // Also mark KYC as suspended to gate job actions
+  user.kycStatus = 'suspended' as any;
   await user.save();
+
+  // Notify user
+  try {
+    const { Notification } = await import('../models/Notification');
+    await (Notification as any).create({
+      userId: user._id,
+      type: 'kyc',
+      title: 'Account Suspended',
+      message: 'Your account KYC status is suspended by admin. Contact support.',
+      createdBy: req.user!._id
+    });
+  } catch (e) {
+    console.warn('⚠️ Failed to create suspension notification:', (e as any)?.message);
+  }
 
   sendSuccessResponse(res, { user }, 'User suspended successfully');
 }));
@@ -800,8 +966,27 @@ router.patch('/users/:id/activate', authenticateToken, requireRole(['admin']), a
     throw new ValidationError('User not found');
   }
 
+  user.status = 'approved';
   user.isActive = true;
+  // Do not auto-approve KYC here; just clear suspended flag if set
+  if (user.kycStatus === 'suspended') {
+    user.kycStatus = 'pending';
+  }
   await user.save();
+
+  // Notify user
+  try {
+    const { Notification } = await import('../models/Notification');
+    await (Notification as any).create({
+      userId: user._id,
+      type: 'system',
+      title: 'Account Activated',
+      message: 'Your account has been activated by admin.',
+      createdBy: req.user!._id
+    });
+  } catch (e) {
+    console.warn('⚠️ Failed to create activation notification:', (e as any)?.message);
+  }
 
   sendSuccessResponse(res, { user }, 'User activated successfully');
 }));

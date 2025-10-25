@@ -60,7 +60,15 @@ const BOT_USER_AGENTS = [
 export const botFilter = (req: Request, res: Response, next: NextFunction) => {
   const userAgent = req.get('User-Agent') || '';
   const path = req.path.toLowerCase();
+  const originalUrl = req.originalUrl.toLowerCase();
   
+  // Allow all API routes to pass through without bot filtering
+  // Check both req.path (stripped of route prefix) and req.originalUrl (full path)
+  // This prevents legitimate endpoints like /api/admin/* from being blocked
+  if (path.startsWith('/api/') || originalUrl.startsWith('/api/')) {
+    return next();
+  }
+
   // Check if it's a bot request
   const isBotUserAgent = BOT_USER_AGENTS.some(pattern => pattern.test(userAgent));
   const isBotPath = BOT_PATTERNS.some(pattern => pattern.test(path));

@@ -913,15 +913,31 @@ class ApiService {
   }
 
   async suspendUser(id: string) {
-    return this.request(`/users/${id}/suspend`, {
-      method: 'PATCH',
-    });
+    try {
+      console.log('⏸️ Suspending user:', id);
+      const response = await this.request(`/admin/users/${id}/suspend`, {
+        method: 'PATCH',
+      });
+      console.log('✅ User suspended successfully:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error suspending user:', error);
+      throw error;
+    }
   }
 
   async activateUser(id: string) {
-    return this.request(`/users/${id}/activate`, {
-      method: 'PATCH',
-    });
+    try {
+      console.log('▶️ Activating user:', id);
+      const response = await this.request(`/admin/users/${id}/activate`, {
+        method: 'PATCH',
+      });
+      console.log('✅ User activated successfully:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error activating user:', error);
+      throw error;
+    }
   }
 
   // Admin Dashboard APIs
@@ -939,16 +955,32 @@ class ApiService {
 
   // User approval methods
   async approveUser(userId: string) {
-    return this.request(`/admin/users/${userId}/approve`, {
-      method: 'PATCH',
-    });
+    try {
+      console.log('✅ Approving user:', userId);
+      const response = await this.request(`/admin/users/${userId}/approve`, {
+        method: 'PATCH',
+      });
+      console.log('✅ User approved successfully:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error approving user:', error);
+      throw error;
+    }
   }
 
   async rejectUser(userId: string, reason: string) {
-    return this.request(`/admin/users/${userId}/reject`, {
-      method: 'PATCH',
-      body: JSON.stringify({ reason }),
-    });
+    try {
+      console.log('❌ Rejecting user:', userId, 'Reason:', reason);
+      const response = await this.request(`/admin/users/${userId}/reject`, {
+        method: 'PATCH',
+        body: JSON.stringify({ reason }),
+      });
+      console.log('✅ User rejected successfully:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error rejecting user:', error);
+      throw error;
+    }
   }
 
   // Verification APIs (Admin)
@@ -1059,8 +1091,8 @@ class ApiService {
   async approveEmployerKYC(kycId: string) {
     try {
       console.log('✅ Approving employer KYC:', kycId);
-      const response = await this.request(`/kyc/admin/${kycId}/approve`, {
-        method: 'PATCH',
+      const response = await this.request(`/admin/kyc/${kycId}/approve`, {
+        method: 'PUT',
       });
       console.log('📊 Approve KYC response:', response);
       return response;
@@ -1073,9 +1105,9 @@ class ApiService {
   async rejectEmployerKYC(kycId: string, rejectionReason: string) {
     try {
       console.log('❌ Rejecting employer KYC:', kycId, 'Reason:', rejectionReason);
-      const response = await this.request(`/kyc/admin/${kycId}/reject`, {
-        method: 'PATCH',
-        body: JSON.stringify({ rejectionReason }),
+      const response = await this.request(`/admin/kyc/${kycId}/reject`, {
+        method: 'PUT',
+        body: JSON.stringify({ reason: rejectionReason }),
       });
       console.log('📊 Reject KYC response:', response);
       return response;
@@ -1091,6 +1123,21 @@ class ApiService {
 
   async rejectKYC(kycId: string, rejectionReason: string) {
     return this.rejectEmployerKYC(kycId, rejectionReason);
+  }
+
+  async suspendKYC(kycId: string, reason?: string) {
+    try {
+      console.log('⏸️ Suspending KYC:', kycId, 'Reason:', reason);
+      const response = await this.request(`/admin/kyc/${kycId}/suspend`, {
+        method: 'PATCH',
+        body: reason ? JSON.stringify({ reason }) : undefined,
+      });
+      console.log('✅ KYC suspended successfully:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error suspending KYC:', error);
+      throw error;
+    }
   }
 
   // Job Management APIs (Admin)

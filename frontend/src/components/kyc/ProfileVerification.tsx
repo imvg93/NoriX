@@ -105,6 +105,28 @@ interface ProfileVerificationProps {
 
 const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = false, onFormSubmitted }) => {
   const { user } = useAuth();
+  const [kycStatus, setKycStatus] = useState<string | null>(null);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(true);
+  
+  // Check KYC status on mount
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const { kycStatusService } = await import('../../services/kycStatusService');
+        const status = await kycStatusService.checkKYCStatus();
+        setKycStatus(status.status);
+        
+        // If KYC is already submitted, pending, approved, or suspended, don't allow resubmission
+        // Note: Don't redirect here - let the parent page handle the message display
+      } catch (error) {
+        console.error('Error checking KYC status:', error);
+      } finally {
+        setIsCheckingStatus(false);
+      }
+    };
+    
+    checkStatus();
+  }, []);
   
   // Form state
   const [formData, setFormData] = useState<ProfileData>({
@@ -732,6 +754,12 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
 
   // Submit form
   const handleSubmit = async () => {
+    // Check if KYC is already submitted
+    if (kycStatus === 'pending' || kycStatus === 'approved' || kycStatus === 'suspended') {
+      alert('You have already applied for KYC. Our team is checking your data. We will update you shortly.');
+      return;
+    }
+    
     setIsSubmitting(true);
     
     // Validate all sections
@@ -847,6 +875,9 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
       // Submit for verification
       await kycService.submitProfile();
       
+      // Update status to pending to prevent resubmission
+      setKycStatus('pending');
+      
       // Show success animation
       setShowSuccess(true);
       
@@ -856,9 +887,18 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
           onFormSubmitted();
         }, 2000); // Wait for success animation to complete
       }
+      // Note: Don't redirect - let the parent page show the pending message
     } catch (error: any) {
       console.error('Submission failed:', error);
-      alert(`Failed to submit: ${error.message}`);
+      
+      // Check if it's a duplicate submission error
+      if (error.message?.includes('already submitted') || error.message?.includes('under review')) {
+        setKycStatus('pending');
+        // Update local state to trigger the pending message
+        setIsCheckingStatus(false);
+      } else {
+        alert(`Failed to submit: ${error.message}`);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -1362,7 +1402,18 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {isDisabled && (
+      {isCheckingStatus && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md mx-4 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Checking KYC status...</p>
+          </div>
+        </div>
+      )}
+      
+      {/* Status messages are handled by parent page */}
+      
+      {isDisabled && !kycStatus && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md mx-4 text-center">
             <div className="text-green-600 text-6xl mb-4">✅</div>
@@ -1378,15 +1429,17 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
         </div>
       )}
       
-      <div className={`${isDisabled ? 'pointer-events-none opacity-50' : ''}`}>
-      {/* Theme Toggle */}
-      <ThemeToggle />
-      
-      {/* Success Animation */}
-      <SuccessAnimation 
-        isVisible={showSuccess} 
-        onComplete={() => setShowSuccess(false)} 
-      />
+      {/* Only show form if status allows it */}
+      {!kycStatus || kycStatus === 'not_submitted' || kycStatus === 'rejected' ? (
+        <div className={`${isDisabled ? 'pointer-events-none opacity-50' : ''}`}>
+        {/* Theme Toggle */}
+        <ThemeToggle />
+        
+        {/* Success Animation */}
+        <SuccessAnimation 
+          isVisible={showSuccess} 
+          onComplete={() => setShowSuccess(false)} 
+        />
       
       {/* Mobile Floating Back Button */}
       <div className="fixed top-4 left-4 z-50 md:hidden">
@@ -1682,7 +1735,8 @@ const ProfileVerification: React.FC<ProfileVerificationProps> = ({ isDisabled = 
           </div>
         </div>
       </div>
-    </div>
+      </div>
+      ) : null}
     </div>
   );
 };

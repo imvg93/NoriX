@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { Job } from '../models/Job';
 import { User } from '../models/User';
 import { Application } from '../models/Application';
+import { Notification } from '../models/Notification';
 import { authenticateToken, requireRole, AuthRequest, requireEmployer, requireStudent } from '../middleware/auth';
 import { asyncHandler, sendSuccessResponse, sendErrorResponse, ValidationError } from '../middleware/errorHandler';
 
@@ -252,10 +253,175 @@ router.get('/employer', authenticateToken, requireEmployer, asyncHandler(async (
 router.patch('/:notificationId/read', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { notificationId } = req.params;
 
-  // In a real implementation, you would update the notification in the database
-  console.log(`📧 Marking notification ${notificationId} as read for user ${req.user!._id}`);
+  if (!mongoose.Types.ObjectId.isValid(notificationId)) {
+    throw new ValidationError('Invalid notification ID');
+  }
 
-  sendSuccessResponse(res, { notificationId }, 'Notification marked as read');
+  const notification = await Notification.findByIdAndUpdate(
+    notificationId,
+    { read: true, readAt: new Date() },
+    { new: true }
+  );
+
+  if (!notification) {
+    throw new ValidationError('Notification not found');
+  }
+
+  sendSuccessResponse(res, { notification }, 'Notification marked as read');
+}));
+
+// @route   GET /api/notifications/my-notifications
+// @desc    Get user's notifications
+// @access  Private
+router.get('/my-notifications', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { page = 1, limit = 20, unreadOnly = false } = req.query;
+
+  const query: any = { userId: req.user!._id };
+  if (unreadOnly === 'true') {
+    query.read = false;
+  }
+
+  const notifications = await Notification.find(query)
+    .sort({ createdAt: -1 })
+    .limit(Number(limit))
+    .skip((Number(page) - 1) * Number(limit));
+
+  const total = await Notification.countDocuments(query);
+
+  sendSuccessResponse(res, {
+    notifications,
+    pagination: {
+      page: Number(page),
+      limit: Number(limit),
+      total,
+      pages: Math.ceil(total / Number(limit))
+    }
+  }, 'Notifications retrieved successfully');
+}));
+
+// ==================== ADMIN NOTIFICATION ENDPOINTS ====================
+
+// @route   POST /api/notifications/admin/send
+// @desc    Send notification to specific user(s) - Admin only
+// @access  Private (Admin only)
+router.post('/admin/send', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { userIds, title, message, type = 'announcement', metadata } = req.body;
+
+  if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+    throw new ValidationError('User IDs array is required');
+  }
+
+  if (!title || !message) {
+    throw new ValidationError('Title and message are required');
+  }
+
+  // Create notifications for each user
+  const notifications = await Promise.all(
+    userIds.map((userId: string) => {
+      if (!mongoose.Types.ObjectId.isValid(userId)) {
+        return null;
+      }
+      return Notification.create({
+        userId,
+        type,
+        title,
+        message,
+        read: false,
+        metadata,
+        createdBy: req.user!._id
+      });
+    })
+  );
+
+  const validNotifications = notifications.filter(n => n !== null);
+
+  sendSuccessResponse(res, {
+    notifications: validNotifications,
+    count: validNotifications.length
+  }, 'Notifications sent successfully');
+}));
+
+// @route   POST /api/notifications/admin/broadcast
+// @desc    Broadcast notification to all users or specific user type - Admin only
+// @access  Private (Admin only)
+router.post('/admin/broadcast', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { userType, title, message, type = 'announcement', metadata } = req.body;
+
+  if (!title || !message) {
+    throw new ValidationError('Title and message are required');
+  }
+
+  // Build query for target users
+  const query: any = {};
+  if (userType && userType !== 'all') {
+    query.userType = userType;
+  }
+
+  // Get all target users
+  const users = await User.find(query).select('_id');
+  const userIds = users.map(u => u._id);
+
+  if (userIds.length === 0) {
+    throw new ValidationError('No users found matching criteria');
+  }
+
+  // Create notifications for all users
+  const notifications = await Promise.all(
+    userIds.map(userId => 
+      Notification.create({
+        userId,
+        type,
+        title,
+        message,
+        read: false,
+        metadata,
+        createdBy: req.user!._id
+      })
+    )
+  );
+
+  sendSuccessResponse(res, {
+    notifications,
+    count: notifications.length,
+    userType: userType || 'all'
+  }, 'Broadcast notifications sent successfully');
+}));
+
+// @route   GET /api/notifications/admin/all
+// @desc    Get all notifications (for admin to see what was sent) - Admin only
+// @access  Private (Admin only)
+router.get('/admin/all', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { page = 1, limit = 50, userId, type, read } = req.query;
+
+  const query: any = {};
+  if (userId && mongoose.Types.ObjectId.isValid(userId as string)) {
+    query.userId = userId;
+  }
+  if (type) {
+    query.type = type;
+  }
+  if (read !== undefined) {
+    query.read = read === 'true';
+  }
+
+  const notifications = await Notification.find(query)
+    .populate('userId', 'name email userType')
+    .populate('createdBy', 'name email')
+    .sort({ createdAt: -1 })
+    .limit(Number(limit))
+    .skip((Number(page) - 1) * Number(limit));
+
+  const total = await Notification.countDocuments(query);
+
+  sendSuccessResponse(res, {
+    notifications,
+    pagination: {
+      page: Number(page),
+      limit: Number(limit),
+      total,
+      pages: Math.ceil(total / Number(limit))
+    }
+  }, 'All notifications retrieved successfully');
 }));
 
 export default router;

@@ -126,19 +126,21 @@ app.use('/api/debug-upload', debugUploadRoutes);
 app.use('/api/enhanced-jobs', enhancedJobRoutes);
 app.use('/api/notifications', notificationRoutes);
 
-// Debug: Print all registered routes
-console.log('🔍 Registered Routes:');
-app._router.stack.forEach((middleware: any) => {
-  if (middleware.route) {
-    console.log(`  ${Object.keys(middleware.route.methods).join(',').toUpperCase()} ${middleware.route.path}`);
-  } else if (middleware.name === 'router') {
-    middleware.handle.stack.forEach((handler: any) => {
-      if (handler.route) {
-        console.log(`  ${Object.keys(handler.route.methods).join(',').toUpperCase()} ${middleware.regexp.source.replace(/\\/g, '').replace(/\^|\$/, '')}${handler.route.path}`);
-      }
-    });
-  }
-});
+// Debug: Print registered routes only when enabled via env flag
+if (process.env.LOG_ROUTES === 'true') {
+  console.log('🔍 Registered Routes:');
+  app._router.stack.forEach((middleware: any) => {
+    if (middleware.route) {
+      console.log(`  ${Object.keys(middleware.route.methods).join(',').toUpperCase()} ${middleware.route.path}`);
+    } else if (middleware.name === 'router') {
+      middleware.handle.stack.forEach((handler: any) => {
+        if (handler.route) {
+          console.log(`  ${Object.keys(handler.route.methods).join(',').toUpperCase()} ${middleware.regexp.source.replace(/\\/g, '').replace(/\^|\$/, '')}${handler.route.path}`);
+        }
+      });
+    }
+  });
+}
 
 // Error handling middleware
 app.use(notFound);
