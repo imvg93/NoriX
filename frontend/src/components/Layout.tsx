@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import { 
   LogOut, 
@@ -76,10 +77,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="flex items-center">
               <Link href="/home" className="flex items-center">
                 <div className="relative h-8 w-32 sm:h-10 sm:w-40">
-                  <img
+                  <Image
                     src="/img/norixgreen.png"
                     alt="NoriX logo"
-                    className="h-full w-full object-contain"
+                    fill
+                    sizes="(max-width: 640px) 128px, 160px"
+                    className="object-contain"
+                    priority
                   />
                 </div>
               </Link>
@@ -323,10 +327,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="flex items-center">
               <Link href="/" className="flex items-center">
                 <div className="relative h-8 w-32 sm:h-10 sm:w-40">
-                  <img
+                  <Image
                     src="/img/norixgreen.png"
                     alt="NoriX logo"
-                    className="h-full w-full object-contain"
+                    fill
+                    sizes="(max-width: 640px) 128px, 160px"
+                    className="object-contain"
+                    priority
                   />
                 </div>
               </Link>
