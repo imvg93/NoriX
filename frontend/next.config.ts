@@ -4,8 +4,20 @@ const nextConfig: NextConfig = {
   // Vercel-optimized configuration
   trailingSlash: false,
   images: {
-    unoptimized: true,
-    domains: ['localhost'],
+    unoptimized: false, // Enable image optimization for better performance
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.cloudinary.com',
+      },
+    ],
+    // Fallback for public images
+    minimumCacheTTL: 60,
   },
   eslint: {
     ignoreDuringBuilds: true,
