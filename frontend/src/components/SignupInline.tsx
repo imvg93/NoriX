@@ -117,8 +117,12 @@ const SignupInline: React.FC = () => {
                 key={type}
                 type="button"
                 onClick={() => setUserType(type)}
-                className={`rounded-md border px-3 py-2 text-sm ${
-                  userType === type ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-300 bg-white text-gray-700'
+                className={`rounded-lg border-2 px-3 py-2.5 text-sm font-medium transition-all ${
+                  userType === type 
+                    ? type === 'admin'
+                      ? 'border-amber-500 bg-amber-50 text-amber-700 shadow-sm'
+                      : 'border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm'
+                    : 'border-gray-200 bg-white text-gray-700 hover:border-indigo-300 hover:bg-indigo-50'
                 }`}
               >
                 {type === 'student' ? '🎓 Student' : type === 'employer' ? '💼 Employer' : '👑 Admin'}
@@ -127,30 +131,30 @@ const SignupInline: React.FC = () => {
           </div>
 
           <input name="name" placeholder="Full name" value={form.name} onChange={onChange}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" required />
+            className="w-full rounded-lg border-2 border-gray-200 px-3 py-2.5 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" required />
           <input name="email" type="email" placeholder="Email address" value={form.email} onChange={onChange}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" required />
+            className="w-full rounded-lg border-2 border-gray-200 px-3 py-2.5 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" required />
           <input name="phone" type="tel" placeholder="Phone number" value={form.phone} onChange={onChange}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" required />
+            className="w-full rounded-lg border-2 border-gray-200 px-3 py-2.5 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" required />
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <input name="password" type="password" placeholder="Password" value={form.password} onChange={onChange}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" required />
+              className="w-full rounded-lg border-2 border-gray-200 px-3 py-2.5 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" required />
             <input name="confirmPassword" type="password" placeholder="Confirm password" value={form.confirmPassword} onChange={onChange}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" required />
+              className="w-full rounded-lg border-2 border-gray-200 px-3 py-2.5 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" required />
           </div>
 
           {userType === 'student' && (
             <input name="college" placeholder="College / University" value={form.college} onChange={onChange}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" required />
+              className="w-full rounded-lg border-2 border-gray-200 px-3 py-2.5 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" required />
           )}
 
           {userType === 'employer' && (
             <>
               <input name="companyName" placeholder="Company name" value={form.companyName} onChange={onChange}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" required />
+                className="w-full rounded-lg border-2 border-gray-200 px-3 py-2.5 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" required />
               <select name="businessType" value={form.businessType} onChange={onChange}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" required>
+                className="w-full rounded-lg border-2 border-gray-200 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" required>
                 <option value="">Select business type</option>
                 <option value="Cafe & Restaurant">Cafe & Restaurant</option>
                 <option value="Retail Store">Retail Store</option>
@@ -166,11 +170,11 @@ const SignupInline: React.FC = () => {
             </>
           )}
 
-          {error && <div className="text-sm text-red-600">{error}</div>}
-          {success && <div className="text-sm text-green-600">{success}</div>}
+          {error && <div className="text-sm text-red-700 bg-red-50 border-2 border-red-200 rounded-lg p-3">{error}</div>}
+          {success && <div className="text-sm text-green-700 bg-green-50 border-2 border-green-200 rounded-lg p-3">{success}</div>}
 
           <button type="submit" disabled={loading}
-            className="w-full rounded-md bg-indigo-600 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50">
+            className="w-full rounded-lg bg-indigo-600 py-3 text-sm font-medium text-white transition-all hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
             {loading ? 'Sending OTP…' : 'Send OTP'}
           </button>
         </form>
@@ -178,26 +182,37 @@ const SignupInline: React.FC = () => {
 
       {step === 'otp' && (
         <form className="space-y-4" onSubmit={verifyAndRegister}>
-          <div className="text-sm text-gray-600">We sent a verification code to <strong>{form.email}</strong></div>
+          <div className="bg-indigo-50 border-2 border-indigo-200 rounded-lg p-4">
+            <p className="text-sm text-gray-700">
+              We sent a verification code to <strong className="text-indigo-700">{form.email}</strong>
+            </p>
+          </div>
           <input name="otp" placeholder="Enter 6-digit OTP" value={form.otp} onChange={onChange}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" required />
-          {error && <div className="text-sm text-red-600">{error}</div>}
+            className="w-full rounded-lg border-2 border-gray-200 px-3 py-2.5 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" required />
+          {error && <div className="text-sm text-red-700 bg-red-50 border-2 border-red-200 rounded-lg p-3">{error}</div>}
           <div className="grid grid-cols-2 gap-3">
             <button type="button" onClick={() => { setStep('form'); setError(''); setSuccess(''); }}
-              className="rounded-md border border-gray-300 bg-white py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              className="rounded-lg border-2 border-gray-200 bg-white py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all">
               Edit Details
             </button>
             <button type="submit" disabled={loading}
-              className="rounded-md bg-indigo-600 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50">
-              {loading ? 'Creating…' : 'Verify & Create Account'}
+              className="rounded-lg bg-indigo-600 py-3 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+              {loading ? 'Creating…' : 'Verify & Create'}
             </button>
           </div>
         </form>
       )}
 
       {step === 'success' && (
-        <div className="space-y-2 text-center">
-          <div className="text-green-600 font-semibold">Account created successfully!</div>
+        <div className="space-y-3 text-center">
+          <div className="flex justify-center mb-2">
+            <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+              <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          </div>
+          <div className="text-green-700 font-semibold">Account created successfully!</div>
           <div className="text-sm text-gray-600">You can close this dialog or continue.</div>
         </div>
       )}

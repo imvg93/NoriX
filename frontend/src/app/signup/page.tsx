@@ -3,6 +3,9 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { ArrowLeft, Home } from 'lucide-react';
+import Image from 'next/image';
+import { motion } from 'framer-motion';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -199,23 +202,85 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="mb-4">
+    <div className="relative h-screen bg-gradient-to-br from-indigo-50 via-white to-cyan-50 overflow-y-auto">
+      {/* Top bar with Back and Home */}
+      <div className="sticky top-0 z-10 bg-transparent h-16">
+        <div className="mx-auto flex h-full max-w-6xl items-center justify-between px-4">
+          <button
+            onClick={() => router.back()}
+            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white/70 px-4 py-2 text-sm text-gray-700 shadow-sm backdrop-blur-md transition hover:bg-white"
+            aria-label="Go back"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back
+          </button>
           <Link 
             href="/" 
-            className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
+            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white/70 px-4 py-2 text-sm text-gray-700 shadow-sm backdrop-blur-md transition hover:bg-white"
+            aria-label="Go home"
           >
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to Home
+            <Home className="h-4 w-4" /> Home
           </Link>
         </div>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+      <div className="mx-auto grid min-h-[calc(100vh-64px)] max-w-6xl grid-cols-1 items-center gap-8 px-4 py-8 md:grid-cols-2">
+        {/* Left: Branding with subtle animations */}
+        <motion.div
+          className="hidden md:block"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          <div className="mb-4 inline-flex items-center gap-3 rounded-full border border-gray-200 bg-white/70 px-3 py-2 shadow-sm backdrop-blur-md">
+            <Image src="/img/norixnobg.jpg" alt="NoriX" width={50} height={50} className="h-10 w-10" />
+            <span className="text-sm font-semibold tracking-wide text-gray-800">Welcome to NoriX</span>
+          </div>
+
+          <h1 className="mb-2 text-3xl font-bold leading-tight text-gray-900">
+            Join NoriX Community
+          </h1>
+          <p className="mb-6 max-w-lg text-gray-600">
+            Create your account and start connecting with opportunities. Students find jobs, employers find talent.
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            {["Secure Sign-up", "Real-time Verification", "Student & Employer Profiles", "Quick Start"].map((item, idx) => (
+              <motion.div
+                key={idx}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.05 * idx }}
+                className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white/80 px-3 py-2 text-sm text-gray-700 shadow-sm backdrop-blur"
+              >
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-white">✓</span>
+                {item}
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Right: Auth card */}
+        <motion.div
+          className="w-full"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.08 }}
+        >
+          <div className="mx-auto w-full max-w-md rounded-2xl border border-gray-200 bg-white/85 p-6 shadow-xl backdrop-blur-sm">
+            {/* Mobile Logo - Hidden on desktop */}
+            <div className="mb-6 flex md:hidden items-center justify-center">
+              <div className="inline-flex items-center gap-3 rounded-full border border-gray-200 bg-white/70 px-3 py-2 shadow-sm backdrop-blur-md">
+                <Image src="/img/norixnobg.jpg" alt="NoriX" width={40} height={40} className="h-10 w-10" />
+                <span className="text-sm font-semibold tracking-wide text-gray-800">Welcome to NoriX</span>
+              </div>
+            </div>
+
+            <div className="mb-4 flex flex-col items-center text-center">
+              {/* Big logo - Hidden on mobile */}
+              <Image src="/img/norixnobg.jpg" alt="NoriX" width={160} height={160} className="hidden md:block h-32 w-32" priority />
+              <h2 className="mt-3 text-xl font-semibold text-gray-900">Create your account</h2>
+            </div>
+
           {step === 'form' && (
             <>
               {/* User Type Selection */}
@@ -227,10 +292,10 @@ export default function Signup() {
                   <button
                     type="button"
                     onClick={() => setUserType('student')}
-                    className={`flex-1 py-2 px-4 border rounded-md text-sm font-medium ${
+                    className={`flex-1 py-2.5 px-4 border-2 rounded-lg text-sm font-medium transition-all ${
                       userType === 'student'
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm'
+                        : 'border-gray-200 bg-white text-gray-700 hover:border-indigo-300 hover:bg-indigo-50'
                     }`}
                   >
                     🎓 Student
@@ -238,10 +303,10 @@ export default function Signup() {
                   <button
                     type="button"
                     onClick={() => setUserType('employer')}
-                    className={`flex-1 py-2 px-4 border rounded-md text-sm font-medium ${
+                    className={`flex-1 py-2.5 px-4 border-2 rounded-lg text-sm font-medium transition-all ${
                       userType === 'employer'
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm'
+                        : 'border-gray-200 bg-white text-gray-700 hover:border-indigo-300 hover:bg-indigo-50'
                     }`}
                   >
                     💼 Employer
@@ -249,10 +314,10 @@ export default function Signup() {
                   <button
                     type="button"
                     onClick={() => setUserType('admin')}
-                    className={`flex-1 py-2 px-4 border rounded-md text-sm font-medium ${
+                    className={`flex-1 py-2.5 px-4 border-2 rounded-lg text-sm font-medium transition-all ${
                       userType === 'admin'
-                        ? 'border-red-500 bg-red-50 text-red-700'
-                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                        ? 'border-amber-500 bg-amber-50 text-amber-700 shadow-sm'
+                        : 'border-gray-200 bg-white text-gray-700 hover:border-amber-300 hover:bg-amber-50'
                     }`}
                   >
                     👑 Admin
@@ -274,7 +339,7 @@ export default function Signup() {
                       required
                       value={formData.name}
                       onChange={handleInputChange}
-                      className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
                       placeholder="Enter your full name"
                     />
                   </div>
@@ -293,7 +358,7 @@ export default function Signup() {
                       required
                       value={formData.email}
                       onChange={handleInputChange}
-                      className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
                       placeholder="Enter your email"
                     />
                   </div>
@@ -311,7 +376,7 @@ export default function Signup() {
                       required
                       value={formData.phone}
                       onChange={handleInputChange}
-                      className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
                       placeholder="Enter your phone number"
                     />
                   </div>
@@ -330,7 +395,7 @@ export default function Signup() {
                       required
                       value={formData.password}
                       onChange={handleInputChange}
-                      className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
                       placeholder="Create a password"
                     />
                   </div>
@@ -349,7 +414,7 @@ export default function Signup() {
                       required
                       value={formData.confirmPassword}
                       onChange={handleInputChange}
-                      className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
                       placeholder="Confirm your password"
                     />
                   </div>
@@ -370,7 +435,7 @@ export default function Signup() {
                           required
                           value={formData.college}
                           onChange={handleInputChange}
-                          className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
                           placeholder="Enter your college name"
                         />
                       </div>
@@ -387,7 +452,7 @@ export default function Signup() {
                           rows={3}
                           value={formData.skills}
                           onChange={handleInputChange}
-                          className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
                           placeholder="List your skills (e.g., Customer Service, Data Entry, Tutoring)"
                         />
                       </div>
@@ -404,7 +469,7 @@ export default function Signup() {
                           required
                           value={formData.availability}
                           onChange={handleInputChange}
-                          className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
                         >
                           <option value="">Select your availability</option>
                           <option value="weekdays">Weekdays</option>
@@ -432,7 +497,7 @@ export default function Signup() {
                           required
                           value={formData.companyName}
                           onChange={handleInputChange}
-                          className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
                           placeholder="Enter your company name"
                         />
                       </div>
@@ -449,7 +514,7 @@ export default function Signup() {
                           required
                           value={formData.businessType}
                           onChange={handleInputChange}
-                          className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
                         >
                           <option value="">Select business type</option>
                           <option value="Cafe & Restaurant">Cafe & Restaurant</option>
@@ -478,7 +543,7 @@ export default function Signup() {
                           required
                           value={formData.address}
                           onChange={handleInputChange}
-                          className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
                           placeholder="Enter your business address"
                         />
                       </div>
@@ -489,7 +554,7 @@ export default function Signup() {
                 <div>
                   <button
                     type="submit"
-                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={loading}
                   >
                     {loading ? 'Sending OTP...' : 'Continue'}
@@ -501,17 +566,21 @@ export default function Signup() {
 
           {step === 'otp' && (
             <>
-              <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+              <div className="text-center mb-4">
+                <h2 className="text-2xl font-bold text-gray-900">
                 Verify your email
               </h2>
-              <p className="mt-2 text-center text-sm text-gray-600">
+                <p className="mt-2 text-sm text-gray-600">
                 We sent a verification code to <strong>{otpData.email}</strong>. Enter it below to complete your registration.
               </p>
+              </div>
 
               {/* Display entered information for review */}
-              <div className="mt-4 bg-gray-50 rounded-lg p-4">
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Your Details:</h3>
-                <div className="space-y-1 text-sm text-gray-600">
+              <div className="bg-indigo-50 border-2 border-indigo-200 rounded-lg p-4 mb-4">
+                <h3 className="text-sm font-semibold text-indigo-900 mb-2 flex items-center gap-2">
+                  <span className="text-indigo-600">✓</span> Your Details:
+                </h3>
+                <div className="space-y-1 text-sm text-gray-700">
                   <p><strong>Name:</strong> {formData.name}</p>
                   <p><strong>Email:</strong> {formData.email}</p>
                   <p><strong>Phone:</strong> {formData.phone}</p>
@@ -537,7 +606,7 @@ export default function Signup() {
                       required
                       value={formData.otp}
                       onChange={(e) => setFormData(prev => ({ ...prev, otp: e.target.value }))}
-                      className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
                       placeholder="Enter the 6-digit code"
                     />
                   </div>
@@ -546,7 +615,7 @@ export default function Signup() {
                 <div className="space-y-3">
                   <button
                     type="submit"
-                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={loading}
                   >
                     {loading ? 'Verifying...' : 'Verify OTP'}
@@ -561,7 +630,7 @@ export default function Signup() {
                       setError('');
                       setSuccess('');
                     }}
-                    className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    className="w-full flex justify-center py-3 px-4 border-2 border-gray-200 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
                     disabled={loading}
                   >
                     ← Edit Details
@@ -594,52 +663,52 @@ export default function Signup() {
 
           {step === 'success' && (
             <>
-              <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+              <div className="text-center">
+                <div className="mb-4 flex justify-center">
+                  <div className="h-16 w-16 rounded-full bg-indigo-100 flex items-center justify-center">
+                    <svg className="h-8 w-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900">
                 Welcome, {formData.name}!
               </h2>
-              <p className="mt-2 text-center text-sm text-gray-600">
+                <p className="mt-2 text-sm text-gray-600">
                 Your account has been created successfully. You're being redirected to your dashboard...
               </p>
-
-              <div className="mt-6">
-                <div className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white">
-                  Redirecting...
-                </div>
               </div>
             </>
           )}
 
           {error && (
-            <div className="mt-6 text-center text-sm text-red-600">
+            <div className="mt-4 text-center text-sm text-red-600 bg-red-50 border-2 border-red-200 rounded-lg p-3">
               {error}
             </div>
           )}
           {success && (
-            <div className="mt-6 text-center text-sm text-green-600">
+            <div className="mt-4 text-center text-sm text-green-700 bg-green-50 border-2 border-green-200 rounded-lg p-3">
               {success}
             </div>
           )}
 
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Already have an account?</span>
-              </div>
+          <div className="my-6 flex items-center gap-3">
+            <span className="h-px flex-1 bg-gray-200" />
+            <span className="text-xs uppercase tracking-wide text-gray-400">or</span>
+            <span className="h-px flex-1 bg-gray-200" />
             </div>
 
-            <div className="mt-6">
+          <div className="text-center">
+            <span className="text-sm text-gray-600">Already have an account?</span>{' '}
               <Link
                 href="/login"
-                className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="text-sm font-semibold text-indigo-600 hover:text-indigo-700"
               >
                 Sign in
               </Link>
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
     </div>
   );
