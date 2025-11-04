@@ -225,10 +225,8 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
     throw new ValidationError('College/University is required for students');
   }
 
-  // Validate employer-specific fields
-  if (userType === 'employer' && (!companyName || !businessType || !address)) {
-    throw new ValidationError('Company name, business type, and address are required for employers');
-  }
+  // Note: Employer-specific fields (companyName, businessType, address) are optional during registration
+  // They will be collected during KYC verification process
 
   // Verify OTP before proceeding
   const otpValid = await verifyOTP(email, otp, 'verification');
@@ -268,11 +266,11 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
     userData.availability = availability || 'flexible';
   }
 
-  // Add employer-specific fields
+  // Add employer-specific fields (optional - can be filled during KYC)
   if (userType === 'employer') {
-    userData.companyName = companyName;
-    userData.businessType = businessType;
-    userData.address = address;
+    if (companyName) userData.companyName = companyName;
+    if (businessType) userData.businessType = businessType;
+    if (address) userData.address = address;
     userData.isVerified = false; // Employers need verification
   }
 

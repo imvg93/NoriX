@@ -4,17 +4,19 @@ import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { kycStatusService } from '../../../services/kycStatusService';
-import { Briefcase, MapPin, DollarSign, Clock, Star, Filter, Search, ArrowLeft, Loader2 } from 'lucide-react';
+import { Briefcase, MapPin, DollarSign, Clock, Star, Filter, Search, ArrowLeft, Loader2, CheckCircle2 } from 'lucide-react';
 import RoleProtectedRoute from '../../../components/auth/RoleProtectedRoute';
 import { apiService } from '../../../services/api';
 import { useSafeNavigation } from '../../../hooks/useSafeNavigation';
 import { useAuth } from '../../../contexts/AuthContext';
+import LoadingOverlay from '../../../components/LoadingOverlay';
 
 export default function StudentJobsPage() {
   const router = useRouter();
   const { navigateBack } = useSafeNavigation();
   const { user } = useAuth();
-  const [jobs, setJobs] = useState<any[]>([]); // applied jobs only
+  const [jobs, setJobs] = useState<any[]>([]); // all available jobs
+  const [appliedJobIds, setAppliedJobIds] = useState<Set<string>>(new Set()); // track applied job IDs
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -22,20 +24,32 @@ export default function StudentJobsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [kycStatus, setKycStatus] = useState<'not_submitted' | 'pending' | 'approved' | 'rejected' | 'suspended'>('not_submitted');
 
-  // Fetch student's applied jobs from API
+  // Fetch all available jobs and check which ones are applied
   useEffect(() => {
     const fetchJobs = async () => {
       try {
         setLoading(true);
         setError('');
-        // Get user's applications and map to job data
+        
+        // Fetch all available jobs
+        const jobsResponse = await apiService.getJobs();
+        const allJobs = jobsResponse.jobs || [];
+        setJobs(allJobs);
+        
+        // Fetch user's applications to determine which jobs are applied
         const applications = await apiService.getStudentApplications();
         const apps = applications.applications || [];
-        const appliedJobs = apps
-          .map((app: any) => app.job)
-          .filter((j: any) => j && typeof j === 'object');
-        setJobs(appliedJobs);
-        console.log('✅ Fetched applied jobs:', appliedJobs.length);
+        const appliedIds = new Set<string>();
+        
+        apps.forEach((app: any) => {
+          const jobId = typeof app.job === 'string' ? app.job : app.job?._id;
+          if (jobId) {
+            appliedIds.add(jobId);
+          }
+        });
+        
+        setAppliedJobIds(appliedIds);
+        console.log('✅ Fetched jobs:', allJobs.length, 'Applied:', appliedIds.size);
       } catch (error: any) {
         console.error('❌ Error fetching jobs:', error);
         setError(error?.message || 'Failed to load jobs. Please try again.');
@@ -113,9 +127,9 @@ export default function StudentJobsPage() {
             <span className="font-medium">Back</span>
           </button>
           
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">Your Applied Jobs</h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">Browse Jobs</h1>
           <p className="text-xl text-gray-600">
-            These are the jobs you have applied for. {jobs.length === 0 ? 'You have not applied to any jobs yet.' : 'Use search and filters to find a specific application.'}
+            Explore all available job opportunities. {appliedJobIds.size > 0 ? `You have applied to ${appliedJobIds.size} job${appliedJobIds.size !== 1 ? 's' : ''}.` : 'Use search and filters to find the perfect job.'}
           </p>
         </motion.div>
 
@@ -176,18 +190,7 @@ export default function StudentJobsPage() {
         </motion.div>
 
         {/* Loading State */}
-        {loading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex items-center justify-center py-12"
-          >
-            <div className="text-center">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
-              <p className="text-gray-600">Loading jobs...</p>
-            </div>
-          </motion.div>
-        )}
+        {loading && <LoadingOverlay message="Loading jobs..." />}
 
         {/* Error State */}
         {error && (
@@ -203,7 +206,7 @@ export default function StudentJobsPage() {
           </motion.div>
         )}
 
-        {/* Empty State for no applications */}
+        {/* Empty State for no jobs */}
         {!loading && !error && jobs.length === 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -211,22 +214,14 @@ export default function StudentJobsPage() {
             className="text-center py-16 bg-white rounded-2xl border border-gray-200"
           >
             <Briefcase className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-2xl font-semibold text-gray-900 mb-2">No applications yet</h3>
-            <p className="text-gray-600 mb-6">Start applying to jobs to see them listed here.</p>
-            <div className="flex items-center justify-center gap-3">
-              <button
-                onClick={() => router.push('/student')}
-                className="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-              >
-                Go to Student Dashboard
-              </button>
-              <button
-                onClick={() => router.push('/jobs')}
-                className="px-5 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                Browse Jobs
-              </button>
-            </div>
+            <h3 className="text-2xl font-semibold text-gray-900 mb-2">No jobs available</h3>
+            <p className="text-gray-600 mb-6">There are no job postings available at the moment. Check back later!</p>
+            <button
+              onClick={() => router.push('/student')}
+              className="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+            >
+              Go to Student Dashboard
+            </button>
           </motion.div>
         )}
 
@@ -240,62 +235,83 @@ export default function StudentJobsPage() {
           >
             <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
               <Star className="w-6 h-6 text-yellow-500 fill-current" />
-              Featured Applied Jobs
+              Featured Jobs
             </h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {featuredJobs.map((job, index) => (
-                <motion.div
-                  key={job._id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 + index * 0.1 }}
-                  className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-2xl p-6 border-2 border-yellow-300 hover:shadow-lg transition-shadow relative"
-                >
-                  <div className="absolute top-0 right-0 bg-yellow-500 text-white px-3 py-1 text-xs font-bold rounded-bl-lg">
-                    ⭐ FEATURED
-                  </div>
-                  
-                  <div className="mb-4">
-                    <h3 className="text-xl font-bold text-gray-900 mb-1">{job.title}</h3>
-                    <p className="text-lg font-semibold text-yellow-600">{job.company}</p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-gray-600">
-                    <div className="flex items-center gap-1">
-                      <MapPin className="w-4 h-4" />
-                      <span>{job.location}</span>
+              {featuredJobs.map((job, index) => {
+                const isApplied = appliedJobIds.has(job._id);
+                return (
+                  <motion.div
+                    key={job._id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 + index * 0.1 }}
+                    className={`bg-gradient-to-r from-yellow-50 to-orange-50 rounded-2xl p-6 border-2 border-yellow-300 hover:shadow-lg transition-shadow relative ${isApplied ? 'ring-2 ring-green-500 ring-opacity-50' : ''}`}
+                  >
+                    <div className="absolute top-0 right-0 flex gap-1">
+                      <div className="bg-yellow-500 text-white px-3 py-1 text-xs font-bold rounded-bl-lg">
+                        ⭐ FEATURED
+                      </div>
+                      {isApplied && (
+                        <div className="bg-green-500 text-white px-3 py-1 text-xs font-bold rounded-br-lg flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" />
+                          APPLIED
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-1">
-                      <DollarSign className="w-4 h-4" />
-                      <span className="font-semibold text-green-600">{formatSalary(job.salary)}</span>
+                    
+                    <div className="mb-4">
+                      <h3 className="text-xl font-bold text-gray-900 mb-1">{job.title}</h3>
+                      <p className="text-lg font-semibold text-yellow-600">{job.company}</p>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Clock className="w-4 h-4" />
-                      <span>{job.type}</span>
+
+                    <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-gray-600">
+                      <div className="flex items-center gap-1">
+                        <MapPin className="w-4 h-4" />
+                        <span>{job.location}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <DollarSign className="w-4 h-4" />
+                        <span className="font-semibold text-green-600">{formatSalary(job.salary)}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-4 h-4" />
+                        <span>{job.type}</span>
+                      </div>
                     </div>
-                  </div>
 
-                  <p className="text-gray-700 mb-4 line-clamp-2">{job.description}</p>
+                    <p className="text-gray-700 mb-4 line-clamp-2">{job.description}</p>
 
-                  <div className="flex flex-wrap gap-2 mb-6">
-                    {(job.requirements || []).slice(0, 3).map((req: string, idx: number) => (
-                      <span key={idx} className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
-                        {req}
-                      </span>
-                    ))}
-                  </div>
+                    <div className="flex flex-wrap gap-2 mb-6">
+                      {(job.requirements || []).slice(0, 3).map((req: string, idx: number) => (
+                        <span key={idx} className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
+                          {req}
+                        </span>
+                      ))}
+                    </div>
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">Posted {formatDate(job.createdAt)}</span>
-                    <button 
-                      onClick={() => router.push(`/jobs/${job._id}`)}
-                      className="px-6 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors font-bold shadow-md"
-                    >
-                      ⚡ Apply Now
-                    </button>
-                  </div>
-                </motion.div>
-              ))}
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-500">Posted {formatDate(job.createdAt)}</span>
+                      {isApplied ? (
+                        <button 
+                          onClick={() => router.push(`/student/approved-applications`)}
+                          className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-bold shadow-md flex items-center gap-2"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          View Application
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => router.push(`/jobs/${job._id}`)}
+                          className="px-6 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors font-bold shadow-md"
+                        >
+                          ⚡ Apply Now
+                        </button>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
             </div>
           </motion.div>
         )}
@@ -321,55 +337,76 @@ export default function StudentJobsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {regularJobs.map((job, index) => (
-                  <motion.div
-                    key={job._id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 + index * 0.1 }}
-                    className="bg-white rounded-2xl p-6 border border-gray-200 hover:shadow-md transition-shadow"
-                  >
-                    <div className="mb-4">
-                      <h3 className="text-xl font-semibold text-gray-900 mb-1">{job.title}</h3>
-                      <p className="text-lg font-medium text-blue-600">{job.company}</p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-gray-600">
-                      <div className="flex items-center gap-1">
-                        <MapPin className="w-4 h-4" />
-                        <span>{job.location}</span>
+                {regularJobs.map((job, index) => {
+                  const isApplied = appliedJobIds.has(job._id);
+                  return (
+                    <motion.div
+                      key={job._id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.5 + index * 0.1 }}
+                      className={`bg-white rounded-2xl p-6 border border-gray-200 hover:shadow-md transition-shadow relative ${isApplied ? 'ring-2 ring-green-500 ring-opacity-50' : ''}`}
+                    >
+                      {/* Applied Badge */}
+                      {isApplied && (
+                        <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 text-xs font-bold rounded-full flex items-center gap-1 shadow-md">
+                          <CheckCircle2 className="w-3 h-3" />
+                          APPLIED
+                        </div>
+                      )}
+                      
+                      <div className="mb-4">
+                        <h3 className="text-xl font-semibold text-gray-900 mb-1">{job.title}</h3>
+                        <p className="text-lg font-medium text-blue-600">{job.company}</p>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <DollarSign className="w-4 h-4" />
-                        <span>{formatSalary(job.salary)}</span>
+
+                      <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-gray-600">
+                        <div className="flex items-center gap-1">
+                          <MapPin className="w-4 h-4" />
+                          <span>{job.location}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <DollarSign className="w-4 h-4" />
+                          <span>{formatSalary(job.salary)}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-4 h-4" />
+                          <span>{job.type}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-4 h-4" />
-                        <span>{job.type}</span>
+
+                      <p className="text-gray-700 mb-4 line-clamp-2">{job.description}</p>
+
+                      <div className="flex flex-wrap gap-2 mb-6">
+                        {(job.requirements || []).slice(0, 2).map((req: string, idx: number) => (
+                          <span key={idx} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
+                            {req}
+                          </span>
+                        ))}
                       </div>
-                    </div>
 
-                    <p className="text-gray-700 mb-4 line-clamp-2">{job.description}</p>
-
-                    <div className="flex flex-wrap gap-2 mb-6">
-                      {(job.requirements || []).slice(0, 2).map((req: string, idx: number) => (
-                        <span key={idx} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
-                          {req}
-                        </span>
-                      ))}
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500">Posted {formatDate(job.createdAt)}</span>
-                      <button 
-                        onClick={() => router.push(`/jobs/${job._id}`)}
-                        className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                      >
-                        Apply Now
-                      </button>
-                    </div>
-                  </motion.div>
-                ))}
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-500">Posted {formatDate(job.createdAt)}</span>
+                        {isApplied ? (
+                          <button 
+                            onClick={() => router.push(`/student/approved-applications`)}
+                            className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center gap-2"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            View Application
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => router.push(`/jobs/${job._id}`)}
+                            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                          >
+                            Apply Now
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                })}
               </div>
             )}
           </motion.div>

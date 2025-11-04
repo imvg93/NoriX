@@ -27,7 +27,6 @@ import {
   X,
   ChevronDown,
   ChevronUp,
-  LogOut,
   Shield,
   AlertCircle
 } from 'lucide-react';
@@ -151,7 +150,6 @@ interface RecentApplication {
 
 const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
   const router = useRouter();
-  const { logout } = useAuth();
   const { addNotification } = useNotifications();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [appliedJobs, setAppliedJobs] = useState<AppliedJob[]>([]);
@@ -279,9 +277,17 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
           setApprovedApplicationsWithContact([]);
         }
         
-        // Initialize empty arrays for saved jobs, interviews, and notifications
-        // TODO: Implement real API calls for these features
-        setSavedJobs([]);
+        // Fetch saved jobs from database
+        try {
+          const savedJobsData = await apiService.getSavedJobs();
+          console.log('📊 Saved jobs data:', savedJobsData);
+          setSavedJobs(Array.isArray(savedJobsData.savedJobs) ? savedJobsData.savedJobs : []);
+        } catch (error) {
+          console.error('Error fetching saved jobs:', error);
+          setSavedJobs([]);
+        }
+        
+        // Initialize empty arrays for interviews and notifications
         setInterviews([]);
         setNotifications([]);
         
@@ -452,18 +458,29 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
       
       console.log('✅ Application response:', response);
       
-      // Update applied jobs list
-      const job = jobs.find(j => j._id === jobId);
-      if (job) {
-        const newApplication = {
-          _id: Date.now().toString(),
-          job,
-          status: 'applied',
-          appliedDate: new Date().toISOString().split('T')[0]
-        };
-        
-        setAppliedJobs(prev => [...prev, newApplication]);
-        console.log('✅ Added application to local state:', newApplication);
+      // Refresh applications from the server to get the latest data
+      try {
+        const applicationsData: ApplicationsResponse = await apiService.getUserApplications();
+        console.log('📊 Refreshed applications data:', applicationsData);
+        const applications = applicationsData.applications || [];
+        console.log('📊 Processed applications:', applications);
+        setAppliedJobs(Array.isArray(applications) ? applications : []);
+        console.log('✅ Successfully updated applied jobs state');
+      } catch (appsErr: any) {
+        console.error('Error refreshing applications:', appsErr);
+        // Fallback to local update if refresh fails
+        const job = jobs.find(j => j._id === jobId);
+        if (job) {
+          const newApplication = {
+            _id: Date.now().toString(),
+            job,
+            status: 'pending',
+            appliedDate: new Date().toISOString().split('T')[0]
+          };
+          
+          setAppliedJobs(prev => [...prev, newApplication]);
+          console.log('✅ Added application to local state (fallback):', newApplication);
+        }
       }
       
       // Success notification
@@ -493,24 +510,82 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
     }
   };
 
-  const handleSaveJob = (jobId: string) => {
-    const job = jobs.find(j => j._id === jobId);
-    if (job && Array.isArray(savedJobs) && !savedJobs.find(sj => sj.job._id === jobId)) {
-      setSavedJobs(prev => Array.isArray(prev) ? [...prev, {
-        _id: Date.now().toString(),
-        job,
-        savedDate: new Date().toISOString().split('T')[0]
-      }] : [{
-        _id: Date.now().toString(),
-        job,
-        savedDate: new Date().toISOString().split('T')[0]
-      }]);
-    }
-  };
+  const handleSaveJob = async (jobId: string) => {
+    try {
+      const job = jobs.find(j => j._id === jobId);
+      if (!job) {
+        console.error('Job not found:', jobId);
+        return;
+      }
 
-  const handleLogout = () => {
-    logout();
-    router.push('/login');
+      // Check if job is already saved
+      const isSaved = Array.isArray(savedJobs) && savedJobs.some(sj => {
+        const savedJobId = typeof sj.job === 'object' && sj.job !== null ? sj.job._id : sj.job;
+        return savedJobId === jobId;
+      });
+
+      if (isSaved) {
+        // Unsave the job
+        try {
+          await apiService.unsaveJob(jobId);
+          
+          // Remove from local state
+          setSavedJobs(prev => Array.isArray(prev) 
+            ? prev.filter(sj => {
+                const savedJobId = typeof sj.job === 'object' && sj.job !== null ? sj.job._id : sj.job;
+                return savedJobId !== jobId;
+              })
+            : []);
+          
+          // Show notification
+          addNotification({
+            type: 'application_status_update',
+            title: 'Job Unsaved',
+            message: `You unsaved ${job.title || 'this job'}`,
+            timestamp: new Date().toISOString()
+          });
+        } catch (error: any) {
+          console.error('Error unsaving job:', error);
+          alert(error?.message || 'Failed to unsave job. Please try again.');
+        }
+      } else {
+        // Save the job
+        try {
+          const response = await apiService.saveJob(jobId);
+          const savedJob = response.savedJob;
+          
+          // Add to local state
+          if (savedJob) {
+            setSavedJobs(prev => Array.isArray(prev) ? [...prev, savedJob] : [savedJob]);
+          } else {
+            // Fallback: create saved job object
+            setSavedJobs(prev => Array.isArray(prev) ? [...prev, {
+              _id: Date.now().toString(),
+              job,
+              savedDate: new Date().toISOString().split('T')[0]
+            }] : [{
+              _id: Date.now().toString(),
+              job,
+              savedDate: new Date().toISOString().split('T')[0]
+            }]);
+          }
+          
+          // Show notification
+          addNotification({
+            type: 'application_status_update',
+            title: 'Job Saved',
+            message: `You saved ${job.title || 'this job'}`,
+            timestamp: new Date().toISOString()
+          });
+        } catch (error: any) {
+          console.error('Error saving job:', error);
+          alert(error?.message || 'Failed to save job. Please try again.');
+        }
+      }
+    } catch (error: any) {
+      console.error('Error in handleSaveJob:', error);
+      alert(error?.message || 'An error occurred. Please try again.');
+    }
   };
 
   const quickActions = [
@@ -542,31 +617,238 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
           </div>
         </div>
       )}
+      {/* Profile Header Section - Enhanced with Animations */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="relative overflow-hidden bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-xl sm:rounded-2xl p-5 sm:p-7 shadow-xl border border-blue-100/50"
+      >
+        {/* Animated Background Elements */}
+        <div className="absolute inset-0 overflow-hidden">
+          <motion.div
+            animate={{
+              scale: [1, 1.2, 1],
+              opacity: [0.15, 0.25, 0.15],
+            }}
+            transition={{
+              duration: 8,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+            className="absolute -top-20 -right-20 w-64 h-64 bg-blue-300 rounded-full blur-3xl"
+          />
+          <motion.div
+            animate={{
+              scale: [1, 1.3, 1],
+              opacity: [0.1, 0.2, 0.1],
+            }}
+            transition={{
+              duration: 6,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: 1
+            }}
+            className="absolute -bottom-10 -left-10 w-48 h-48 bg-purple-300 rounded-full blur-3xl"
+          />
+          {/* Decorative Circles */}
+          <div className="absolute top-10 right-20 w-32 h-32 border-2 border-blue-200/30 rounded-full"></div>
+          <div className="absolute bottom-10 left-20 w-24 h-24 border-2 border-purple-200/30 rounded-full"></div>
+        </div>
+
+        {/* Content */}
+        <div className="relative z-10">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4 sm:gap-5 flex-1">
+              {/* Profile Picture with Animation */}
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                className="relative"
+              >
+                <motion.div
+                  animate={{ rotate: [0, 5, -5, 0] }}
+                  transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                  className="w-20 h-20 sm:w-24 sm:h-24 bg-white/80 backdrop-blur-md rounded-full flex items-center justify-center border-2 border-white/60 shadow-lg"
+                >
+                  {user?.profilePicture ? (
+                    <img 
+                      src={user.profilePicture} 
+                      alt={user?.name || 'User'} 
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  ) : (
+                    <User className="w-10 h-10 sm:w-12 sm:h-12 text-indigo-600" />
+                  )}
+                </motion.div>
+                {/* Animated Status Indicator */}
+                <motion.div
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                  className="absolute bottom-0 right-0 w-5 h-5 sm:w-6 sm:h-6 bg-green-400 rounded-full border-2 border-white shadow-lg"
+                >
+                  <div className="w-full h-full bg-green-400 rounded-full animate-ping opacity-75"></div>
+                </motion.div>
+              </motion.div>
+              
+              {/* User Info with Animation */}
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+                className="flex-1 min-w-0"
+              >
+                <h1 className="text-xl sm:text-3xl font-bold truncate mb-1 text-gray-800">
+                  Hi {user?.name || 'Student'}! 👋
+                </h1>
+                <p className="text-gray-600 text-sm sm:text-base truncate flex items-center gap-2">
+                  <span>{user?.email || 'Ready to find your next opportunity?'}</span>
+                </p>
+              </motion.div>
+            </div>
+            
+            {/* Action Buttons with Hover Effects */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 }}
+              className="flex items-center gap-2 ml-4"
+            >
+              <NotificationDropdown />
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => router.push('/')}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-white/80 hover:bg-white backdrop-blur-sm rounded-xl transition-all text-sm font-medium shadow-md text-gray-700 border border-gray-200/50"
+                title="Back to Home"
+              >
+                <Home className="w-4 h-4" />
+                <span className="hidden sm:inline">Home</span>
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => router.back()}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-white/80 hover:bg-white backdrop-blur-sm rounded-xl transition-all text-sm font-medium shadow-md text-gray-700 border border-gray-200/50"
+                title="Go Back"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span className="hidden sm:inline">Back</span>
+              </motion.button>
+            </motion.div>
+          </div>
+          
+          {/* Stats Cards - Enhanced Design */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6"
+          >
+            <motion.div
+              whileHover={{ y: -4, scale: 1.02 }}
+              className="bg-white/90 backdrop-blur-sm rounded-xl p-4 border border-white/60 shadow-lg hover:shadow-xl transition-all"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="p-2.5 bg-blue-100 rounded-lg">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-600 font-medium">Jobs Applied</p>
+                  <p className="text-2xl font-bold text-gray-900">{Array.isArray(appliedJobs) ? appliedJobs.length : 0}</p>
+                </div>
+              </div>
+              <p className="text-xs text-green-600 font-semibold">
+                +{Array.isArray(appliedJobs) ? appliedJobs.filter(job => new Date(job.appliedDate) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length : 0} this week
+              </p>
+            </motion.div>
+
+            <motion.div
+              whileHover={{ y: -4, scale: 1.02 }}
+              className="bg-white/90 backdrop-blur-sm rounded-xl p-4 border border-white/60 shadow-lg hover:shadow-xl transition-all"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="p-2.5 bg-purple-100 rounded-lg">
+                  <Bookmark className="w-5 h-5 text-purple-600" />
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-600 font-medium">Saved Jobs</p>
+                  <p className="text-2xl font-bold text-gray-900">{Array.isArray(savedJobs) ? savedJobs.length : 0}</p>
+                </div>
+              </div>
+              <p className="text-xs text-green-600 font-semibold">
+                +{Array.isArray(savedJobs) ? savedJobs.filter(job => new Date(job.savedDate) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length : 0} this week
+              </p>
+            </motion.div>
+
+            <motion.div
+              whileHover={{ y: -4, scale: 1.02 }}
+              className="bg-white/90 backdrop-blur-sm rounded-xl p-4 border border-white/60 shadow-lg hover:shadow-xl transition-all"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="p-2.5 bg-orange-100 rounded-lg">
+                  <Calendar className="w-5 h-5 text-orange-600" />
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-600 font-medium">Interviews</p>
+                  <p className="text-2xl font-bold text-gray-900">{interviews.filter(i => i.status === 'scheduled').length}</p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-600 font-semibold">
+                {interviews.length > 0 && interviews[0]?.date ? `Next: ${interviews[0].date}` : 'No upcoming'}
+              </p>
+            </motion.div>
+
+            <motion.div
+              whileHover={{ y: -4, scale: 1.02 }}
+              className="bg-white/90 backdrop-blur-sm rounded-xl p-4 border border-white/60 shadow-lg hover:shadow-xl transition-all"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="p-2.5 bg-green-100 rounded-lg">
+                  <TrendingUp className="w-5 h-5 text-green-600" />
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-600 font-medium">Available</p>
+                  <p className="text-2xl font-bold text-gray-900">{jobs.length}</p>
+                </div>
+              </div>
+              <p className="text-xs text-green-600 font-semibold">
+                {filteredJobs.length} match criteria
+              </p>
+            </motion.div>
+          </motion.div>
+          
+          {/* Mobile KYC Button */}
+          {!kycStatus.isCompleted && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.6 }}
+              className="mt-4 pt-4 border-t border-gray-200/50"
+            >
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleKycClick}
+                className="flex items-center gap-2 px-5 py-3 bg-orange-500 hover:bg-orange-600 rounded-xl transition-colors text-sm font-semibold shadow-lg text-white"
+              >
+                <Shield className="w-4 h-4" />
+                <span>Complete KYC</span>
+              </motion.button>
+            </motion.div>
+          )}
+        </div>
+      </motion.div>
+
       {/* Navigation Header - Mobile Optimized */}
       <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4">
         {/* Mobile Header */}
         <div className="flex flex-col space-y-3 sm:hidden">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Student Dashboard</h2>
-            <div className="flex items-center gap-2">
-              <NotificationDropdown />
-              <button 
-                onClick={handleLogout}
-                className="flex items-center gap-1 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
-              >
-                <LogOut className="w-4 h-4" />
-                <span className="hidden xs:inline">Logout</span>
-              </button>
-            </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link 
-              href="/home" 
-              className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-            >
-              <Home className="w-4 h-4" />
-              Home
-            </Link>
             {!kycStatus.isCompleted && (
               <button
                 onClick={handleKycClick}
@@ -576,779 +858,16 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                 Complete KYC
               </button>
             )}
-            <button 
-              onClick={() => window.history.back()} 
-              className="flex items-center gap-1 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back
-            </button>
           </div>
         </div>
       </div>
 
-      {/* Welcome Banner - Mobile Optimized */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-white"
-      >
-        <div className="flex items-center gap-3 sm:gap-4">
-          <div className="p-2 sm:p-3 bg-white/20 rounded-full">
-            <Briefcase className="w-6 h-6 sm:w-8 sm:h-8" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-lg sm:text-2xl font-bold truncate">Hi {user?.name || 'Student'}!</h1>
-            <p className="text-blue-100 text-sm sm:text-base">Ready to find your next opportunity? Here's your job search overview</p>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* KYC Status Banner Removed - No longer needed */}
-
-      {/* Stats Cards - Mobile Optimized */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatsCard
-          title="Jobs Applied"
-          value={Array.isArray(appliedJobs) ? appliedJobs.length : 0}
-          icon={FileText}
-          color="blue"
-          change={`+${Array.isArray(appliedJobs) ? appliedJobs.filter(job => new Date(job.appliedDate) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length : 0} this week`}
-          changeType="positive"
-        />
-        <StatsCard
-          title="Saved Jobs"
-          value={Array.isArray(savedJobs) ? savedJobs.length : 0}
-          icon={Bookmark}
-          color="purple"
-          change={`+${Array.isArray(savedJobs) ? savedJobs.filter(job => new Date(job.savedDate) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length : 0} this week`}
-          changeType="positive"
-        />
-        <StatsCard
-          title="Upcoming Interviews"
-          value={interviews.filter(i => i.status === 'scheduled').length}
-          icon={Calendar}
-          color="orange"
-          change={interviews.length > 0 && interviews[0]?.date ? `Next: ${interviews[0].date}` : 'No upcoming'}
-          changeType="neutral"
-        />
-        <StatsCard
-          title="Available Jobs"
-          value={jobs.length}
-          icon={TrendingUp}
-          color="green"
-          change={`${jobs.filter(job => job.highlighted === true).length} featured • ${filteredJobs.length} match criteria`}
-          changeType="positive"
-        />
-      </div>
-
-      {/* Highlighted Jobs Section - Mobile Optimized */}
-      {jobs.length > 0 ? (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.15 }}
-          className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl sm:rounded-2xl p-4 sm:p-6 border-2 border-yellow-300 shadow-lg"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-yellow-500 rounded-full">
-              <Star className="w-4 h-4 sm:w-5 sm:h-5 text-white fill-current" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
-                ⭐ Featured & Highlighted Jobs
-                <span className="px-2 py-1 bg-yellow-200 text-yellow-800 rounded-full text-xs font-semibold">
-                  HOT
-                </span>
-              </h2>
-              <p className="text-xs sm:text-sm text-gray-600">Premium opportunities with highlighted visibility</p>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            {filteredJobs
-              .filter(job => job.highlighted === true)
-              .slice(0, 6)
-              .map((job) => {
-              const isApplied = Array.isArray(appliedJobs) ? appliedJobs.some(aj => aj.job._id === job._id) : false;
-              const isSaved = Array.isArray(savedJobs) ? savedJobs.some(sj => sj.job._id === job._id) : false;
-              
-              return (
-                <motion.div
-                  key={job._id}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 border-2 border-yellow-300 hover:shadow-lg transition-all duration-300 relative overflow-hidden"
-                >
-                  {/* Highlighted Badge */}
-                  <div className="absolute top-0 right-0 bg-yellow-500 text-white px-2 py-1 text-xs font-bold rounded-bl-lg">
-                    ⭐ FEATURED
-                  </div>
-                  
-                  <div className="flex items-start justify-between mb-3 pt-4">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-gray-900 mb-1 text-sm sm:text-base truncate">{job.title}</h3>
-                      <p className="text-yellow-600 font-semibold text-xs sm:text-sm truncate">{job.company}</p>
-                    </div>
-                    <div className="flex items-center gap-1 ml-2">
-                      <button
-                        onClick={() => handleSaveJob(job._id)}
-                        className={`p-1 rounded-full transition-colors ${
-                          isSaved 
-                            ? 'bg-purple-100 text-purple-600' 
-                            : 'bg-gray-100 text-gray-400 hover:bg-purple-100 hover:text-purple-600'
-                        }`}
-                      >
-                        <Bookmark className={`w-3 h-3 sm:w-4 sm:h-4 ${isSaved ? 'fill-current' : ''}`} />
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-3 text-xs text-gray-600">
-                    <div className="flex items-center gap-1">
-                      <MapPin className="w-3 h-3" />
-                      <span className="truncate">{job.location}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <DollarSign className="w-3 h-3" />
-                      <span className="truncate font-semibold text-green-600">{formatSalaryToINR(job.salary)}</span>
-                    </div>
-                  </div>
-                  
-                  <p className="text-gray-700 text-xs sm:text-sm mb-3 line-clamp-2">{job.description}</p>
-                  
-                  <div className="flex flex-wrap gap-1 mb-3">
-                    {job.requirements?.slice(0, 2).map((req, index) => (
-                      <span key={index} className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs truncate font-medium">
-                        {req}
-                      </span>
-                    ))}
-                    {job.requirements && job.requirements.length > 2 && (
-                      <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">
-                        +{job.requirements.length - 2} more
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    {isApplied ? (
-                      <div className="flex items-center justify-center gap-1 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-xs font-semibold">
-                        <CheckCircle className="w-3 h-3" />
-                        <span>Applied</span>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => handleApplyJob(job._id)}
-                        className="flex-1 px-3 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors text-xs font-bold shadow-md"
-                      >
-                        ⚡ Apply Now
-                      </button>
-                    )}
-                    <Link 
-                      href={`/jobs/${job._id}`}
-                      className="px-3 py-2 border border-yellow-300 text-yellow-700 rounded-lg hover:bg-yellow-50 transition-colors text-xs text-center font-medium"
-                    >
-                      View Details
-                    </Link>
-                  </div>
-                </motion.div>
-              );
-            })}
-        </div>
-        
-          {filteredJobs.filter(job => job.highlighted === true).length === 0 && (
-            <div className="text-center py-6 sm:py-8">
-              <Star className="w-10 h-10 sm:w-12 sm:h-12 text-yellow-400 mx-auto mb-3 sm:mb-4" />
-              <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No highlighted jobs available</h3>
-              <p className="text-gray-600 text-sm sm:text-base">Check back later for featured opportunities!</p>
-            </div>
-          )}
-        </motion.div>
-      ) : null}
-
-      {/* Regular Jobs Section - Mobile Optimized */}
-      {filteredJobs.filter(job => job.highlighted !== true).length > 0 ? (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-blue-200"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-blue-600 rounded-full">
-              <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900">All Available Jobs</h2>
-              <p className="text-xs sm:text-sm text-gray-600">Browse through all job opportunities</p>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            {filteredJobs
-              .filter(job => job.highlighted !== true)
-              .slice(0, 6)
-              .map((job) => {
-              const isApplied = Array.isArray(appliedJobs) ? appliedJobs.some(aj => aj.job._id === job._id) : false;
-              const isSaved = Array.isArray(savedJobs) ? savedJobs.some(sj => sj.job._id === job._id) : false;
-              
-              return (
-                <motion.div
-                  key={job._id}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 border border-blue-200 hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 mb-1 text-sm sm:text-base truncate">{job.title}</h3>
-                      <p className="text-blue-600 font-medium text-xs sm:text-sm truncate">{job.company}</p>
-                    </div>
-                    <div className="flex items-center gap-1 ml-2">
-                      <button
-                        onClick={() => handleSaveJob(job._id)}
-                        className={`p-1 rounded-full transition-colors ${
-                          isSaved 
-                            ? 'bg-purple-100 text-purple-600' 
-                            : 'bg-gray-100 text-gray-400 hover:bg-purple-100 hover:text-purple-600'
-                        }`}
-                      >
-                        <Bookmark className={`w-3 h-3 sm:w-4 sm:h-4 ${isSaved ? 'fill-current' : ''}`} />
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-3 text-xs text-gray-600">
-                    <div className="flex items-center gap-1">
-                      <MapPin className="w-3 h-3" />
-                      <span className="truncate">{job.location}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <DollarSign className="w-3 h-3" />
-                      <span className="truncate">{formatSalaryToINR(job.salary)}</span>
-                    </div>
-                  </div>
-                  
-                  <p className="text-gray-700 text-xs sm:text-sm mb-3 line-clamp-2">{job.description}</p>
-                  
-                  <div className="flex flex-wrap gap-1 mb-3">
-                    {job.requirements?.slice(0, 2).map((req, index) => (
-                      <span key={index} className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs truncate">
-                        {req}
-                      </span>
-                    ))}
-                    {job.requirements && job.requirements.length > 2 && (
-                      <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">
-                        +{job.requirements.length - 2} more
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    {isApplied ? (
-                      <div className="flex items-center justify-center gap-1 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-xs">
-                        <CheckCircle className="w-3 h-3" />
-                        <span>Applied</span>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => handleApplyJob(job._id)}
-                        className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium"
-                      >
-                        Apply Now
-                      </button>
-                    )}
-                    <Link 
-                      href={`/jobs/${job._id}`}
-                      className="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-xs text-center"
-                    >
-                      Details
-                    </Link>
-                  </div>
-                </motion.div>
-              );
-            })}
-        </div>
-        
-          {filteredJobs.filter(job => job.highlighted !== true).length > 6 && (
-            <div className="text-center mt-4">
-              <Link 
-                href="/jobs"
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-              >
-                <Eye className="w-4 h-4" />
-                View All Jobs
-              </Link>
-            </div>
-          )}
-        </motion.div>
-      ) : null}
-
-      {/* Job Search Section - Mobile Optimized */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-        className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6"
-      >
-        <div className="flex items-center gap-2 mb-4">
-          <Search className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900">Find Your Perfect Job</h2>
-        </div>
-        
-        {/* Search Bar - Mobile Optimized */}
-        <div className="flex flex-col gap-3 sm:gap-4 mb-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5" />
-            <input
-              type="text"
-              placeholder="Search jobs, companies, or keywords..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 sm:pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
-            />
-          </div>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm sm:text-base"
-          >
-            <Filter className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span>Filters</span>
-            {showFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </button>
-        </div>
-
-        {/* Filters - Mobile Optimized */}
-        {showFilters && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 p-3 sm:p-4 bg-gray-50 rounded-lg"
-          >
-            <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Job Type</label>
-              <select
-                value={selectedType}
-                onChange={(e) => setSelectedType(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-              >
-                {jobTypes.map(type => (
-                  <option key={type} value={type === 'All' ? '' : type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Location</label>
-              <select
-                value={selectedLocation}
-                onChange={(e) => setSelectedLocation(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-              >
-                {locations.map(location => (
-                  <option key={location} value={location === 'All' ? '' : location}>
-                    {location}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Job Listings - Mobile Optimized */}
-        <div className="space-y-3 sm:space-y-4">
-
-          {!kycStatus.isCompleted ? (
-            <div className="text-center py-8 sm:py-12">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Shield className="w-8 h-8 sm:w-10 sm:h-10 text-orange-600" />
-              </div>
-              {kycStatus.status === 'not_submitted' && (
-                <>
-                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Complete KYC to get your first job</h3>
-                  <p className="text-gray-600 text-sm sm:text-base mb-6 max-w-md mx-auto">
-                    Please complete your KYC verification to browse and apply for jobs.
-                  </p>
-                  <button
-                    onClick={handleKycClick}
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium text-sm sm:text-base"
-                  >
-                    <Shield className="w-5 h-5" />
-                    Complete KYC Now
-                  </button>
-                </>
-              )}
-              {kycStatus.status === 'pending' && (
-                <>
-                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Your KYC is Pending Approval</h3>
-                  <p className="text-gray-600 text-sm sm:text-base mb-6 max-w-md mx-auto">
-                    Your KYC is pending approval. Please wait for admin verification.
-                  </p>
-                  <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
-                    <div className="flex items-center gap-2 justify-center text-blue-700">
-                      <Clock className="w-5 h-5" />
-                      <span className="text-sm font-medium">Your KYC is under review. Jobs will appear once approved.</span>
-                    </div>
-                  </div>
-                </>
-              )}
-              {kycStatus.status === 'rejected' && (
-                <>
-                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Your KYC was Rejected</h3>
-                  <p className="text-gray-600 text-sm sm:text-base mb-6 max-w-md mx-auto">
-                    Your KYC was rejected. Please submit your KYC again with correct details.
-                  </p>
-                  <Link 
-                    href="/kyc-profile"
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium text-sm sm:text-base"
-                  >
-                    <Shield className="w-5 h-5" />
-                    Submit KYC Again
-                  </Link>
-                </>
-              )}
-              {kycStatus.status === 'suspended' && (
-                <>
-                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Your KYC is Suspended</h3>
-                  <p className="text-gray-600 text-sm sm:text-base mb-6 max-w-md mx-auto">
-                    Your KYC has been suspended. Contact admin for support.
-                  </p>
-                  <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 max-w-md mx-auto">
-                    <div className="flex items-center gap-2 justify-center text-red-700">
-                      <AlertCircle className="w-5 h-5" />
-                      <span className="text-sm font-medium">Contact admin to resolve this issue.</span>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          ) : filteredJobs.length === 0 ? (
-
-            <div className="text-center py-6 sm:py-8">
-              <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-3 sm:mb-4" />
-              <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No jobs found</h3>
-              <p className="text-gray-600 text-sm sm:text-base">Try adjusting your search criteria or filters</p>
-            </div>
-          ) : (
-            filteredJobs.map((job) => {
-              const isApplied = Array.isArray(appliedJobs)
-                ? appliedJobs.some(aj => getJobIdFromRef(aj?.job) === job._id)
-                : false;
-
-              const isSaved = Array.isArray(savedJobs)
-                ? savedJobs.some(sj => getJobIdFromRef(sj?.job) === job._id)
-                : false;
-              
-              const isHighlighted = job.highlighted === true;
-              
-              return (
-                <motion.div
-                  key={job._id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`border rounded-lg sm:rounded-xl p-4 sm:p-6 hover:shadow-md transition-shadow relative ${
-                    isHighlighted 
-                      ? 'border-2 border-yellow-400 bg-gradient-to-r from-yellow-50 to-orange-50 shadow-lg' 
-                      : 'border-gray-200'
-                  }`}
-                >
-                  {/* Highlighted Badge */}
-                  {isHighlighted && (
-                    <div className="absolute top-0 right-0 bg-yellow-500 text-white px-3 py-1 text-xs font-bold rounded-bl-lg">
-                      ⭐ FEATURED
-                    </div>
-                  )}
-                  
-                  <div className="flex flex-col gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1 min-w-0">
-                          <h3 className={`text-lg sm:text-xl font-semibold mb-1 truncate ${
-                            isHighlighted ? 'text-gray-900' : 'text-gray-900'
-                          }`}>
-                            {job.title}
-                            {isHighlighted && <span className="ml-2 text-yellow-600">🔥</span>}
-                          </h3>
-                          <p className={`text-base sm:text-lg font-medium truncate ${
-                            isHighlighted ? 'text-yellow-600' : 'text-blue-600'
-                          }`}>
-                            {job.company}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 ml-3">
-                          <button
-                            onClick={() => handleSaveJob(job._id)}
-                            className={`p-2 rounded-full transition-colors ${
-                              isSaved 
-                                ? 'bg-purple-100 text-purple-600' 
-                                : 'bg-gray-100 text-gray-400 hover:bg-purple-100 hover:text-purple-600'
-                            }`}
-                          >
-                            <Bookmark className={`w-4 h-4 sm:w-5 sm:h-5 ${isSaved ? 'fill-current' : ''}`} />
-                          </button>
-                        </div>
-                      </div>
-                      
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-4 text-sm text-gray-600">
-                        <div className="flex items-center gap-1">
-                          <MapPin className="w-4 h-4" />
-                          <span className="truncate">{job.location}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <DollarSign className="w-4 h-4" />
-                          <span className={`truncate ${isHighlighted ? 'font-semibold text-green-600' : ''}`}>
-                            {formatSalaryToINR(job.salary)}
-                          </span>
-                        </div>
-                        <span className={`px-2 py-1 rounded-full text-xs w-fit ${
-                          isHighlighted 
-                            ? 'bg-yellow-100 text-yellow-800 font-semibold' 
-                            : 'bg-blue-100 text-blue-600'
-                        }`}>
-                          {job.type}
-                        </span>
-                      </div>
-                      
-                      <p className="text-gray-700 mb-4 line-clamp-2 text-sm sm:text-base">{job.description}</p>
-                      
-                      <div className="flex flex-wrap gap-2 mb-4">
-                        {job.requirements?.slice(0, 3).map((req, index) => (
-                          <span key={index} className={`px-3 py-1 rounded-full text-xs sm:text-sm truncate ${
-                            isHighlighted 
-                              ? 'bg-yellow-100 text-yellow-800 font-medium' 
-                              : 'bg-gray-100 text-gray-700'
-                          }`}>
-                            {req}
-                          </span>
-                        ))}
-                        {job.requirements && job.requirements.length > 3 && (
-                          <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs sm:text-sm">
-                            +{job.requirements.length - 3} more
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-col gap-3">
-                      <div className="text-xs sm:text-sm text-gray-500">
-                        Posted {new Date(job.createdAt).toLocaleDateString()}
-                        {isHighlighted && <span className="ml-2 text-yellow-600 font-semibold">• Featured Job</span>}
-                      </div>
-                      
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        {isApplied ? (
-                          <div className="flex items-center justify-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg">
-                            <CheckCircle className="w-4 h-4" />
-                            <span className="text-sm font-medium">Applied</span>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => handleApplyJob(job._id)}
-                            className={`flex items-center justify-center gap-2 px-4 py-2 text-white rounded-lg transition-colors font-medium text-sm sm:text-base ${
-                              isHighlighted 
-                                ? 'bg-yellow-500 hover:bg-yellow-600 shadow-md' 
-                                : 'bg-blue-600 hover:bg-blue-700'
-                            }`}
-                          >
-                            <Plus className="w-4 h-4" />
-                            {isHighlighted ? '⚡ Apply Now' : 'Apply Now'}
-                          </button>
-                        )}
-                        
-                        <Link 
-                          href={`/jobs/${job._id}`}
-                          className={`flex items-center justify-center gap-2 px-4 py-2 border rounded-lg transition-colors text-sm sm:text-base ${
-                            isHighlighted 
-                              ? 'border-yellow-300 text-yellow-700 hover:bg-yellow-50' 
-                              : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                          }`}
-                        >
-                          <Eye className="w-4 h-4" />
-                          View Details
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })
-          )}
-        </div>
-      </motion.div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        {/* Recent Approved Applications - Mobile Optimized */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Recent Approved Applications</h2>
-            </div>
-            {Array.isArray(recentApprovedApplications) && recentApprovedApplications.length > 0 && (
-              <Link 
-                href="/student/approved-applications"
-                className="text-sm text-green-600 hover:text-green-700 font-medium"
-              >
-                View All
-              </Link>
-            )}
-          </div>
-          <div className="space-y-3">
-            {Array.isArray(recentApprovedApplications) && recentApprovedApplications.length > 0 ? recentApprovedApplications.slice(0, 3).map((application) => (
-              <div key={application._id} className="p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-gray-900 text-sm sm:text-base truncate">{application.jobTitle}</h3>
-                    <p className="text-xs sm:text-sm text-gray-600 truncate">{application.companyName} • {application.location}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">
-                        ✓ Approved
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {new Date(application.approvedDate).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => router.push(`/jobs/${application.jobId}`)}
-                    className="text-green-600 hover:text-green-700 flex-shrink-0"
-                  >
-                    <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </button>
-                </div>
-              </div>
-            )) : (
-              <div className="text-center py-4 text-gray-500 text-sm sm:text-base">
-                No approved applications yet. Keep applying!
-              </div>
-            )}
-          </div>
-        </motion.div>
-
-        {/* Saved Jobs - Mobile Optimized */}
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <Bookmark className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900">Saved Jobs</h2>
-          </div>
-          <div className="space-y-3">
-            {Array.isArray(savedJobs) ? savedJobs.slice(0, 3).map((savedJob) => (
-              <div key={savedJob._id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-gray-900 text-sm sm:text-base truncate">{savedJob.job?.title || 'Job Title Not Available'}</h3>
-                    <p className="text-xs sm:text-sm text-gray-600 truncate">{savedJob.job?.company || 'Company Not Available'}</p>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mt-2">
-                      <span className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded-full w-fit">
-                        {formatSalaryToINR(savedJob.job?.salary)}
-                      </span>
-                      <span className="text-xs text-gray-500 truncate">{savedJob.job?.location || 'Location Not Available'}</span>
-                    </div>
-                  </div>
-                  <button className="text-purple-600 hover:text-purple-700 flex-shrink-0">
-                    <Star className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
-                  </button>
-                </div>
-              </div>
-            )) : null}
-            {Array.isArray(savedJobs) && savedJobs.length === 0 && (
-              <div className="text-center py-4 text-gray-500 text-sm sm:text-base">
-                No saved jobs yet. Save interesting positions for later!
-              </div>
-            )}
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Upcoming Interviews - Mobile Optimized */}
-      {interviews.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
-          className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600" />
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900">Upcoming Interviews</h2>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-            {interviews.map((interview) => (
-              <div key={interview._id} className="p-3 sm:p-4 bg-orange-50 rounded-lg sm:rounded-xl border border-orange-200">
-                <div className="flex items-center gap-3 mb-3">
-                  <Building className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600" />
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-medium text-gray-900 text-sm sm:text-base truncate">{interview.job.company}</h3>
-                    <p className="text-xs sm:text-sm text-gray-600 truncate">{interview.job.title}</p>
-                  </div>
-                </div>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />
-                    <span className="text-xs sm:text-sm text-gray-600">{interview.date}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />
-                    <span className="text-xs sm:text-sm text-gray-600">{interview.time}</span>
-                  </div>
-                </div>
-                <div>
-                  <span className="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded-full">
-                    {interview.type} Interview
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Notifications - Mobile Optimized */}
-      {notifications.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.5 }}
-          className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900">Recent Notifications</h2>
-          </div>
-          <div className="space-y-3">
-            {notifications.map((notification) => (
-              <NotificationCard
-                key={notification._id}
-                title={notification.title}
-                message={notification.message}
-                type={notification.type}
-                timestamp={notification.timestamp}
-                isRead={notification.isRead}
-              />
-            ))}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Approved Applications with Contact Details - Mobile Optimized */}
+      {/* Approved Applications with Contact Details - First Section */}
       {Array.isArray(approvedApplicationsWithContact) && approvedApplicationsWithContact.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
+          transition={{ duration: 0.5, delay: 0 }}
           className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl sm:rounded-2xl p-4 sm:p-6 border-2 border-green-300 shadow-lg"
         >
           <div className="flex items-center justify-between mb-4">
@@ -1429,6 +948,474 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                   </Link>
                 </div>
               </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Job Search Section - Simple Design - Second Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6"
+      >
+        <div className="flex items-center gap-2 mb-4">
+          <Search className="w-5 h-5 text-blue-600" />
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Find Your Perfect Job</h2>
+        </div>
+        
+        {/* Search Bar */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search jobs, companies, keywords..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            />
+          </div>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+          >
+            <Filter className="w-4 h-4" />
+            <span>Filters</span>
+            {showFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {/* Filters */}
+        {showFilters && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 p-4 bg-gray-50 rounded-lg"
+          >
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Job Type</label>
+              <select
+                value={selectedType}
+                onChange={(e) => setSelectedType(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white"
+              >
+                {jobTypes.map(type => (
+                  <option key={type} value={type === 'All' ? '' : type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+              <select
+                value={selectedLocation}
+                onChange={(e) => setSelectedLocation(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white"
+              >
+                {locations.map(location => (
+                  <option key={location} value={location === 'All' ? '' : location}>
+                    {location}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </motion.div>
+        )}
+      </motion.div>
+
+      {/* Job Listings Section - Redesigned */}
+      <div className="mt-6 space-y-4 sm:space-y-6">
+        {!kycStatus.isCompleted ? (
+            <div className="text-center py-8 sm:py-12">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Shield className="w-8 h-8 sm:w-10 sm:h-10 text-orange-600" />
+              </div>
+              {kycStatus.status === 'not_submitted' && (
+                <>
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Complete KYC to get your first job</h3>
+                  <p className="text-gray-600 text-sm sm:text-base mb-6 max-w-md mx-auto">
+                    Please complete your KYC verification to browse and apply for jobs.
+                  </p>
+                  <button
+                    onClick={handleKycClick}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium text-sm sm:text-base"
+                  >
+                    <Shield className="w-5 h-5" />
+                    Complete KYC Now
+                  </button>
+                </>
+              )}
+              {kycStatus.status === 'pending' && (
+                <>
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Your KYC is Pending Approval</h3>
+                  <p className="text-gray-600 text-sm sm:text-base mb-6 max-w-md mx-auto">
+                    Your KYC is pending approval. Please wait for admin verification.
+                  </p>
+                  <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
+                    <div className="flex items-center gap-2 justify-center text-blue-700">
+                      <Clock className="w-5 h-5" />
+                      <span className="text-sm font-medium">Your KYC is under review. Jobs will appear once approved.</span>
+                    </div>
+                  </div>
+                </>
+              )}
+              {kycStatus.status === 'rejected' && (
+                <>
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Your KYC was Rejected</h3>
+                  <p className="text-gray-600 text-sm sm:text-base mb-6 max-w-md mx-auto">
+                    Your KYC was rejected. Please submit your KYC again with correct details.
+                  </p>
+                  <Link 
+                    href="/kyc-profile"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium text-sm sm:text-base"
+                  >
+                    <Shield className="w-5 h-5" />
+                    Submit KYC Again
+                  </Link>
+                </>
+              )}
+              {kycStatus.status === 'suspended' && (
+                <>
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Your KYC is Suspended</h3>
+                  <p className="text-gray-600 text-sm sm:text-base mb-6 max-w-md mx-auto">
+                    Your KYC has been suspended. Contact admin for support.
+                  </p>
+                  <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 max-w-md mx-auto">
+                    <div className="flex items-center gap-2 justify-center text-red-700">
+                      <AlertCircle className="w-5 h-5" />
+                      <span className="text-sm font-medium">Contact admin to resolve this issue.</span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : filteredJobs.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+              <Briefcase className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No jobs found</h3>
+              <p className="text-gray-600 text-sm">Try adjusting your search criteria or filters</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredJobs.map((job, index) => {
+                const isApplied = Array.isArray(appliedJobs)
+                  ? appliedJobs.some(aj => getJobIdFromRef(aj?.job) === job._id)
+                  : false;
+
+                const isSaved = Array.isArray(savedJobs)
+                  ? savedJobs.some(sj => getJobIdFromRef(sj?.job) === job._id)
+                  : false;
+                
+                const isHighlighted = job.highlighted === true;
+                
+                return (
+                  <motion.div
+                    key={job._id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className={`bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow ${
+                      isHighlighted ? 'border-yellow-400' : 'border-gray-200'
+                    }`}
+                  >
+                    <div className="p-4">
+                      {/* Header */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="text-sm font-semibold text-gray-900 truncate">{job.title}</h3>
+                            {isHighlighted && (
+                              <span className="px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-medium rounded">
+                                Featured
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-blue-600 truncate">{job.company}</p>
+                        </div>
+                        <button
+                          onClick={() => handleSaveJob(job._id)}
+                          className={`p-1.5 rounded transition-colors ${
+                            isSaved 
+                              ? 'text-purple-600' 
+                              : 'text-gray-400 hover:text-purple-600'
+                          }`}
+                        >
+                          <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
+                        </button>
+                      </div>
+                      
+                      {/* Info Tags */}
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        <div className="flex items-center gap-1 text-xs text-gray-600">
+                          <MapPin className="w-3 h-3" />
+                          <span className="truncate">{job.location}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-gray-600">
+                          <DollarSign className="w-3 h-3" />
+                          <span className="font-medium text-green-600">{formatSalaryToINR(job.salary)}</span>
+                        </div>
+                        <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs">
+                          {job.type}
+                        </span>
+                      </div>
+                      
+                      {/* Description */}
+                      <p className="text-xs text-gray-600 mb-3 line-clamp-2">{job.description}</p>
+                      
+                      {/* Requirements */}
+                      {job.requirements && job.requirements.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-3">
+                          {job.requirements.slice(0, 2).map((req, index) => (
+                            <span 
+                              key={index} 
+                              className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs"
+                            >
+                              {req}
+                            </span>
+                          ))}
+                          {job.requirements.length > 2 && (
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                              +{job.requirements.length - 2}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Actions */}
+                      <div className="flex flex-col gap-2 pt-3 border-t border-gray-100">
+                        {isApplied ? (
+                          <div className="flex items-center justify-center gap-1 px-3 py-2 bg-green-100 text-green-700 rounded text-xs font-medium">
+                            <CheckCircle className="w-3 h-3" />
+                            <span>Applied</span>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleApplyJob(job._id)}
+                            className="w-full px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-xs font-medium"
+                          >
+                            Apply Now
+                          </button>
+                        )}
+                        
+                        <Link 
+                          href={`/jobs/${job._id}`}
+                          className="w-full px-3 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors text-xs text-center"
+                        >
+                          View Details
+                        </Link>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+      </div>
+
+      {/* Saved Jobs and All Available Jobs - Side by Side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        {/* Saved Jobs Card */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Bookmark className="w-5 h-5 text-purple-600" />
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Saved Jobs</h2>
+            </div>
+            {Array.isArray(savedJobs) && savedJobs.length > 0 && (
+              <Link 
+                href="/saved-jobs"
+                className="text-sm text-purple-600 hover:text-purple-700 font-medium"
+              >
+                View All
+              </Link>
+            )}
+          </div>
+          <div className="space-y-3">
+            {Array.isArray(savedJobs) && savedJobs.length > 0 ? savedJobs.slice(0, 4).map((savedJob) => (
+              <div key={savedJob._id} className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium text-gray-900 text-sm truncate">{savedJob.job?.title || 'Job Title Not Available'}</h3>
+                    <p className="text-xs text-gray-600 truncate mt-1">{savedJob.job?.company || 'Company Not Available'}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-xs text-gray-500">{savedJob.job?.location || 'Location Not Available'}</span>
+                      {savedJob.job?.salary && (
+                        <span className="text-xs font-medium text-green-600">{formatSalaryToINR(savedJob.job.salary)}</span>
+                      )}
+                    </div>
+                  </div>
+                  <Link 
+                    href={`/jobs/${savedJob.job?._id || savedJob.job}`}
+                    className="text-purple-600 hover:text-purple-700 flex-shrink-0"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Link>
+                </div>
+              </div>
+            )) : (
+              <div className="text-center py-8 text-gray-500">
+                <Bookmark className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm">No saved jobs yet</p>
+                <p className="text-xs mt-1">Save interesting positions for later!</p>
+              </div>
+            )}
+          </div>
+        </motion.div>
+
+        {/* All Available Jobs Card */}
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Briefcase className="w-5 h-5 text-blue-600" />
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900">All Available Jobs</h2>
+            </div>
+            {filteredJobs.filter(job => job.highlighted !== true).length > 0 && (
+              <Link 
+                href="/jobs"
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                View All
+              </Link>
+            )}
+          </div>
+          <div className="space-y-3">
+            {filteredJobs.filter(job => job.highlighted !== true).length > 0 ? filteredJobs
+              .filter(job => job.highlighted !== true)
+              .slice(0, 4)
+              .map((job) => {
+                const isApplied = Array.isArray(appliedJobs) ? appliedJobs.some(aj => getJobIdFromRef(aj?.job) === job._id) : false;
+                const isSaved = Array.isArray(savedJobs) ? savedJobs.some(sj => getJobIdFromRef(sj?.job) === job._id) : false;
+                
+                return (
+                  <div key={job._id} className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-medium text-gray-900 text-sm truncate">{job.title}</h3>
+                          {isApplied && (
+                            <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs rounded">Applied</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-600 truncate mb-2">{job.company}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs text-gray-500">{job.location}</span>
+                          {job.salary && (
+                            <span className="text-xs font-medium text-green-600">{formatSalaryToINR(job.salary)}</span>
+                          )}
+                          <span className="text-xs text-gray-500">{job.type}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => handleSaveJob(job._id)}
+                          className={`p-1 rounded transition-colors ${
+                            isSaved 
+                              ? 'text-purple-600' 
+                              : 'text-gray-400 hover:text-purple-600'
+                          }`}
+                        >
+                          <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
+                        </button>
+                        <Link 
+                          href={`/jobs/${job._id}`}
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }) : (
+                <div className="text-center py-8 text-gray-500">
+                  <Briefcase className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm">No jobs available</p>
+                  <p className="text-xs mt-1">Check back later for new opportunities!</p>
+                </div>
+              )}
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Upcoming Interviews - Mobile Optimized */}
+      {interviews.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+          className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600" />
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900">Upcoming Interviews</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            {interviews.map((interview) => (
+              <div key={interview._id} className="p-3 sm:p-4 bg-orange-50 rounded-lg sm:rounded-xl border border-orange-200">
+                <div className="flex items-center gap-3 mb-3">
+                  <Building className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600" />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-medium text-gray-900 text-sm sm:text-base truncate">{interview.job.company}</h3>
+                    <p className="text-xs sm:text-sm text-gray-600 truncate">{interview.job.title}</p>
+                  </div>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />
+                    <span className="text-xs sm:text-sm text-gray-600">{interview.date}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />
+                    <span className="text-xs sm:text-sm text-gray-600">{interview.time}</span>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded-full">
+                    {interview.type} Interview
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Notifications - Mobile Optimized */}
+      {notifications.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.5 }}
+          className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900">Recent Notifications</h2>
+          </div>
+          <div className="space-y-3">
+            {notifications.map((notification) => (
+              <NotificationCard
+                key={notification._id}
+                title={notification.title}
+                message={notification.message}
+                type={notification.type}
+                timestamp={notification.timestamp}
+                isRead={notification.isRead}
+              />
             ))}
           </div>
         </motion.div>

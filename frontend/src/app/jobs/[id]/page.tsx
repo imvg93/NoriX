@@ -134,7 +134,7 @@ export default function JobDetailPage() {
 
   const handleApply = async () => {
     if (!user || user.userType !== 'student') {
-      router.push('/login');
+      alert('You need to be logged in as a student to apply for jobs.');
       return;
     }
 

@@ -6,62 +6,45 @@ import { useRouter } from 'next/navigation';
 import { Users, Shield, ChevronDown, LayoutDashboard, User, Settings } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
-
-interface JobData {
-  _id: string;
-  jobTitle: string;
-  companyName: string;
-  location: string;
-  status: string;
-  approvalStatus: string;
-  applicationsCount: number;
-  createdAt: string;
-}
-
-interface ApplicationData {
-  _id: string;
-  jobId: {
-    _id: string;
-    jobTitle: string;
-    companyName: string;
-    location: string;
-  };
-  studentId: {
-    _id: string;
-    name: string;
-    email: string;
-    skills: string[];
-  };
-  status: string;
-  appliedAt: string;
-  coverLetter?: string;
-  expectedPay?: number;
-}
+import {
+  calculateEmployerDashboardStats,
+  EmployerDashboardStats,
+  normalizeEmployerApplication,
+  normalizeEmployerJob,
+} from '@/utils/employerDataUtils';
 
 export default function EmployerDashboard() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('overview');
-  const { user } = useAuth();
-  const [kycStatus, setKycStatus] = useState<'not-submitted' | 'pending' | 'approved' | 'rejected' | null>(null);
-  const [submittingKyc, setSubmittingKyc] = useState(false);
-  const [kycForm, setKycForm] = useState<{ companyName: string; GSTNumber: string; PAN: string }>({
-    companyName: '',
-    GSTNumber: '',
-    PAN: ''
-  });
-  const [showKycModal, setShowKycModal] = useState(false);
+  const { user, updateUser } = useAuth();
+  const [kycStatus, setKycStatus] = useState<'not-submitted' | 'pending' | 'approved' | 'rejected' | 'suspended' | null>(null);
+  const [showKycPrompt, setShowKycPrompt] = useState(false);
+  const [kycPromptMessage, setKycPromptMessage] = useState('');
+  const [kycRejectionReason, setKycRejectionReason] = useState<string | null>(null);
   
   // Real data states
   const [loading, setLoading] = useState(true);
   const [jobs, setJobs] = useState<any[]>([]);
   const [applications, setApplications] = useState<any[]>([]);
-  const [stats, setStats] = useState({
-    totalJobs: 0,
-    activeJobs: 0,
-    totalApplications: 0,
-    pendingApplications: 0,
-    approvedJobs: 0
-  });
+  const [stats, setStats] = useState<EmployerDashboardStats>(() => calculateEmployerDashboardStats([], []));
+
+const normalizeStatus = (status?: string | null): 'not-submitted' | 'pending' | 'approved' | 'rejected' | 'suspended' => {
+  if (!status) return 'not-submitted';
+  const normalized = status.replace(/_/g, '-').toLowerCase();
+  if (normalized === 'approved' || normalized === 'pending' || normalized === 'rejected' || normalized === 'not-submitted' || normalized === 'suspended') {
+    return normalized as 'not-submitted' | 'pending' | 'approved' | 'rejected' | 'suspended';
+  }
+  return 'not-submitted';
+};
+
+  const handleOpenKycPage = () => {
+    setShowKycPrompt(false);
+    router.push('/employer/kyc');
+  };
+
+  const handleDismissKycPrompt = () => {
+    setShowKycPrompt(false);
+  };
 
   useEffect(() => {
     const init = async () => {
@@ -70,29 +53,59 @@ export default function EmployerDashboard() {
       try {
         setLoading(true);
 
-        // Ensure company name prefill
-        setKycForm(prev => ({ ...prev, companyName: (user as any).companyName || '' }));
-
         const employerId = user._id as string;
 
         // 1) Fetch KYC status
         try {
           const res = await apiService.getEmployerKYCStatus(employerId);
-          setKycStatus((res?.status as 'not-submitted' | 'pending' | 'approved' | 'rejected' | null) || 'not-submitted');
+          const normalized = normalizeStatus(res?.status || res?.user?.kycStatus);
+          setKycStatus(normalized);
+          setKycRejectionReason(res?.kyc?.rejectionReason || null);
+          if (user?.kycStatus !== normalized) {
+            updateUser({ kycStatus: normalized as any });
+          }
+
+          if (normalized === 'approved') {
+            setShowKycPrompt(false);
+          } else if (normalized === 'pending') {
+            setKycPromptMessage('Your KYC is pending approval. You will be notified once it is reviewed.');
+            setShowKycPrompt(true);
+          } else if (normalized === 'suspended') {
+            setKycPromptMessage('Your KYC has been suspended. Please contact support for assistance.');
+            setShowKycPrompt(true);
+          } else if (normalized === 'rejected') {
+            const rejectionMessage = res?.kyc?.rejectionReason
+              ? `Reason: ${res.kyc.rejectionReason}`
+              : 'Please review your details and resubmit the correct documents.';
+            setKycPromptMessage(`Your KYC was rejected. ${rejectionMessage}`);
+            setShowKycPrompt(true);
+          } else {
+            setKycPromptMessage('Please complete your KYC to continue.');
+            setShowKycPrompt(true);
+          }
         } catch (e) {
           console.error('❌ Error loading KYC status:', e);
-          setKycStatus('not-submitted');
+          const fallbackStatus: 'not-submitted' = 'not-submitted';
+          setKycStatus(fallbackStatus);
+          if (user?.kycStatus !== fallbackStatus) {
+            updateUser({ kycStatus: fallbackStatus as any });
+          }
+          setKycPromptMessage('Please complete your KYC to continue.');
+          setShowKycPrompt(true);
         }
 
         // 2) Fetch employer jobs with correct API call
-        let jobsData: any[] = [];
+        let normalizedJobs: any[] = [];
         try {
           console.log('🔍 Fetching jobs for employerId:', employerId);
           const jobsResponse = await apiService.getEmployerDashboardJobs(employerId, 1, 1000);
-          jobsData = jobsResponse?.jobs || [];
-          setJobs(jobsData);
-          console.log('📊 Fetched jobs:', jobsData.length, 'jobs');
-          console.log('📊 Jobs data:', jobsData);
+        const jobsRaw = jobsResponse?.jobs || [];
+        normalizedJobs = jobsRaw
+          .map((job: any) => normalizeEmployerJob(job))
+          .filter((job: any) => !!job);
+          setJobs(normalizedJobs);
+          console.log('📊 Fetched jobs:', normalizedJobs.length, 'jobs');
+          console.log('📊 Jobs data:', normalizedJobs);
         } catch (e) {
           console.error('❌ Error loading jobs:', e);
           console.error('❌ Error details:', e);
@@ -100,49 +113,28 @@ export default function EmployerDashboard() {
         }
 
         // 3) Fetch employer applications (keep existing logic)
-        let applicationsData: any[] = [];
+        let normalizedApplications: any[] = [];
         try {
           console.log('🔍 Fetching applications for employerId:', employerId);
           const applicationsResponse = await apiService.getEmployerApplicationsForEmployer(employerId, 1, 1000);
-          applicationsData = applicationsResponse?.applications || [];
-          setApplications(applicationsData);
-          console.log('📊 Fetched applications:', applicationsData.length, 'applications');
-          console.log('📊 Applications data:', applicationsData);
+          const applicationsRaw = applicationsResponse?.applications || [];
+          normalizedApplications = applicationsRaw
+            .map((app: any) => normalizeEmployerApplication(app))
+            .filter((app: any) => !!app);
+          setApplications(normalizedApplications);
+          console.log('📊 Fetched applications:', normalizedApplications.length, 'applications');
+          console.log('📊 Applications data:', normalizedApplications);
         } catch (e) {
           console.error('❌ Error loading applications:', e);
           console.error('❌ Error details:', e);
           // Don't crash the app, continue with empty applications array
         }
 
-        // 4) Calculate stats based on fetched jobs
-        const totalJobs = jobsData.length;
-        const activeJobs = jobsData.filter((job: any) => (job.status || '').toLowerCase() === 'active').length;
-        const approvedJobs = jobsData.filter((job: any) => (job.approvalStatus || '').toLowerCase() === 'approved').length;
-        
-        // Calculate total applications from applications data (preferred) or fallback to job counts
-        const totalApplications = applicationsData.length > 0
-          ? applicationsData.length
-          : jobsData.reduce((sum: number, job: any) => sum + (Number(job.applicationsCount) || 0), 0);
-        
-        const pendingApplications = applicationsData.filter((app: any) => 
-          app.status === 'applied' || app.status === 'pending'
-        ).length;
+        // 4) Calculate stats based on fetched data
+        const computedStats = calculateEmployerDashboardStats(normalizedJobs, normalizedApplications);
+        console.log('📊 Dashboard stats:', computedStats);
 
-        console.log('📊 Dashboard stats:', {
-          totalJobs,
-          activeJobs,
-          approvedJobs,
-          totalApplications,
-          pendingApplications
-        });
-
-        setStats({
-          totalJobs,
-          activeJobs,
-          totalApplications,
-          pendingApplications,
-          approvedJobs
-        });
+        setStats(computedStats);
       } catch (error) {
         console.error('❌ Error initializing dashboard:', error);
         // Don't crash the app, just log the error
@@ -152,31 +144,7 @@ export default function EmployerDashboard() {
     };
 
     init();
-  }, [user]);
-
-  const handleKycInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setKycForm(prev => ({ ...prev, [name]: value } as any));
-  };
-
-  const submitEmployerKYC = async () => {
-    if (!user) return;
-    try {
-      setSubmittingKyc(true);
-      await apiService.submitEmployerKYC({
-        companyName: kycForm.companyName,
-        GSTNumber: kycForm.GSTNumber || undefined,
-        PAN: kycForm.PAN || undefined,
-      });
-      alert('KYC submitted. Status set to Pending.');
-      setKycStatus('pending');
-      setShowKycModal(false);
-    } catch (e: any) {
-      alert(e?.message || 'Failed to submit KYC');
-    } finally {
-      setSubmittingKyc(false);
-    }
-  };
+  }, [user, updateUser]);
 
   const handleApplicationAction = async (applicationId: string, action: 'approve' | 'reject') => {
     try {
@@ -189,18 +157,18 @@ export default function EmployerDashboard() {
       }
       
       // Refresh applications data
-      const applicationsResponse = await apiService.getEmployerApplicationsForEmployer(user!._id);
-      setApplications(applicationsResponse.applications || []);
+      if (!user?._id) {
+        throw new Error('Unable to refresh applications without a valid employer id');
+      }
+      const applicationsResponse = await apiService.getEmployerApplicationsForEmployer(user._id);
+      const updatedApplications = (applicationsResponse.applications || [])
+        .map((app: any) => normalizeEmployerApplication(app))
+        .filter((app: any) => !!app);
+      setApplications(updatedApplications);
       
-      // Update stats
-      const pendingApplications = (applicationsResponse.applications || []).filter((app: any) => 
-        app.status === 'applied' || app.status === 'pending'
-      ).length;
-      
-      setStats(prev => ({
-        ...prev,
-        pendingApplications
-      }));
+      // Update stats with the latest data
+      const updatedStats = calculateEmployerDashboardStats(jobs, updatedApplications);
+      setStats(updatedStats);
       
     } catch (error: any) {
       console.error('Error updating application:', error);
@@ -214,8 +182,18 @@ export default function EmployerDashboard() {
       alert('Job approved successfully!');
       
       // Refresh jobs data
-      const jobsResponse = await apiService.getEmployerDashboardJobs(user!._id);
-      setJobs(jobsResponse.jobs || []);
+      if (!user?._id) {
+        throw new Error('Unable to refresh jobs without a valid employer id');
+      }
+      const jobsResponse = await apiService.getEmployerDashboardJobs(user._id);
+      const updatedJobs = (jobsResponse.jobs || [])
+        .map((job: any) => normalizeEmployerJob(job))
+        .filter((job: any) => !!job);
+      setJobs(updatedJobs);
+
+      // Recalculate stats with updated jobs
+      const updatedStats = calculateEmployerDashboardStats(updatedJobs, applications);
+      setStats(updatedStats);
       
     } catch (error: any) {
       console.error('Error approving job:', error);
@@ -240,7 +218,13 @@ export default function EmployerDashboard() {
           <p className="text-sm text-gray-600">Manage jobs, applications and company information</p>
         </div>
         <div className="hidden sm:flex gap-2">
-          <Link href="/employer/post-job" className="px-3 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">Post Job</Link>
+          {kycStatus === 'approved' ? (
+            <Link href="/employer/post-job" className="px-3 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">Post Job</Link>
+          ) : (
+            <button onClick={handleOpenKycPage} className="px-3 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">
+              {kycStatus === 'pending' || kycStatus === 'suspended' ? 'View KYC Status' : 'Complete KYC'}
+            </button>
+          )}
           <Link href="/employer/applications" className="px-3 py-2 bg-white border border-gray-300 text-gray-800 rounded-md text-sm hover:bg-gray-100">View Applications</Link>
         </div>
       </div>
@@ -302,13 +286,30 @@ export default function EmployerDashboard() {
             </div>
             <div className="divide-y divide-gray-200">
               {(() => {
-                const applicationsByJob = applications.reduce((acc: any, app: any) => {
-                  const jobId = app.job?._id || app.jobId?._id || app.jobId;
-                  const jobTitle = app.job?.title || app.jobId?.jobTitle || app.job?.jobTitle || 'Unknown Job';
-                  if (!acc[jobId]) acc[jobId] = { jobTitle, applications: [] };
-                  acc[jobId].applications.push(app);
-                  return acc;
-                }, {});
+                const applicationsByJob = applications.reduce(
+                  (acc: Record<string, { jobTitle: string; applications: any[] }>, app: any) => {
+                    const jobInfo =
+                      app.job && typeof app.job === 'object' ? app.job : {};
+                    const jobId =
+                      (typeof app.jobId === 'string' && app.jobId) ||
+                      jobInfo._id ||
+                      jobInfo.jobId ||
+                      '';
+                    if (!jobId) {
+                      return acc;
+                    }
+                    const jobTitle =
+                      jobInfo.jobTitle ||
+                      jobInfo.title ||
+                      jobInfo.name ||
+                      'Unknown Job';
+                    if (!acc[jobId]) {
+                      acc[jobId] = { jobTitle, applications: [] };
+                    }
+                    acc[jobId].applications.push(app);
+                    return acc;
+                  },
+                  {} as Record<string, { jobTitle: string; applications: any[] }>);
 
                 const jobEntries = Object.entries(applicationsByJob);
                 if (jobEntries.length === 0) {
@@ -324,7 +325,7 @@ export default function EmployerDashboard() {
                   );
                 }
 
-                return jobEntries.slice(0, 3).map(([jobId, jobData]: [string, any]) => (
+                return jobEntries.slice(0, 3).map(([jobId, jobData]) => (
                   <div key={jobId} className="p-4">
                     <div className="flex justify-between items-start mb-3">
                       <div>
@@ -334,18 +335,38 @@ export default function EmployerDashboard() {
                       <button onClick={() => router.push(`/employer/applications?job=${jobId}`)} className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">View All</button>
                     </div>
                     <div className="space-y-2">
-                      {jobData.applications.slice(0, 2).map((app: any) => (
-                        <div key={app._id} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-900">{app.student?.name || app.studentId?.name || 'Unknown Student'}</p>
-                            <p className="text-xs text-gray-500">Applied: {new Date(app.appliedAt || app.appliedDate).toLocaleDateString()}</p>
+                      {jobData.applications.slice(0, 2).map((app: any) => {
+                        const studentInfo = app.student || app.studentId || {};
+                        const status = (app.status || '').toLowerCase();
+                        const statusClass =
+                          status === 'applied'
+                            ? 'bg-blue-100 text-blue-800'
+                            : status === 'pending'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : status === 'approved' || status === 'accepted'
+                            ? 'bg-green-100 text-green-800'
+                            : status === 'rejected'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-gray-100 text-gray-800';
+                        const statusLabel = status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Status';
+                        const appliedAt = app.appliedAt || app.appliedDate || app.createdAt;
+                        const appliedLabel = appliedAt ? new Date(appliedAt).toLocaleDateString() : 'N/A';
+
+                        return (
+                          <div key={app._id} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-gray-900">{studentInfo.name || 'Unknown Student'}</p>
+                              <p className="text-xs text-gray-500">Applied: {appliedLabel}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusClass}`}>
+                                {statusLabel}
+                              </span>
+                              <button onClick={() => router.push(`/employer/applications/${app._id}`)} className="text-xs bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700">View</button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${app.status === 'applied' ? 'bg-blue-100 text-blue-800' : app.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : app.status === 'approved' ? 'bg-green-100 text-green-800' : app.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>{app.status}</span>
-                            <button onClick={() => router.push(`/employer/applications/${app._id}`)} className="text-xs bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700">View</button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ));
@@ -362,11 +383,13 @@ export default function EmployerDashboard() {
               {kycStatus === 'approved' ? (
                 <Link href="/employer/post-job" className="w-full block bg-indigo-600 text-white py-2 px-4 rounded-md text-center hover:bg-indigo-700">Post New Job</Link>
               ) : (
-                <button className="w-full bg-gray-200 text-gray-700 py-2 px-4 rounded-md cursor-not-allowed" onClick={() => alert('Your employer KYC must be Approved before posting jobs.')}>Post New Job (KYC Required)</button>
+                <button className="w-full bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300 transition" onClick={handleOpenKycPage}>Post New Job (KYC Required)</button>
               )}
               <Link href="/employer/applications" className="w-full block bg-green-600 text-white py-2 px-4 rounded-md text-center hover:bg-green-700">Review Applications</Link>
               {kycStatus !== 'approved' && (
-                <button className="w-full bg-white border border-gray-300 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-50" onClick={() => setShowKycModal(true)}>Complete KYC</button>
+                <button className="w-full bg-white border border-gray-300 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-50" onClick={handleOpenKycPage}>
+                  {kycStatus === 'pending' || kycStatus === 'suspended' ? 'View KYC Status' : 'Complete KYC'}
+                </button>
               )}
             </div>
           </div>
@@ -386,16 +409,16 @@ export default function EmployerDashboard() {
         <div key={job._id} className="bg-white rounded-xl shadow border border-gray-200 p-4">
           <div className="flex justify-between items-start mb-2">
             <div>
-              <h4 className="text-base font-semibold text-gray-900">{job.jobTitle}</h4>
-              <p className="text-xs text-gray-500">{job.companyName} • {job.location}</p>
+              <h4 className="text-base font-semibold text-gray-900">{job.jobTitle || job.title || 'Untitled Role'}</h4>
+              <p className="text-xs text-gray-500">{job.companyName || job.company || 'Company'} • {job.location || 'Location not specified'}</p>
             </div>
             <div className="flex items-center gap-2">
               <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                job.status === 'active' ? 'bg-green-100 text-green-800' :
-                job.status === 'paused' ? 'bg-yellow-100 text-yellow-800' :
+                (job.status || '').toLowerCase() === 'active' ? 'bg-green-100 text-green-800' :
+                (job.status || '').toLowerCase() === 'paused' ? 'bg-yellow-100 text-yellow-800' :
                 'bg-gray-100 text-gray-800'
               }`}>
-                {job.status}
+                {job.status || 'pending'}
               </span>
               <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                 (job.approvalStatus || '').toLowerCase() === 'approved' ? 'bg-emerald-100 text-emerald-800' :
@@ -432,7 +455,7 @@ export default function EmployerDashboard() {
             >
               View Apps ({job.applicationsCount || 0})
             </button>
-            {job.approvalStatus === 'pending' && (
+            {(job.approvalStatus || '').toLowerCase() === 'pending' && (
               <button 
                 onClick={() => handleJobApproval(job._id)}
                 className="flex-1 text-xs bg-blue-600 text-white py-1.5 px-2 rounded hover:bg-blue-700"
@@ -458,64 +481,93 @@ export default function EmployerDashboard() {
 
   const renderApplications = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {applications.map((app) => (
-        <div key={app._id} className="bg-white rounded-xl shadow border border-gray-200 p-4">
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <h4 className="text-base font-semibold text-gray-900">{app.jobId.jobTitle}</h4>
-              <p className="text-xs text-gray-500">{app.studentId.name} • {app.studentId.email}</p>
-              <p className="text-xs text-gray-500">Skills: {app.studentId.skills?.join(', ') || 'Not specified'}</p>
-              {app.expectedPay && (
-                <p className="text-xs text-gray-500">Expected Pay: ₹{app.expectedPay}</p>
+      {applications.map((app) => {
+        const jobInfo = app.job && typeof app.job === 'object' ? app.job : {};
+        const studentInfo = app.student || app.studentId || {};
+        const status = (app.status || '').toLowerCase();
+        const statusClass =
+          status === 'applied'
+            ? 'bg-blue-100 text-blue-800'
+            : status === 'pending'
+            ? 'bg-yellow-100 text-yellow-800'
+            : status === 'approved' || status === 'accepted'
+            ? 'bg-green-100 text-green-800'
+            : status === 'rejected'
+            ? 'bg-red-100 text-red-800'
+            : 'bg-gray-100 text-gray-800';
+        const statusLabel =
+          status === 'accepted'
+            ? 'Approved'
+            : status
+            ? status.charAt(0).toUpperCase() + status.slice(1)
+            : 'Status';
+        const appliedAt = app.appliedAt || app.appliedDate || app.createdAt;
+        const appliedLabel = appliedAt ? new Date(appliedAt).toLocaleDateString() : 'N/A';
+        const skills =
+          Array.isArray(studentInfo.skills) && studentInfo.skills.length > 0
+            ? studentInfo.skills.join(', ')
+            : 'Not specified';
+
+        return (
+          <div key={app._id} className="bg-white rounded-xl shadow border border-gray-200 p-4">
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <h4 className="text-base font-semibold text-gray-900">
+                  {jobInfo.jobTitle || jobInfo.title || 'Job Opportunity'}
+                </h4>
+                <p className="text-xs text-gray-500">
+                  {(studentInfo.name || 'Candidate')}
+                  {studentInfo.email ? ` • ${studentInfo.email}` : ''}
+                </p>
+                <p className="text-xs text-gray-500">Skills: {skills}</p>
+                {app.expectedPay && (
+                  <p className="text-xs text-gray-500">Expected Pay: ₹{app.expectedPay}</p>
+                )}
+              </div>
+              <div className="text-right">
+                <span
+                  className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusClass}`}
+                >
+                  {statusLabel}
+                </span>
+                <p className="text-xs text-gray-500 mt-1">Applied: {appliedLabel}</p>
+              </div>
+            </div>
+
+            {app.coverLetter && (
+              <div className="mb-3 p-2 bg-gray-50 rounded text-xs text-gray-700">
+                <strong>Cover Letter:</strong> {app.coverLetter}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button className="flex-1 text-xs bg-indigo-600 text-white py-1.5 px-2 rounded hover:bg-indigo-700">
+                View Profile
+              </button>
+              {status === 'applied' || status === 'pending' ? (
+                <>
+                  <button
+                    onClick={() => handleApplicationAction(app._id, 'approve')}
+                    className="flex-1 text-xs bg-green-600 text-white py-1.5 px-2 rounded hover:bg-green-700"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => handleApplicationAction(app._id, 'reject')}
+                    className="flex-1 text-xs bg-red-600 text-white py-1.5 px-2 rounded hover:bg-red-700"
+                  >
+                    Reject
+                  </button>
+                </>
+              ) : (
+                <button className="flex-1 text-xs bg-gray-400 text-white py-1.5 px-2 rounded cursor-not-allowed">
+                  {statusLabel}
+                </button>
               )}
             </div>
-            <div className="text-right">
-              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                app.status === 'applied' ? 'bg-blue-100 text-blue-800' :
-                app.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                app.status === 'accepted' ? 'bg-green-100 text-green-800' :
-                app.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                'bg-gray-100 text-gray-800'
-              }`}>
-                {app.status}
-              </span>
-              <p className="text-xs text-gray-500 mt-1">Applied: {new Date(app.appliedAt).toLocaleDateString()}</p>
-            </div>
           </div>
-
-          {app.coverLetter && (
-            <div className="mb-3 p-2 bg-gray-50 rounded text-xs text-gray-700">
-              <strong>Cover Letter:</strong> {app.coverLetter}
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            <button className="flex-1 text-xs bg-indigo-600 text-white py-1.5 px-2 rounded hover:bg-indigo-700">
-              View Profile
-            </button>
-            {app.status === 'applied' || app.status === 'pending' ? (
-              <>
-                <button 
-                  onClick={() => handleApplicationAction(app._id, 'approve')}
-                  className="flex-1 text-xs bg-green-600 text-white py-1.5 px-2 rounded hover:bg-green-700"
-                >
-                  Approve
-                </button>
-                <button 
-                  onClick={() => handleApplicationAction(app._id, 'reject')}
-                  className="flex-1 text-xs bg-red-600 text-white py-1.5 px-2 rounded hover:bg-red-700"
-                >
-                  Reject
-                </button>
-              </>
-            ) : (
-              <button className="flex-1 text-xs bg-gray-400 text-white py-1.5 px-2 rounded cursor-not-allowed">
-                {app.status === 'accepted' ? 'Approved' : 'Rejected'}
-              </button>
-            )}
-          </div>
-        </div>
-      ))}
+        );
+      })}
       {applications.length === 0 && (
         <div className="bg-white rounded-xl shadow border border-gray-200 p-8 text-center">
           <p className="text-gray-500">No applications received yet</p>
@@ -590,6 +642,46 @@ export default function EmployerDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {showKycPrompt && kycStatus !== 'approved' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="max-w-lg w-full bg-white rounded-2xl shadow-xl p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <Shield className="w-8 h-8 text-orange-600" />
+              <h2 className="text-xl font-semibold text-gray-900">Employer KYC Required</h2>
+            </div>
+            <p className="text-gray-600 whitespace-pre-line">{kycPromptMessage}</p>
+            {kycStatus === 'rejected' && kycRejectionReason && (
+              <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                <strong>Rejection Details:</strong> {kycRejectionReason}
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+              {kycStatus === 'pending' && (
+                <button
+                  onClick={handleDismissKycPrompt}
+                  className="w-full sm:w-auto px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  Got it
+                </button>
+              )}
+              {kycStatus === 'suspended' && (
+                <button
+                  onClick={handleOpenKycPage}
+                  className="w-full sm:w-auto px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  View KYC Status
+                </button>
+              )}
+              <button
+                onClick={handleOpenKycPage}
+                className="w-full sm:w-auto px-4 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-700"
+              >
+                {kycStatus === 'rejected' ? 'Resubmit KYC' : kycStatus === 'suspended' ? 'View KYC Status' : 'Complete KYC'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-6xl mx-auto px-4 py-4">
@@ -652,6 +744,7 @@ export default function EmployerDashboard() {
                 <p className="text-sm text-gray-600">
                   {kycStatus === 'pending' && 'Your KYC is under review. You will be able to post jobs once approved.'}
                   {kycStatus === 'rejected' && 'Your KYC was rejected. Please resubmit with correct details.'}
+                  {kycStatus === 'suspended' && 'Your KYC has been suspended. Contact support for assistance.'}
                   {(kycStatus === 'not-submitted' || kycStatus === null) && 'Please submit your company KYC to start posting jobs.'}
                 </p>
               </div>
@@ -665,6 +758,9 @@ export default function EmployerDashboard() {
                 {kycStatus === 'rejected' && (
                   <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Rejected</span>
                 )}
+                {kycStatus === 'suspended' && (
+                  <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Suspended</span>
+                )}
                 {(kycStatus === 'not-submitted' || kycStatus === null) && (
                   <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">Not Submitted</span>
                 )}
@@ -673,10 +769,20 @@ export default function EmployerDashboard() {
             {(kycStatus === 'not-submitted' || kycStatus === 'rejected') && (
               <div className="mt-4">
                 <button
-                  onClick={() => setShowKycModal(true)}
+                  onClick={handleOpenKycPage}
                   className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
                 >
                   Open KYC Form
+                </button>
+              </div>
+            )}
+            {kycStatus === 'suspended' && (
+              <div className="mt-4">
+                <button
+                  onClick={handleOpenKycPage}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                >
+                  View KYC Details
                 </button>
               </div>
             )}
@@ -705,7 +811,12 @@ export default function EmployerDashboard() {
           </Link>
           <Link
             href={kycStatus === 'approved' ? '/employer/post-job' : '/employer'}
-            onClick={(e) => { if (kycStatus !== 'approved') { e.preventDefault(); alert('Complete employer KYC (Approved) to post jobs.'); } }}
+        onClick={(e) => {
+          if (kycStatus !== 'approved') {
+            e.preventDefault();
+            handleOpenKycPage();
+          }
+        }}
             className="flex flex-col items-center py-2 px-3 text-gray-600 hover:text-indigo-600"
           >
             <span className="text-lg">➕</span>
@@ -713,66 +824,6 @@ export default function EmployerDashboard() {
           </Link>
         </div>
       </div>
-      {showKycModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="bg-white rounded-lg shadow w-full max-w-xl">
-            <div className="p-4 border-b">
-              <h3 className="text-lg font-semibold text-gray-900">Employer KYC</h3>
-              <p className="text-sm text-gray-600">Provide your company details for verification</p>
-            </div>
-            <div className="p-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Company Name *</label>
-                <input
-                  name="companyName"
-                  value={kycForm.companyName}
-                  onChange={handleKycInput}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  placeholder="Your legal company name"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">GST Number</label>
-                  <input
-                    name="GSTNumber"
-                    value={kycForm.GSTNumber}
-                    onChange={handleKycInput}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    placeholder="Optional"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">PAN</label>
-                  <input
-                    name="PAN"
-                    value={kycForm.PAN}
-                    onChange={handleKycInput}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    placeholder="Optional"
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="p-4 border-t flex items-center justify-end gap-2">
-              <button
-                onClick={() => setShowKycModal(false)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submitEmployerKYC}
-                disabled={submittingKyc || !kycForm.companyName}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {submittingKyc ? 'Submitting...' : 'Submit KYC'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

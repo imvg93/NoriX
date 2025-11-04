@@ -137,10 +137,16 @@ router.get('/jobs/pending', authenticateToken, requireRole(['admin']), asyncHand
 }));
 
 // @route   PATCH /api/admin/users/:id/approve
-// @desc    Approve a user
+// @desc    Approve a user (updates both User and KYC records)
 // @access  Private (Admin only)
 router.patch('/users/:id/approve', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { id } = req.params;
+
+  console.log('🔍 Admin approval request received:', {
+    userId: id,
+    adminId: req.user!._id,
+    timestamp: new Date().toISOString()
+  });
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new ValidationError('Invalid user ID');
@@ -151,20 +157,143 @@ router.patch('/users/:id/approve', authenticateToken, requireRole(['admin']), as
     throw new ValidationError('User not found');
   }
 
-  user.status = 'approved';
-  user.isActive = true;
-  await user.save();
+  console.log('📋 User found:', {
+    userId: user._id,
+    userType: user.userType,
+    currentStatus: user.status,
+    currentKycStatus: user.kycStatus,
+    isActive: user.isActive
+  });
 
-  sendSuccessResponse(res, { user }, 'User approved successfully');
+  // Convert id to ObjectId if it's a string
+  const userIdObjectId = mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id;
+
+  // Update User model directly using updateOne to ensure it saves
+  const updateResult = await User.updateOne(
+    { _id: userIdObjectId },
+    {
+      $set: {
+        status: 'approved',
+        isActive: true,
+        kycStatus: 'approved',
+        isVerified: true,
+        kycVerifiedAt: new Date()
+      },
+      $unset: {
+        kycRejectedAt: '',
+        kycPendingAt: ''
+      }
+    }
+  );
+
+  console.log('📝 MongoDB update result:', {
+    matchedCount: updateResult.matchedCount,
+    modifiedCount: updateResult.modifiedCount,
+    acknowledged: updateResult.acknowledged
+  });
+
+  if (updateResult.matchedCount === 0) {
+    throw new ValidationError('User not found');
+  }
+
+  if (updateResult.modifiedCount === 0) {
+    console.log('⚠️ No fields were modified - user may already be approved');
+  }
+
+  // Fetch the updated user to verify
+  const updatedUser = await User.findById(userIdObjectId);
+  if (!updatedUser) {
+    throw new ValidationError('User not found after update');
+  }
+
+  console.log('✅ User model updated:', {
+    userId: updatedUser._id,
+    status: updatedUser.status,
+    kycStatus: updatedUser.kycStatus,
+    isVerified: updatedUser.isVerified,
+    isActive: updatedUser.isActive,
+    kycVerifiedAt: updatedUser.kycVerifiedAt
+  });
+
+  // Update corresponding KYC record based on user type
+  if (updatedUser.userType === 'student') {
+    // Update student KYC record using updateOne
+    const kycUpdateResult = await KYC.updateOne(
+      { userId: userIdObjectId, isActive: true },
+      {
+        $set: {
+          verificationStatus: 'approved',
+          approvedAt: new Date(),
+          approvedBy: req.user!._id
+        },
+        $unset: {
+          rejectedAt: '',
+          rejectedBy: '',
+          rejectionReason: ''
+        }
+      }
+    );
+    console.log('✅ Student KYC update result:', {
+      matchedCount: kycUpdateResult.matchedCount,
+      modifiedCount: kycUpdateResult.modifiedCount,
+      acknowledged: kycUpdateResult.acknowledged
+    });
+  } else if (updatedUser.userType === 'employer') {
+    // Update employer KYC record using updateOne
+    const employerKycUpdateResult = await EmployerKYC.updateOne(
+      { employerId: userIdObjectId },
+      {
+        $set: {
+          status: 'approved',
+          reviewedAt: new Date(),
+          reviewedBy: req.user!._id
+        },
+        $unset: {
+          rejectionReason: ''
+        }
+      }
+    );
+    console.log('✅ Employer KYC update result:', {
+      matchedCount: employerKycUpdateResult.matchedCount,
+      modifiedCount: employerKycUpdateResult.modifiedCount,
+      acknowledged: employerKycUpdateResult.acknowledged
+    });
+  }
+
+  // Verify the update was saved correctly
+  const verifiedUser = await User.findById(userIdObjectId);
+  console.log('🔍 Verification - User status after save:', {
+    userId: verifiedUser?._id,
+    status: verifiedUser?.status,
+    kycStatus: verifiedUser?.kycStatus,
+    isVerified: verifiedUser?.isVerified,
+    isActive: verifiedUser?.isActive
+  });
+
+  console.log('✅ User approved successfully:', {
+    userId: userIdObjectId.toString(),
+    userType: updatedUser.userType,
+    kycStatus: verifiedUser?.kycStatus,
+    isVerified: verifiedUser?.isVerified
+  });
+
+  sendSuccessResponse(res, { user: verifiedUser }, 'User approved successfully');
 }));
 
 // @route   PATCH /api/admin/users/:id/reject
-// @desc    Reject a user
+// @desc    Reject a user (updates both User and KYC records)
 // @access  Private (Admin only)
 router.patch('/users/:id/reject', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { id } = req.params;
   const { reason } = req.body;
 
+  console.log('🔍 Admin rejection request received:', {
+    userId: id,
+    adminId: req.user!._id,
+    reason: reason,
+    timestamp: new Date().toISOString()
+  });
+
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new ValidationError('Invalid user ID');
   }
@@ -174,11 +303,122 @@ router.patch('/users/:id/reject', authenticateToken, requireRole(['admin']), asy
     throw new ValidationError('User not found');
   }
 
-  user.status = 'rejected';
-  user.isActive = false;
-  await user.save();
+  console.log('📋 User found for rejection:', {
+    userId: user._id,
+    userType: user.userType,
+    currentStatus: user.status,
+    currentKycStatus: user.kycStatus
+  });
 
-  sendSuccessResponse(res, { user }, 'User rejected successfully');
+  // Convert id to ObjectId if it's a string
+  const userIdObjectId = mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id;
+
+  // Update User model directly using updateOne to ensure it saves
+  const updateResult = await User.updateOne(
+    { _id: userIdObjectId },
+    {
+      $set: {
+        status: 'rejected',
+        isActive: false,
+        kycStatus: 'rejected',
+        isVerified: false,
+        kycRejectedAt: new Date()
+      },
+      $unset: {
+        kycVerifiedAt: '',
+        kycPendingAt: ''
+      }
+    }
+  );
+
+  console.log('📝 MongoDB update result:', {
+    matchedCount: updateResult.matchedCount,
+    modifiedCount: updateResult.modifiedCount,
+    acknowledged: updateResult.acknowledged
+  });
+
+  if (updateResult.matchedCount === 0) {
+    throw new ValidationError('User not found');
+  }
+
+  if (updateResult.modifiedCount === 0) {
+    console.log('⚠️ No fields were modified - user may already be rejected');
+  }
+
+  // Fetch the updated user to verify
+  const updatedUser = await User.findById(userIdObjectId);
+  if (!updatedUser) {
+    throw new ValidationError('User not found after update');
+  }
+
+  console.log('✅ User model updated:', {
+    userId: updatedUser._id,
+    status: updatedUser.status,
+    kycStatus: updatedUser.kycStatus,
+    isVerified: updatedUser.isVerified,
+    kycRejectedAt: updatedUser.kycRejectedAt
+  });
+
+  // Update corresponding KYC record based on user type
+  if (updatedUser.userType === 'student') {
+    // Update student KYC record using updateOne
+    const kycUpdateResult = await KYC.updateOne(
+      { userId: userIdObjectId, isActive: true },
+      {
+        $set: {
+          verificationStatus: 'rejected',
+          rejectedAt: new Date(),
+          rejectedBy: req.user!._id,
+          rejectionReason: reason || 'Rejected by admin'
+        },
+        $unset: {
+          approvedAt: '',
+          approvedBy: ''
+        }
+      }
+    );
+    console.log('✅ Student KYC update result:', {
+      matchedCount: kycUpdateResult.matchedCount,
+      modifiedCount: kycUpdateResult.modifiedCount,
+      acknowledged: kycUpdateResult.acknowledged
+    });
+  } else if (updatedUser.userType === 'employer') {
+    // Update employer KYC record using updateOne
+    const employerKycUpdateResult = await EmployerKYC.updateOne(
+      { employerId: new mongoose.Types.ObjectId(id) },
+      {
+        $set: {
+          status: 'rejected',
+          reviewedAt: new Date(),
+          reviewedBy: req.user!._id,
+          rejectionReason: reason || 'Rejected by admin'
+        }
+      }
+    );
+    console.log('✅ Employer KYC update result:', {
+      matchedCount: employerKycUpdateResult.matchedCount,
+      modifiedCount: employerKycUpdateResult.modifiedCount,
+      acknowledged: employerKycUpdateResult.acknowledged
+    });
+  }
+
+  // Verify the update was saved correctly
+  const verifiedUser = await User.findById(userIdObjectId);
+  console.log('🔍 Verification - User status after save:', {
+    userId: verifiedUser?._id,
+    status: verifiedUser?.status,
+    kycStatus: verifiedUser?.kycStatus,
+    isVerified: verifiedUser?.isVerified
+  });
+
+  console.log('✅ User rejected successfully:', {
+    userId: userIdObjectId.toString(),
+    userType: updatedUser.userType,
+    kycStatus: verifiedUser?.kycStatus,
+    reason: reason || 'No reason provided'
+  });
+
+  sendSuccessResponse(res, { user: verifiedUser }, 'User rejected successfully');
 }));
 
 // User approve/reject routes removed - no approval needed for login/signup

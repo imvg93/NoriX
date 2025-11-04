@@ -187,18 +187,11 @@ class ApiService {
         // Log the full error response for debugging
         console.error('🌐 Full error response:', errorText);
         
-        // Handle authentication errors
+        // Handle authentication errors - don't logout automatically, just throw error
         if (response.status === 401) {
-          // Clear invalid token
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          
-          // Redirect to login if not already there
-          if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-            window.location.href = '/login';
-          }
-          
-          throw new Error('Authentication failed. Please login again.');
+          // Don't clear token or redirect - let the calling component handle it
+          const errorMessage = errorData?.message || errorData?.error || 'Authentication failed. Your session may have expired.';
+          throw new Error(errorMessage);
         }
         
         const message =
@@ -421,25 +414,32 @@ class ApiService {
     }
   }
 
-  async submitEmployerKYC(payload: { 
+  async submitEmployerKYC(payload: FormData | { 
+    fullName?: string;
     companyName: string; 
     companyEmail?: string;
     companyPhone?: string;
+    businessRegNo?: string;
     authorizedName?: string;
     designation?: string;
     address?: string;
     city?: string;
     latitude?: string;
     longitude?: string;
+    gstNo?: string;
     GSTNumber?: string; 
     PAN?: string; 
     documents?: any 
   }) {
     try {
       console.log('📝 Submitting Employer KYC:', payload);
+      const body = (typeof FormData !== 'undefined' && payload instanceof FormData)
+        ? payload
+        : JSON.stringify(payload);
+
       const res = await this.request<any>(`/kyc/employer`, {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body,
       });
       const data = res?.data || res;
       console.log('✅ KYC Submission Response:', data);
@@ -886,9 +886,54 @@ class ApiService {
     });
   }
 
+  // Saved Jobs APIs
+  async getSavedJobs(): Promise<{ savedJobs: any[] }> {
+    try {
+      const raw = await this.request<any>('/saved-jobs');
+      const payload = this.unwrap<any>(raw);
+      return {
+        savedJobs: Array.isArray(payload?.savedJobs) ? payload.savedJobs : []
+      };
+    } catch (error) {
+      console.error('getSavedJobs failed:', error);
+      return { savedJobs: [] };
+    }
+  }
 
+  async saveJob(jobId: string): Promise<{ savedJob: any }> {
+    try {
+      const raw = await this.request<any>(`/saved-jobs/${jobId}`, {
+        method: 'POST',
+      });
+      const payload = this.unwrap<any>(raw);
+      return { savedJob: payload?.savedJob || payload };
+    } catch (error) {
+      console.error('saveJob failed:', error);
+      throw error;
+    }
+  }
 
-  // User Management APIs (Admin)
+  async unsaveJob(jobId: string): Promise<void> {
+    try {
+      await this.request(`/saved-jobs/${jobId}`, {
+        method: 'DELETE',
+      });
+    } catch (error) {
+      console.error('unsaveJob failed:', error);
+      throw error;
+    }
+  }
+
+  async checkJobSaved(jobId: string): Promise<{ isSaved: boolean }> {
+    try {
+      const raw = await this.request<any>(`/saved-jobs/check/${jobId}`);
+      const payload = this.unwrap<any>(raw);
+      return { isSaved: payload?.isSaved || false };
+    } catch (error) {
+      console.error('checkJobSaved failed:', error);
+      return { isSaved: false };
+    }
+  }
   async getAllUsers(filters?: any) {
     const queryParams = filters ? new URLSearchParams(filters).toString() : '';
     const endpoint = queryParams ? `/admin/users?${queryParams}` : '/admin/users';
@@ -1145,9 +1190,9 @@ class ApiService {
     try {
       console.log('✅ Approving job:', jobId);
       console.log('🌐 API Base URL:', API_BASE_URL);
-      console.log('🌐 Full endpoint:', `${API_BASE_URL}/jobs/${jobId}/approve`);
+      console.log('🌐 Full endpoint:', `${API_BASE_URL}/admin/jobs/${jobId}/approve`);
       
-      const response = await this.request(`/jobs/${jobId}/approve`, {
+      const response = await this.request(`/admin/jobs/${jobId}/approve`, {
         method: 'PATCH',
       });
       console.log('📊 Approve job response:', response);
@@ -1158,7 +1203,7 @@ class ApiService {
         message: error instanceof Error ? error.message : 'Unknown error',
         status: (error as any)?.status,
         details: (error as any)?.details,
-        endpoint: `/jobs/${jobId}/approve`,
+        endpoint: `/admin/jobs/${jobId}/approve`,
         apiUrl: API_BASE_URL
       });
       throw error;
@@ -1194,11 +1239,11 @@ class ApiService {
     try {
       console.log('❌ Rejecting job:', jobId, 'Reason:', rejectionReason);
       console.log('🌐 API Base URL:', API_BASE_URL);
-      console.log('🌐 Full endpoint:', `${API_BASE_URL}/jobs/${jobId}/reject`);
+      console.log('🌐 Full endpoint:', `${API_BASE_URL}/admin/jobs/${jobId}/reject`);
       
-      const response = await this.request(`/jobs/${jobId}/reject`, {
+      const response = await this.request(`/admin/jobs/${jobId}/reject`, {
         method: 'PATCH',
-        body: JSON.stringify({ rejectionReason }),
+        body: JSON.stringify({ reason: rejectionReason }),
       });
       console.log('📊 Reject job response:', response);
       return response;
@@ -1208,7 +1253,7 @@ class ApiService {
         message: error instanceof Error ? error.message : 'Unknown error',
         status: (error as any)?.status,
         details: (error as any)?.details,
-        endpoint: `/jobs/${jobId}/reject`,
+        endpoint: `/admin/jobs/${jobId}/reject`,
         apiUrl: API_BASE_URL
       });
       throw error;

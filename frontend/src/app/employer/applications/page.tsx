@@ -27,6 +27,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { apiService } from '../../../services/api';
 import RoleProtectedRoute from '../../../components/auth/RoleProtectedRoute';
 import { useSafeNavigation } from '../../../hooks/useSafeNavigation';
+import LoadingOverlay from '../../../components/LoadingOverlay';
 import type { Application } from '../../../services/api';
 
 
@@ -82,22 +83,15 @@ function EmployerApplicationsContent() {
         // Handle specific error types
         if (err.status === 401) {
           setError('Please log in to view your applications');
-          // Redirect to login after a short delay
-          setTimeout(() => {
-            router.push('/login');
-          }, 2000);
+          // Don't redirect, just show error
         } else if (err.status === 403) {
           setError('You do not have permission to view applications. Please log in as an employer.');
-          setTimeout(() => {
-            router.push('/login');
-          }, 2000);
+          // Don't redirect, just show error
         } else if (err.status === 404) {
           setError('Applications endpoint not found');
         } else if (err.message?.includes('Authentication failed')) {
           setError('Your session has expired. Please log in again.');
-          setTimeout(() => {
-            router.push('/login');
-          }, 2000);
+          // Don't redirect, just show error
         } else {
           setError(err.message || 'Failed to load applications');
         }
@@ -184,14 +178,7 @@ function EmployerApplicationsContent() {
   const uniqueJobs = Array.from(new Set(applications.map(app => app.job?._id).filter(Boolean)));
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600">Loading applications...</p>
-        </div>
-      </div>
-    );
+    return <LoadingOverlay message="Loading applications..." />;
   }
 
   return (
@@ -627,14 +614,7 @@ function EmployerApplicationsContent() {
 
 export default function EmployerApplicationsPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading applications...</p>
-        </div>
-      </div>
-    }>
+    <Suspense fallback={<LoadingOverlay message="Loading applications..." />}>
       <EmployerApplicationsContent />
     </Suspense>
   );

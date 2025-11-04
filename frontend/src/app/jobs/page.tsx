@@ -22,6 +22,7 @@ import { apiService } from "../../services/api";
 import { kycStatusService } from "../../services/kycStatusService";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSafeNavigation } from "../../hooks/useSafeNavigation";
+import LoadingOverlay from "../../components/LoadingOverlay";
 
 interface Job {
   _id: string;
@@ -142,7 +143,7 @@ const JobsPage = () => {
 
   const handleApply = async (jobId: string) => {
     if (!isAuthenticated || user?.userType !== "student") {
-      router.push("/login");
+      alert("You need to be logged in as a student to apply for jobs.");
       return;
     }
 
@@ -204,33 +205,26 @@ const JobsPage = () => {
   const workTypes = [...new Set(jobs.map(job => job.type).filter(Boolean))];
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-600 mx-auto" />
-          <p className="mt-4 text-gray-600">Loading jobs...</p>
-        </div>
-      </div>
-    );
+    return <LoadingOverlay message="Loading jobs..." />;
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6">
         {/* Back Button */}
-        <div className="mb-6">
+        <div className="mb-4 sm:mb-6">
           <button
             onClick={() => router.back()}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors group"
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors group text-sm sm:text-base"
           >
-            <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 group-hover:-translate-x-1 transition-transform" />
             <span className="font-medium">Back</span>
           </button>
         </div>
         
         {/* Page Title */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
             {isAuthenticated ? 'Currently Available Works' : 'Job Opportunities'}
           </h1>
           
@@ -279,13 +273,13 @@ const JobsPage = () => {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {isAuthenticated && (
-          <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <section className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
+            <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div className="relative md:col-span-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5" />
                 <input
                   type="text"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  className="w-full pl-9 sm:pl-10 pr-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm sm:text-base"
                   placeholder="Search jobs..."
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
@@ -295,7 +289,7 @@ const JobsPage = () => {
               <select
                 value={selectedLocation}
                 onChange={(event) => setSelectedLocation(event.target.value)}
-                className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                className="px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm sm:text-base"
               >
                 <option value="">All Locations</option>
                 {locations.map(location => (
@@ -306,7 +300,7 @@ const JobsPage = () => {
               <select
                 value={selectedType}
                 onChange={(event) => setSelectedType(event.target.value)}
-                className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                className="px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm sm:text-base"
               >
                 <option value="">All Types</option>
                 {workTypes.map(type => (
@@ -320,7 +314,7 @@ const JobsPage = () => {
                   setSelectedLocation("");
                   setSelectedType("");
                 }}
-                className="px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors"
+                className="px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-100 text-gray-700 rounded-lg sm:rounded-xl hover:bg-gray-200 transition-colors text-sm sm:text-base font-medium"
               >
                 Clear Filters
               </button>
@@ -399,27 +393,27 @@ const JobsPage = () => {
           </section>
         ) : (
           // Show jobs for authenticated users
-          <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <section className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
             {filteredJobs.map((job, index) => (
               <motion.article
                 key={job._id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: index * 0.05 }}
-                className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
+                className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow"
               >
-                <div className="flex flex-col gap-4">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex items-start gap-3">
-                      <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden">
-                        <Building className="w-6 h-6 text-gray-400" />
+                <div className="flex flex-col gap-3 sm:gap-4">
+                  <div className="flex flex-col gap-3 sm:gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex items-start gap-2 sm:gap-3">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg sm:rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <Building className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400" />
                       </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-900 text-lg">{job.title}</h3>
-                        <p className="text-gray-600">{job.company}</p>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-gray-900 text-base sm:text-lg break-words">{job.title}</h3>
+                        <p className="text-gray-600 text-sm sm:text-base">{job.company}</p>
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-3 text-sm text-gray-500">
+                    <div className="flex flex-wrap gap-2 sm:gap-3 text-xs sm:text-sm text-gray-500">
                       <span className="inline-flex items-center gap-1">
                         <MapPin className="w-4 h-4" />
                         {job.location}
@@ -452,36 +446,37 @@ const JobsPage = () => {
                     </div>
                   )}
 
-                  <div className="flex flex-col gap-4 border-t border-gray-200 pt-4 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex flex-col gap-3 sm:gap-4 border-t border-gray-200 pt-3 sm:pt-4 text-xs sm:text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                       <span>Posted {new Date(job.createdAt).toLocaleDateString()}</span>
-                      <span>Views: {job.views || 0}</span>
+                      <span className="hidden sm:inline">Views: {job.views || 0}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => router.push(`/jobs/${job._id}`)}
-                        className="px-3 py-2 text-gray-600 hover:text-gray-900 transition-colors"
+                        className="p-2 sm:px-3 sm:py-2 text-gray-600 hover:text-gray-900 transition-colors rounded-lg hover:bg-gray-100"
+                        aria-label="View details"
                       >
-                        <Eye className="w-4 h-4" />
+                        <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
                       </button>
                       {user?.userType === "student" ? (
                         appliedJobs.includes(job._id) ? (
-                          <span className="px-4 py-2 bg-green-100 text-green-600 rounded-xl text-sm font-medium">
+                          <span className="px-3 sm:px-4 py-1.5 sm:py-2 bg-green-100 text-green-600 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium">
                             Applied
                           </span>
                         ) : (
                           <button
                             onClick={() => router.push(`/jobs/${job._id}`)}
                             disabled={kycStatus !== 'approved'}
-                            className={`px-4 py-2 rounded-xl transition-colors ${kycStatus === 'approved' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-gray-300 text-gray-600 cursor-not-allowed'}`}
+                            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl transition-colors text-xs sm:text-sm font-medium ${kycStatus === 'approved' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-gray-300 text-gray-600 cursor-not-allowed'}`}
                           >
-                            {kycStatus === 'approved' ? 'Apply Now' : 'Complete KYC first'}
+                            {kycStatus === 'approved' ? 'Apply Now' : 'KYC Required'}
                           </button>
                         )
                       ) : (
                         <button
                           onClick={() => router.push(`/jobs/${job._id}`)}
-                          className="px-4 py-2 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-colors"
+                          className="px-3 sm:px-4 py-1.5 sm:py-2 bg-orange-600 text-white rounded-lg sm:rounded-xl hover:bg-orange-700 transition-colors text-xs sm:text-sm font-medium"
                         >
                           View Details
                         </button>

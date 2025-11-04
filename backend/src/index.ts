@@ -7,6 +7,7 @@ import nodemailer from 'nodemailer';
 import path from 'path';
 import SocketManager from './utils/socketManager';
 import EmailNotificationService from './services/emailNotificationService';
+import NotificationService from './services/notificationService';
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -20,7 +21,9 @@ import uploadRoutes from './routes/upload';
 import testUploadRoutes from './routes/test-upload';
 import debugUploadRoutes from './routes/debug-upload';
 import enhancedJobRoutes from './routes/enhanced-jobs';
-import notificationRoutes from './routes/notifications';
+import notificationRoutes, { setNotificationService as setNotificationRouteService } from './routes/notifications';
+import savedJobsRoutes from './routes/saved-jobs';
+import profileRoutes from './routes/profile';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -41,10 +44,18 @@ const socketManager = new SocketManager(server);
 
 // Initialize services
 const emailService = new EmailNotificationService();
+const notificationService = new NotificationService();
+
+// Set socket manager for notification service
+notificationService.setSocketManager(socketManager);
 
 // Inject services into routes
 setJobServices(socketManager, emailService);
 setApplicationServices(socketManager, emailService);
+setNotificationRouteService(notificationService);
+
+// Make notification service available globally
+(global as any).notificationService = notificationService;
 
 // Environment-aware CORS configuration
 const isProduction = process.env.NODE_ENV === 'production';
@@ -125,6 +136,12 @@ app.use('/api/test-upload', testUploadRoutes);
 app.use('/api/debug-upload', debugUploadRoutes);
 app.use('/api/enhanced-jobs', enhancedJobRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/saved-jobs', savedJobsRoutes);
+app.use('/api/profile', profileRoutes);
+
+// Debug: Log saved-jobs route registration
+console.log('✅ Saved jobs routes registered at /api/saved-jobs');
+console.log('✅ Profile routes registered at /api/profile');
 
 // Debug: Print registered routes only when enabled via env flag
 if (process.env.LOG_ROUTES === 'true') {

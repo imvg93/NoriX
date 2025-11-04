@@ -431,7 +431,7 @@ export default function StudentDashboard() {
             <span className="text-lg">📊</span>
             <span className="text-xs">Dashboard</span>
           </Link>
-          <Link href="/profile" className="flex flex-col items-center py-2 px-3 text-gray-600 hover:text-indigo-600">
+          <Link href="/student/profile" className="flex flex-col items-center py-2 px-3 text-gray-600 hover:text-indigo-600">
             <span className="text-lg">👤</span>
             <span className="text-xs">Profile</span>
           </Link>

@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Home } from 'lucide-react';
 import Image from 'next/image';
-import { motion } from 'framer-motion';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -81,17 +80,8 @@ export default function Signup() {
       return;
     }
 
-    if (userType === 'employer' && !formData.companyName) {
-      setError('Please enter your company name');
-      setLoading(false);
-      return;
-    }
-
-    if (userType === 'employer' && !formData.businessType) {
-      setError('Please select your business type');
-      setLoading(false);
-      return;
-    }
+    // Note: Employer-specific fields (companyName, businessType, address) are optional during signup
+    // They will be collected during KYC verification process
 
     try {
       // Send OTP to email address
@@ -202,7 +192,7 @@ export default function Signup() {
   };
 
   return (
-    <div className="relative h-screen bg-gradient-to-br from-indigo-50 via-white to-cyan-50 overflow-y-auto">
+    <div className="relative min-h-screen bg-gradient-to-br from-indigo-50 via-white to-cyan-50 overflow-hidden">
       {/* Top bar with Back and Home */}
       <div className="sticky top-0 z-10 bg-transparent h-16">
         <div className="mx-auto flex h-full max-w-6xl items-center justify-between px-4">
@@ -223,14 +213,9 @@ export default function Signup() {
         </div>
       </div>
 
-      <div className="mx-auto grid min-h-[calc(100vh-64px)] max-w-6xl grid-cols-1 items-center gap-8 px-4 py-8 md:grid-cols-2">
-        {/* Left: Branding with subtle animations */}
-        <motion.div
-          className="hidden md:block"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-        >
+      <div className="mx-auto grid h-[calc(100vh-64px)] max-w-6xl grid-cols-1 items-center gap-4 sm:gap-6 lg:gap-8 px-3 sm:px-4 py-6 sm:py-8 md:grid-cols-2">
+        {/* Left: Branding */}
+        <div className="hidden md:block">
           <div className="mb-4 inline-flex items-center gap-3 rounded-full border border-gray-200 bg-white/70 px-3 py-2 shadow-sm backdrop-blur-md">
             <Image src="/img/norixnobg.jpg" alt="NoriX" width={50} height={50} className="h-10 w-10" />
             <span className="text-sm font-semibold tracking-wide text-gray-800">Welcome to NoriX</span>
@@ -245,43 +230,46 @@ export default function Signup() {
 
           <div className="grid grid-cols-2 gap-3">
             {["Secure Sign-up", "Real-time Verification", "Student & Employer Profiles", "Quick Start"].map((item, idx) => (
-              <motion.div
+              <div
                 key={idx}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: 0.05 * idx }}
                 className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white/80 px-3 py-2 text-sm text-gray-700 shadow-sm backdrop-blur"
               >
                 <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-white">✓</span>
                 {item}
-              </motion.div>
+              </div>
             ))}
           </div>
-        </motion.div>
+        </div>
 
         {/* Right: Auth card */}
-        <motion.div
-          className="w-full"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.08 }}
-        >
-          <div className="mx-auto w-full max-w-md rounded-2xl border border-gray-200 bg-white/85 p-6 shadow-xl backdrop-blur-sm">
-            {/* Mobile Logo - Hidden on desktop */}
-            <div className="mb-6 flex md:hidden items-center justify-center">
-              <div className="inline-flex items-center gap-3 rounded-full border border-gray-200 bg-white/70 px-3 py-2 shadow-sm backdrop-blur-md">
-                <Image src="/img/norixnobg.jpg" alt="NoriX" width={40} height={40} className="h-10 w-10" />
-                <span className="text-sm font-semibold tracking-wide text-gray-800">Welcome to NoriX</span>
+        <div className="w-full flex items-center justify-center">
+          <div className="mx-auto w-full max-w-md rounded-xl sm:rounded-2xl border border-gray-200 bg-white/85 shadow-xl backdrop-blur-sm flex flex-col max-h-[85vh]">
+            {/* Card Header - Fixed */}
+            <div className="flex-shrink-0 p-4 sm:p-6 pb-0">
+              {/* Mobile Logo - Hidden on desktop */}
+              <div className="mb-4 sm:mb-6 flex md:hidden items-center justify-center">
+                <div className="inline-flex items-center gap-3 rounded-full border border-gray-200 bg-white/70 px-3 py-2 shadow-sm backdrop-blur-md">
+                  <Image src="/img/norixnobg.jpg" alt="NoriX" width={40} height={40} className="h-10 w-10" />
+                  <span className="text-sm font-semibold tracking-wide text-gray-800">Welcome to NoriX</span>
+                </div>
+              </div>
+
+              <div className="mb-4 flex flex-col items-center text-center">
+                {/* Big logo - Hidden on mobile */}
+                <Image src="/img/norixnobg.jpg" alt="NoriX" width={160} height={160} className="hidden md:block h-20 w-20 sm:h-24 sm:w-24" priority />
+                <h2 className="mt-2 sm:mt-3 text-lg sm:text-xl font-semibold text-gray-900">Create account</h2>
               </div>
             </div>
 
-            <div className="mb-4 flex flex-col items-center text-center">
-              {/* Big logo - Hidden on mobile */}
-              <Image src="/img/norixnobg.jpg" alt="NoriX" width={160} height={160} className="hidden md:block h-32 w-32" priority />
-              <h2 className="mt-3 text-xl font-semibold text-gray-900">Create your account</h2>
-            </div>
-
-          {step === 'form' && (
+            {/* Scrollable Content */}
+            <div 
+              className="flex-1 overflow-y-auto px-4 sm:px-6 pb-4 sm:pb-6 custom-scrollbar"
+              style={{
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#cbd5e1 #f1f5f9'
+              }}
+            >
+              {step === 'form' && (
             <>
               {/* User Type Selection */}
               <div className="mb-6">
@@ -291,36 +279,48 @@ export default function Signup() {
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
-                    onClick={() => setUserType('student')}
-                    className={`flex-1 py-2.5 px-4 border-2 rounded-lg text-sm font-medium transition-all ${
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setUserType('student');
+                    }}
+                    className={`flex-1 py-2 sm:py-2.5 px-2 sm:px-4 border-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
                       userType === 'student'
                         ? 'border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm'
                         : 'border-gray-200 bg-white text-gray-700 hover:border-indigo-300 hover:bg-indigo-50'
                     }`}
                   >
-                    🎓 Student
+                    🎓 <span className="hidden xs:inline">Student</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => setUserType('employer')}
-                    className={`flex-1 py-2.5 px-4 border-2 rounded-lg text-sm font-medium transition-all ${
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setUserType('employer');
+                    }}
+                    className={`flex-1 py-2 sm:py-2.5 px-2 sm:px-4 border-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
                       userType === 'employer'
                         ? 'border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm'
                         : 'border-gray-200 bg-white text-gray-700 hover:border-indigo-300 hover:bg-indigo-50'
                     }`}
                   >
-                    💼 Employer
+                    💼 <span className="hidden xs:inline">Employer</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => setUserType('admin')}
-                    className={`flex-1 py-2.5 px-4 border-2 rounded-lg text-sm font-medium transition-all ${
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setUserType('admin');
+                    }}
+                    className={`flex-1 py-2 sm:py-2.5 px-2 sm:px-4 border-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
                       userType === 'admin'
                         ? 'border-amber-500 bg-amber-50 text-amber-700 shadow-sm'
                         : 'border-gray-200 bg-white text-gray-700 hover:border-amber-300 hover:bg-amber-50'
                     }`}
                   >
-                    👑 Admin
+                    👑 <span className="hidden xs:inline">Admin</span>
                   </button>
                 </div>
               </div>
@@ -494,11 +494,10 @@ export default function Signup() {
                           id="companyName"
                           name="companyName"
                           type="text"
-                          required
                           value={formData.companyName}
                           onChange={handleInputChange}
                           className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
-                          placeholder="Enter your company name"
+                          placeholder="Enter your company name (optional)"
                         />
                       </div>
                     </div>
@@ -511,12 +510,11 @@ export default function Signup() {
                         <select
                           id="businessType"
                           name="businessType"
-                          required
                           value={formData.businessType}
                           onChange={handleInputChange}
                           className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
                         >
-                          <option value="">Select business type</option>
+                          <option value="">Select business type (optional)</option>
                           <option value="Cafe & Restaurant">Cafe & Restaurant</option>
                           <option value="Retail Store">Retail Store</option>
                           <option value="Tuition Center">Tuition Center</option>
@@ -540,11 +538,10 @@ export default function Signup() {
                           id="address"
                           name="address"
                           rows={3}
-                          required
                           value={formData.address}
                           onChange={handleInputChange}
                           className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
-                          placeholder="Enter your business address"
+                          placeholder="Enter your business address (optional)"
                         />
                       </div>
                     </div>
@@ -681,34 +678,39 @@ export default function Signup() {
             </>
           )}
 
-          {error && (
-            <div className="mt-4 text-center text-sm text-red-600 bg-red-50 border-2 border-red-200 rounded-lg p-3">
-              {error}
-            </div>
-          )}
-          {success && (
-            <div className="mt-4 text-center text-sm text-green-700 bg-green-50 border-2 border-green-200 rounded-lg p-3">
-              {success}
-            </div>
-          )}
+              {error && (
+                <div className="mt-4 text-center text-sm text-red-600 bg-red-50 border-2 border-red-200 rounded-lg p-3">
+                  {error}
+                </div>
+              )}
+              {success && (
+                <div className="mt-4 text-center text-sm text-green-700 bg-green-50 border-2 border-green-200 rounded-lg p-3">
+                  {success}
+                </div>
+              )}
 
-          <div className="my-6 flex items-center gap-3">
-            <span className="h-px flex-1 bg-gray-200" />
-            <span className="text-xs uppercase tracking-wide text-gray-400">or</span>
-            <span className="h-px flex-1 bg-gray-200" />
-            </div>
+              {step === 'form' && (
+                <>
+                  <div className="my-6 flex items-center gap-3">
+                    <span className="h-px flex-1 bg-gray-200" />
+                    <span className="text-xs uppercase tracking-wide text-gray-400">or</span>
+                    <span className="h-px flex-1 bg-gray-200" />
+                  </div>
 
-          <div className="text-center">
-            <span className="text-sm text-gray-600">Already have an account?</span>{' '}
-              <Link
-                href="/login"
-              className="text-sm font-semibold text-indigo-600 hover:text-indigo-700"
-              >
-                Sign in
-              </Link>
+                  <div className="text-center">
+                    <span className="text-sm text-gray-600">Already have an account?</span>{' '}
+                    <Link
+                      href="/login"
+                      className="text-sm font-semibold text-indigo-600 hover:text-indigo-700"
+                    >
+                      Sign in
+                    </Link>
+                  </div>
+                </>
+              )}
             </div>
           </div>
-        </motion.div>
+        </div>
       </div>
     </div>
   );

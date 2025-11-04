@@ -16,7 +16,9 @@ import {
   ChevronDown,
   UserCircle,
   HelpCircle,
-  Shield
+  Shield,
+  Menu,
+  X
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import NotificationDropdown from './NotificationDropdown';
@@ -28,6 +30,7 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, logout, isAuthenticated } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -35,6 +38,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Close dropdown when route changes
   useEffect(() => {
     setProfileDropdownOpen(false);
+    setMobileMenuOpen(false);
   }, [pathname]);
 
   // Close profile dropdown when clicking outside
@@ -55,8 +59,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     };
   }, [profileDropdownOpen]);
 
-  // Don't show layout for login/signup pages, admin pages, and KYC management pages
-  if (pathname.startsWith('/login') || pathname.startsWith('/signup') || pathname.startsWith('/admin') || pathname.startsWith('/kyc-')) {
+  // Don't show layout for login/signup pages, admin pages, KYC management pages, and profile page
+  if (pathname.startsWith('/login') || pathname.startsWith('/signup') || pathname.startsWith('/admin') || pathname.startsWith('/kyc-') || pathname.startsWith('/student/profile')) {
     return <>{children}</>;
   }
 
@@ -73,15 +77,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            {/* Logo */}
+            {/* Logo - Left */}
             <div className="flex items-center">
-              <Link href="/home" className="flex items-center">
-                <div className="relative h-8 w-32 sm:h-10 sm:w-40">
+              <Link href="/" className="flex items-center">
+                <div className="relative h-10 w-40 sm:h-12 sm:w-48">
                   <Image
                     src="/img/norixgreen.png"
                     alt="NoriX logo"
                     fill
-                    sizes="(max-width: 640px) 128px, 160px"
+                    sizes="(max-width: 640px) 160px, 192px"
                     className="object-contain"
                     priority
                   />
@@ -89,7 +93,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </Link>
             </div>
 
-            {/* User Profile Section */}
+            {/* User Profile Section - Right */}
             <div className="flex items-center gap-4">
               <NotificationDropdown />
               
@@ -267,12 +271,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                         )}
                         
                         <Link
-                          href="/profile"
+                          href={user?.userType === 'student' ? "/student/profile" : "/profile"}
                           className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
                           onClick={() => setProfileDropdownOpen(false)}
                         >
                           <UserCircle className="w-5 h-5" />
-                          <span>Profile Settings</span>
+                          <span>Profile</span>
                         </Link>
                         
                         <Link
@@ -321,7 +325,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <div className="min-h-screen bg-white">
       {/* Simple Header for Unauthenticated Users */}
-      <header className="bg-white border-b border-gray-200">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
@@ -339,31 +343,112 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </Link>
             </div>
             
-            <div className="flex items-center space-x-6">
-              <Link href="/jobs" className="text-gray-700 hover:text-gray-900 font-medium">
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex items-center space-x-4 lg:space-x-6">
+              <Link href="/jobs" className="text-gray-700 hover:text-gray-900 font-medium text-sm lg:text-base px-2">
                 Jobs
               </Link>
-              <Link href="/services" className="text-gray-700 hover:text-gray-900 font-medium">
+              <Link href="/services" className="text-gray-700 hover:text-gray-900 font-medium text-sm lg:text-base px-2">
                 Services
               </Link>
-              <Link href="/about" className="text-gray-700 hover:text-gray-900 font-medium">
+              <Link href="/about" className="text-gray-700 hover:text-gray-900 font-medium text-sm lg:text-base px-2">
                 About
               </Link>
-              <Link href="/how-it-works" className="text-gray-700 hover:text-gray-900 font-medium">
+              <Link href="/how-it-works" className="text-gray-700 hover:text-gray-900 font-medium text-sm lg:text-base px-2">
                 How It Works
               </Link>
-              <Link href="/careers" className="text-gray-700 hover:text-gray-900 font-medium">
+              <Link href="/careers" className="text-gray-700 hover:text-gray-900 font-medium text-sm lg:text-base px-2">
                 Careers
               </Link>
-              <Link href="/signup" className="text-gray-700 hover:text-gray-900 font-medium">
+              <Link href="/signup" className="text-gray-700 hover:text-gray-900 font-medium text-sm lg:text-base px-2">
                 Sign up
               </Link>
-              <Link href="/login" className="bg-[#32A4A6] text-white px-4 py-2 rounded-lg font-medium hover:bg-[#2a8a8c] transition-colors">
+              <Link href="/login" className="bg-[#32A4A6] text-white px-3 py-2 sm:px-4 rounded-lg font-medium hover:bg-[#2a8a8c] transition-colors text-sm lg:text-base">
                 Log in
               </Link>
-            </div>
+            </nav>
+
+            {/* Mobile Menu Button */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? (
+                <X className="w-6 h-6" />
+              ) : (
+                <Menu className="w-6 h-6" />
+              )}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Menu */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="md:hidden bg-white border-t border-gray-200 overflow-hidden"
+            >
+              <div className="px-4 py-4 space-y-3">
+                <Link
+                  href="/jobs"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block py-2 text-gray-700 hover:text-gray-900 font-medium"
+                >
+                  Jobs
+                </Link>
+                <Link
+                  href="/services"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block py-2 text-gray-700 hover:text-gray-900 font-medium"
+                >
+                  Services
+                </Link>
+                <Link
+                  href="/about"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block py-2 text-gray-700 hover:text-gray-900 font-medium"
+                >
+                  About
+                </Link>
+                <Link
+                  href="/how-it-works"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block py-2 text-gray-700 hover:text-gray-900 font-medium"
+                >
+                  How It Works
+                </Link>
+                <Link
+                  href="/careers"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block py-2 text-gray-700 hover:text-gray-900 font-medium"
+                >
+                  Careers
+                </Link>
+                <div className="pt-2 border-t border-gray-200 space-y-2">
+                  <Link
+                    href="/signup"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block w-full text-center py-2 text-gray-700 hover:text-gray-900 font-medium"
+                  >
+                    Sign up
+                  </Link>
+                  <Link
+                    href="/login"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block w-full text-center bg-[#32A4A6] text-white py-2.5 rounded-lg font-medium hover:bg-[#2a8a8c] transition-colors"
+                  >
+                    Log in
+                  </Link>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
       {children}
     </div>

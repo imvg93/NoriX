@@ -129,6 +129,44 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       });
     };
 
+    // Handle new real-time notifications from the notification service
+    const handleNewNotification = (data: any) => {
+      const notificationType = data.type || 'system';
+      let title = '';
+      let type = notificationType;
+
+      // Map notification types to titles
+      switch (notificationType) {
+        case 'application':
+          if (data.message?.includes('accepted') || data.message?.includes('approved')) {
+            title = 'Application Accepted! 🎉';
+          } else if (data.message?.includes('rejected')) {
+            title = 'Application Update';
+          } else if (data.message?.includes('applied')) {
+            title = 'New Application Received 📝';
+          } else {
+            title = 'Application Update';
+          }
+          break;
+        case 'alert':
+          title = 'Alert ⚠️';
+          break;
+        case 'system':
+          title = 'System Notification 🔔';
+          break;
+        default:
+          title = 'Notification';
+      }
+
+      addNotification({
+        type,
+        title,
+        message: data.message || 'You have a new notification',
+        timestamp: data.createdAt || data.timestamp || new Date().toISOString(),
+        data: data.metadata || data
+      });
+    };
+
     // Register event listeners
     socketService.onJobApproved(handleJobApproved);
     socketService.onJobRejected(handleJobRejected);
@@ -137,6 +175,10 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     socketService.on('connect', handleConnectionStatus);
     socketService.on('disconnect', handleConnectionStatus);
     socketService.on('kyc:status:update', handleKycStatusUpdate);
+    
+    // Listen for new notifications from the notification service
+    socketService.on('notification:new', handleNewNotification);
+    socketService.on('notification', handleNewNotification);
 
     // Check initial connection status
     handleConnectionStatus();
@@ -150,6 +192,8 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       socketService.off('connect', handleConnectionStatus);
       socketService.off('disconnect', handleConnectionStatus);
       socketService.off('kyc:status:update', handleKycStatusUpdate);
+      socketService.off('notification:new', handleNewNotification);
+      socketService.off('notification', handleNewNotification);
     };
   }, []);
 
@@ -166,7 +210,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       new window.Notification(notification.title, {
         body: notification.message,
-        icon: '/img/Favicon.ico',
+        icon: '/Favicon.ico',
         tag: newNotification.id
       });
     }

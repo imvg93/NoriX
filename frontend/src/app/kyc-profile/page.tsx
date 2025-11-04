@@ -27,13 +27,15 @@ const KYCProfilePage: React.FC = () => {
   useEffect(() => {
     const checkKYCStatus = async () => {
       if (!isAuthenticated || !user) {
-        router.push('/login');
+        alert('You need to be logged in to access KYC verification.');
+        setIsLoading(false);
         return;
       }
 
       // Only allow students to access KYC
       if (user.userType !== 'student') {
-        router.push('/unauthorized');
+        alert('KYC verification is only available for students.');
+        setIsLoading(false);
         return;
       }
 

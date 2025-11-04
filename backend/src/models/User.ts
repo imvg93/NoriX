@@ -124,20 +124,14 @@ const userSchema = new Schema<IUser>({
     default: 0
   },
   
-  // Employer specific fields
+  // Employer specific fields (optional - collected during KYC)
   companyName: {
     type: String,
-    required: function(this: IUser) {
-      return this.userType === 'employer';
-    },
     trim: true,
     maxlength: [200, 'Company name cannot exceed 200 characters']
   },
   businessType: {
     type: String,
-    required: function(this: IUser) {
-      return this.userType === 'employer';
-    },
     enum: [
       'Cafe & Restaurant',
       'Retail Store',
@@ -153,9 +147,6 @@ const userSchema = new Schema<IUser>({
   },
   address: {
     type: String,
-    required: function(this: IUser) {
-      return this.userType === 'employer';
-    },
     trim: true,
     maxlength: [500, 'Address cannot exceed 500 characters']
   },
