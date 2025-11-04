@@ -1,0 +1,43 @@
+Norix Cleanup Report
+Date: 2025-11-04
+
+Deleted directories:
+- frontend/frontend/ (duplicate nested frontend copy)
+
+Deleted frontend files:
+- frontend/test-socket-connection.js
+- frontend/test-phone-validation.js
+- frontend/src/components/SignupInline.tsx
+- frontend/src/components/AdminDashboard.tsx
+- frontend/src/components/HomePage.tsx
+- frontend/src/components/JobList.tsx
+- frontend/src/components/Card.tsx
+- frontend/src/components/Button.tsx
+- frontend/src/components/index.ts
+
+Deleted backend files:
+- backend/test-profile-route.js
+- backend/test-upload.html
+- backend/test-admin-frontend.html
+- backend/scripts/test-socket-connection.js
+- backend/scripts/test-login.js
+- backend/scripts/test-kyc-and-applications.js
+- backend/scripts/test-jobs-query.js
+- backend/scripts/test-frontend-backend-connection.js
+- backend/scripts/test-exact-api-query.js
+- backend/scripts/test-cors-patch.js
+- backend/scripts/test-basic-api.js
+- backend/scripts/test-approval-routes.js
+- backend/scripts/test-api-endpoints.js
+- backend/scripts/test-admin-routes.js
+- backend/scripts/test-admin-reports-route.js
+- backend/scripts/demo-realtime-flow.js
+- backend/scripts/create-test-data.js
+- backend/scripts/add-test-data.js
+
+Notes:
+- Restored minimal placeholders for frontend/src/components/StatsCard.tsx and TaskCard.tsx to satisfy existing imports in StudentHome.
+- No Jest/Vitest test files or coverage directories were present.
+- No .DS_Store, Thumbs.db, or *.log files were found.
+- Backend build currently has pre-existing TypeScript type errors unrelated to this cleanup.
+
