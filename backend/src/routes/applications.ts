@@ -159,7 +159,40 @@ router.post('/', authenticateToken, requireStudent, asyncHandler(async (req: Aut
     // Get student info for notifications
     const student = await User.findById(req.user._id).select('name email phone');
 
-    // Real-time notification to employer (best-effort, don't fail on error)
+    // Get notification service
+    const notificationService = (global as any).notificationService as any;
+    const studentName = student?.name || student?.email || 'Unknown Student';
+
+    // Send notification to employer (saves to DB and sends via Socket.io)
+    if (notificationService && student) {
+      try {
+        await notificationService.notifyNewApplication(
+          job.employerId,
+          req.user._id,
+          application._id,
+          job.jobTitle,
+          studentName
+        );
+        console.log(`✅ Notification sent to employer ${job.employerId} for new application`);
+      } catch (notificationErr) {
+        console.error('⚠️ Failed to send notification:', notificationErr);
+        // Don't fail the application if notification fails
+      }
+
+      // Detect suspicious activity (don't block application, just notify)
+      try {
+        await notificationService.detectSuspiciousApplicationActivity(
+          req.user._id,
+          job.employerId,
+          job._id
+        );
+      } catch (detectionErr) {
+        console.error('⚠️ Failed to detect suspicious activity:', detectionErr);
+        // Continue even if detection fails
+      }
+    }
+
+    // Real-time notification to employer via socket (legacy compatibility)
     try {
       if (socketManager && student) {
         socketManager.notifyNewApplication({

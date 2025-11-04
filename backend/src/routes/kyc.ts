@@ -64,9 +64,18 @@ router.get('/employer/test', (req, res) => {
 
 // ===== Employer KYC endpoints =====
 // POST /api/kyc/employer → submit employer KYC to employer_kyc collection
-router.post('/employer', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+router.post(
+  '/employer',
+  authenticateToken,
+  requireEmployer,
+  upload.fields([
+    { name: 'idProof', maxCount: 1 },
+    { name: 'companyProof', maxCount: 1 },
+  ]),
+  asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const employerId = req.user!._id;
   const { 
+    fullName,
     companyName, 
     companyEmail, 
     companyPhone, 
@@ -77,7 +86,9 @@ router.post('/employer', authenticateToken, requireEmployer, asyncHandler(async 
     latitude, 
     longitude, 
     GSTNumber, 
+    gstNo,
     PAN, 
+    businessRegNo,
     documents 
   } = req.body || {};
 
@@ -92,24 +103,74 @@ router.post('/employer', authenticateToken, requireEmployer, asyncHandler(async 
     throw new ValidationError('KYC already approved. Cannot modify approved KYC.');
   }
 
+  const existingDocuments = existing?.documents ? JSON.parse(JSON.stringify(existing.documents)) : {};
+  let incomingDocuments: any = {};
+  if (documents) {
+    if (typeof documents === 'string') {
+      try {
+        incomingDocuments = JSON.parse(documents);
+      } catch (parseErr) {
+        console.warn('⚠️ Failed to parse documents payload, ignoring:', parseErr);
+      }
+    } else if (typeof documents === 'object') {
+      incomingDocuments = documents;
+    }
+  }
+
+  const processedDocuments: any = {
+    ...existingDocuments,
+    ...incomingDocuments,
+  };
+
+  const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+
+  const handleFileUpload = async (file?: Express.Multer.File) => {
+    if (!file) return undefined;
+    const uploadResult = await uploadImage(file, `kyc/employer/${employerId.toString()}`);
+    try {
+      if (file.path && fs.existsSync(file.path)) {
+        fs.unlinkSync(file.path);
+      }
+    } catch (cleanupErr) {
+      console.warn('⚠️ Failed to cleanup temporary file:', cleanupErr);
+    }
+    return {
+      url: uploadResult.secure_url,
+      publicId: uploadResult.public_id,
+    };
+  };
+
+  if (files?.idProof && files.idProof[0]) {
+    processedDocuments.idProof = await handleFileUpload(files.idProof[0]);
+  }
+
+  if (files?.companyProof && files.companyProof[0]) {
+    processedDocuments.companyProof = await handleFileUpload(files.companyProof[0]);
+  }
+
   // Prepare KYC data
   const kycData: any = {
     employerId,
     companyName: companyName.trim(),
     companyEmail: companyEmail?.trim() || undefined,
     companyPhone: companyPhone?.trim() || undefined,
-    authorizedName: authorizedName?.trim() || undefined,
+    authorizedName: authorizedName?.trim() || fullName?.trim() || undefined,
+    fullName: fullName?.trim() || authorizedName?.trim() || undefined,
+    businessRegNo: businessRegNo?.trim() || existing?.businessRegNo || undefined,
     designation: designation?.trim() || undefined,
     address: address?.trim() || undefined,
     city: city?.trim() || undefined,
     latitude: latitude?.trim() || undefined,
     longitude: longitude?.trim() || undefined,
-    GSTNumber: GSTNumber?.trim() || undefined,
+    GSTNumber: (gstNo || GSTNumber)?.trim() || undefined,
     PAN: PAN?.trim() || undefined,
-    documents: documents || {},
     status: 'pending',
     submittedAt: new Date()
   };
+
+  if (Object.keys(processedDocuments).length > 0) {
+    kycData.documents = processedDocuments;
+  }
 
   // If resubmitting after rejection, clear rejection reason
   if (existing?.status === 'rejected') {
@@ -245,6 +306,24 @@ router.patch('/admin/:id/approve', authenticateToken, asyncHandler(async (req: A
     $unset: { kycPendingAt: 1, kycRejectedAt: 1 }
   });
 
+  const notificationService = (global as any).notificationService;
+  if (notificationService) {
+    try {
+      await notificationService.createNotification({
+        receiverId: kycRecord.employerId,
+        message: '✅ Your employer KYC has been approved. You can now post jobs.',
+        type: 'system',
+        metadata: {
+          kycId: kycRecord._id,
+          status: 'approved',
+          reviewedAt: kycRecord.reviewedAt,
+        },
+      });
+    } catch (notifyErr) {
+      console.error('❌ Failed to send KYC approval notification:', notifyErr);
+    }
+  }
+
   return sendSuccessResponse(res, { kyc: kycRecord }, 'KYC approved successfully');
 }));
 
@@ -282,6 +361,25 @@ router.patch('/admin/:id/reject', authenticateToken, asyncHandler(async (req: Au
     kycRejectedAt: new Date(),
     $unset: { kycPendingAt: 1, kycVerifiedAt: 1 }
   });
+
+  const notificationService = (global as any).notificationService;
+  if (notificationService) {
+    try {
+      await notificationService.createNotification({
+        receiverId: kycRecord.employerId,
+        message: `❌ Your employer KYC was rejected. ${rejectionReason.trim()}`,
+        type: 'system',
+        metadata: {
+          kycId: kycRecord._id,
+          status: 'rejected',
+          reviewedAt: kycRecord.reviewedAt,
+          rejectionReason: kycRecord.rejectionReason,
+        },
+      });
+    } catch (notifyErr) {
+      console.error('❌ Failed to send KYC rejection notification:', notifyErr);
+    }
+  }
 
   return sendSuccessResponse(res, { kyc: kycRecord }, 'KYC rejected successfully');
 }));

@@ -18,16 +18,20 @@ import {
   Star,
   Eye,
   CheckCircle,
-  X
+  X,
+  Shield
 } from 'lucide-react';
 import { apiService } from '../../../services/api';
-import { kycStatusService } from '../../../services/kycStatusService';
+import { useAuth } from '../../../contexts/AuthContext';
 
 const PostJobPage = () => {
   const router = useRouter();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [kycOK, setKycOK] = useState<boolean>(false);
+  const [kycStatus, setKycStatus] = useState<'approved' | 'pending' | 'rejected' | 'not-submitted' | 'suspended'>('pending');
+  const [kycMessage, setKycMessage] = useState('');
   const [formData, setFormData] = useState({
     jobTitle: '',
     description: '',
@@ -38,18 +42,51 @@ const PostJobPage = () => {
     applicationDeadline: ''
   });
 
+  const normalizeStatus = (status?: string | null): 'approved' | 'pending' | 'rejected' | 'not-submitted' | 'suspended' => {
+    if (!status) return 'not-submitted';
+    const normalized = status.replace(/_/g, '-').toLowerCase();
+    if (normalized === 'approved' || normalized === 'pending' || normalized === 'rejected' || normalized === 'not-submitted' || normalized === 'suspended') {
+      return normalized as 'approved' | 'pending' | 'rejected' | 'not-submitted' | 'suspended';
+    }
+    return 'not-submitted';
+  };
+
   // Check employer KYC status and gate job posting
   useEffect(() => {
     const checkKYC = async () => {
+      if (!user?._id) return;
       try {
-        const status = await kycStatusService.checkKYCStatus();
-        setKycOK(status.status === 'approved');
+        const res = await apiService.getEmployerKYCStatus(user._id);
+        const normalized = normalizeStatus(res?.status || res?.user?.kycStatus);
+        setKycStatus(normalized);
+        setKycOK(normalized === 'approved');
+        switch (normalized) {
+          case 'approved':
+            setKycMessage('Your KYC is approved. You can post new jobs.');
+            break;
+          case 'pending':
+            setKycMessage('Your KYC is pending approval. You can post jobs once it is approved.');
+            break;
+          case 'rejected':
+            setKycMessage(res?.kyc?.rejectionReason
+              ? `Your KYC was rejected. Reason: ${res.kyc.rejectionReason}`
+              : 'Your KYC was rejected. Please resubmit the required details.');
+            break;
+          case 'suspended':
+            setKycMessage('Your KYC has been suspended. Please contact support for assistance.');
+            break;
+          default:
+            setKycMessage('Please complete your KYC verification before posting jobs.');
+        }
       } catch (e) {
+        console.error('❌ Unable to load employer KYC status:', e);
         setKycOK(false);
+        setKycStatus('not-submitted');
+        setKycMessage('Please complete your KYC verification before posting jobs.');
       }
     };
     checkKYC();
-  }, []);
+  }, [user?._id]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -290,6 +327,46 @@ const PostJobPage = () => {
       </div>
     </motion.div>
   );
+
+  if (!kycOK) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="w-full max-w-md space-y-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-lg">
+          <div className="flex items-center gap-3">
+            <Shield className="h-8 w-8 text-orange-600" />
+            <h1 className="text-xl font-semibold text-gray-900">KYC Verification Required</h1>
+          </div>
+          <p className="text-gray-600 whitespace-pre-line">{kycMessage}</p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            {(kycStatus === 'rejected' || kycStatus === 'not-submitted') && (
+              <button
+                onClick={() => router.push('/employer/kyc')}
+                className="w-full sm:w-auto rounded-lg bg-orange-600 px-4 py-2 text-white hover:bg-orange-700"
+              >
+                {kycStatus === 'rejected' ? 'Resubmit KYC' : 'Complete KYC'}
+              </button>
+            )}
+            {kycStatus === 'pending' && (
+              <button
+                onClick={() => router.push('/employer/kyc')}
+                className="w-full sm:w-auto rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
+              >
+                View KYC Status
+              </button>
+            )}
+            {kycStatus === 'suspended' && (
+              <button
+                onClick={() => router.push('/employer/kyc')}
+                className="w-full sm:w-auto rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
+              >
+                View KYC Details
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">

@@ -4,10 +4,43 @@ import { Job } from '../models/Job';
 import { User } from '../models/User';
 import { Application } from '../models/Application';
 import { KYC } from '../models/KYC';
+import EmployerKYC from '../models/EmployerKYC';
 import { authenticateToken, requireRole, AuthRequest, requireEmployer, requireStudent } from '../middleware/auth';
 import { asyncHandler, sendSuccessResponse, sendErrorResponse, ValidationError } from '../middleware/errorHandler';
 
 const router = express.Router();
+
+const normalizeEmployerKycStatus = (status?: string | null): 'not-submitted' | 'pending' | 'approved' | 'rejected' | 'suspended' => {
+  if (!status) return 'not-submitted';
+  const normalized = status.toString().replace(/_/g, '-').toLowerCase();
+  switch (normalized) {
+    case 'approved':
+    case 'pending':
+    case 'rejected':
+    case 'suspended':
+      return normalized as 'pending' | 'approved' | 'rejected' | 'suspended';
+    default:
+      return 'not-submitted';
+  }
+};
+
+const getEmployerKycState = async (employerId: mongoose.Types.ObjectId) => {
+  const user = await User.findById(employerId).select('kycStatus isVerified');
+  const employerKyc = await EmployerKYC.findOne({ employerId }).select('status rejectionReason reviewedAt submittedAt');
+
+  const status = normalizeEmployerKycStatus((user?.kycStatus as any) || employerKyc?.status);
+  const isApproved = status === 'approved' || !!user?.isVerified;
+  const isSuspended = status === 'suspended';
+  const isPending = status === 'pending';
+
+  return {
+    status,
+    isApproved,
+    isSuspended,
+    isPending,
+    record: employerKyc,
+  };
+};
 
 // @route   GET /api/enhanced-jobs/:id
 // @desc    Get job details by ID
@@ -96,17 +129,20 @@ router.post('/', authenticateToken, requireEmployer, asyncHandler(async (req: Au
 
   // Enforce employer KYC gating
   try {
-    const employerUser = await User.findById(req.user!._id).select('kycStatus isVerified');
-    const kycRecord = await KYC.findOne({ userId: req.user!._id, isActive: true });
-    const kycStatus = (employerUser?.kycStatus as any) || kycRecord?.verificationStatus || 'not_submitted';
-    const isSuspended = employerUser?.kycStatus === 'suspended';
-    const isApproved = kycStatus === 'approved' || !!employerUser?.isVerified;
+    const { status, isApproved, isSuspended } = await getEmployerKycState(req.user!._id);
 
     if (isSuspended) {
       return sendErrorResponse(res, 403, 'Your KYC is suspended. Contact admin.');
     }
+
     if (!isApproved) {
-      return sendErrorResponse(res, 403, 'Please complete and get your KYC approved before posting jobs');
+      const message =
+        status === 'pending'
+          ? 'Your KYC is pending approval. You can post jobs once it is approved.'
+          : status === 'rejected'
+          ? 'Your KYC was rejected. Please resubmit before posting jobs.'
+          : 'Please complete your KYC verification before posting jobs.';
+      return sendErrorResponse(res, 403, message, { kycStatus: status });
     }
   } catch (kycErr) {
     console.error('❌ Employer KYC check failed:', kycErr);
@@ -512,37 +548,18 @@ router.get('/employer-dashboard', authenticateToken, requireEmployer, asyncHandl
 
   try {
     const employerId = req.user!._id;
-    
-    // Check employer's KYC status
-    const user = await User.findById(employerId).select('kycStatus isVerified');
-    const kycRecord = await KYC.findOne({ userId: employerId, isActive: true });
-    const kycStatus = (user?.kycStatus as any) || kycRecord?.verificationStatus || 'not_submitted';
-    const isKYCApproved = kycStatus === 'approved' || !!user?.isVerified;
-    
+    const { status: employerKycStatus, isApproved: isKYCApproved, isSuspended } = await getEmployerKycState(employerId);
+
     console.log(`🔍 Employer ${employerId} KYC status:`, {
-      kycStatus,
-      isVerified: user?.isVerified,
-      isKYCApproved
+      employerKycStatus,
+      isKYCApproved,
+      isSuspended,
     });
-    
-    // Block access to dashboard if KYC is not approved
-    if (!isKYCApproved) {
-      let message = '';
-      
-      if (kycStatus === 'suspended') {
-        message = 'Your KYC is suspended. Contact admin for support.';
-      } else if (kycStatus === 'pending') {
-        message = 'Your KYC is pending approval. Please wait for admin verification.';
-      } else if (kycStatus === 'rejected') {
-        message = 'Your KYC was rejected. Please submit your KYC again with correct details.';
-      } else {
-        // not-submitted or any other status
-        message = 'Please complete your KYC verification to access your dashboard.';
-      }
-      
-      return sendErrorResponse(res, 403, message, {
-        kycStatus,
-        kycRequired: true
+
+    if (isSuspended) {
+      return sendErrorResponse(res, 403, 'Your KYC is suspended. Contact admin for support.', {
+        kycStatus: employerKycStatus,
+        kycRequired: true,
       });
     }
     
@@ -605,6 +622,14 @@ router.get('/employer-dashboard', authenticateToken, requireEmployer, asyncHandl
       };
     });
 
+    const responseMessage = isKYCApproved
+      ? 'Your KYC is approved. You can now post jobs!'
+      : employerKycStatus === 'pending'
+      ? 'Your KYC is pending approval. Some actions may be restricted until verification is complete.'
+      : employerKycStatus === 'rejected'
+      ? 'Your KYC was rejected. Please submit your KYC again with correct details.'
+      : 'Please complete your KYC verification to access your dashboard.';
+
     sendSuccessResponse(res, {
       jobs: structuredJobs,
       pagination: {
@@ -612,10 +637,10 @@ router.get('/employer-dashboard', authenticateToken, requireEmployer, asyncHandl
         pages: Math.ceil(totalJobs / pageSize),
         total: totalJobs
       },
-      kycStatus: kycStatus,
-      kycApproved: true,
-      message: 'Your KYC is approved. You can now post jobs!'
-    }, 'Your KYC is approved. You can now post jobs!');
+      kycStatus: employerKycStatus,
+      kycApproved: isKYCApproved,
+      message: responseMessage
+    }, 'Employer dashboard data retrieved successfully');
   } catch (e: any) {
     console.error('❌ Failed to fetch employer dashboard:', e);
     return sendErrorResponse(res, 500, 'Failed to fetch employer dashboard', process.env.NODE_ENV !== 'production' ? (e?.stack || e?.message || e) : undefined);
@@ -627,6 +652,7 @@ router.get('/employer-dashboard', authenticateToken, requireEmployer, asyncHandl
 // @access  Private (Employers only)
 router.patch('/applications/:applicationId/approve', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { applicationId } = req.params;
+  const { notes } = req.body;
 
   const application = await Application.findById(applicationId)
     .populate('jobId', 'jobTitle companyName location salaryRange')
@@ -643,15 +669,39 @@ router.patch('/applications/:applicationId/approve', authenticateToken, requireE
   }
 
   // Update application status
-  await application.updateStatus('accepted', 'Application approved by employer');
+  await application.updateStatus('accepted', notes || 'Application approved by employer');
 
-  // Real-time notification to student via socket
+  // Get notification service
+  const notificationService = (global as any).notificationService as any;
+  const studentId = typeof application.studentId === 'object' 
+    ? (application.studentId as any)._id 
+    : application.studentId;
+  
+  const employerId = req.user!._id;
+  const jobTitle = job.jobTitle;
+  const companyName = job.companyName || 'Unknown Company';
+
+  // Send notification to student (saves to DB and sends via Socket.io)
+  if (notificationService && studentId) {
+    try {
+      await notificationService.notifyApplicationAccepted(
+        studentId,
+        employerId,
+        application._id,
+        jobTitle,
+        companyName
+      );
+      console.log(`✅ Notification sent to student ${studentId} for approved application`);
+    } catch (error) {
+      console.error('❌ Failed to send notification:', error);
+      // Don't fail the approval if notification fails
+    }
+  }
+
+  // Also send via socket for real-time updates (legacy compatibility)
   const socketManager = (global as any).socketManager;
-  if (socketManager && application.studentId) {
-    const studentId = typeof application.studentId === 'object' 
-      ? (application.studentId as any)._id.toString() 
-      : String(application.studentId);
-    
+  if (socketManager && studentId) {
+    const studentIdStr = studentId.toString();
     const jobData = typeof application.jobId === 'object' ? application.jobId : job;
     
     socketManager.notifyApplicationStatusUpdate({
@@ -664,9 +714,7 @@ router.patch('/applications/:applicationId/approve', authenticateToken, requireE
       salaryRange: (jobData as any).salaryRange || job.salaryRange,
       approvedAt: application.shortlistedDate || new Date(),
       message: `Your application for ${(jobData as any).jobTitle || job.jobTitle} at ${(jobData as any).companyName || job.companyName} has been approved! 🎉`
-    }, studentId);
-    
-    console.log(`📢 Real-time notification sent to student ${studentId} for approved application`);
+    }, studentIdStr);
   }
 
   sendSuccessResponse(res, { application }, 'Application approved successfully');
@@ -677,8 +725,12 @@ router.patch('/applications/:applicationId/approve', authenticateToken, requireE
 // @access  Private (Employers only)
 router.patch('/applications/:applicationId/reject', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { applicationId } = req.params;
+  const { reason } = req.body;
 
-  const application = await Application.findById(applicationId);
+  const application = await Application.findById(applicationId)
+    .populate('jobId', 'jobTitle companyName')
+    .populate('studentId', 'name email');
+  
   if (!application) {
     throw new ValidationError('Application not found');
   }
@@ -690,24 +742,51 @@ router.patch('/applications/:applicationId/reject', authenticateToken, requireEm
   }
 
   // Update application status
-  await application.updateStatus('rejected', 'Application rejected by employer');
+  const rejectionReason = reason || 'Application rejected by employer';
+  await application.updateStatus('rejected', rejectionReason);
 
-  // Trigger student notification
-  try {
-    await fetch('http://localhost:5000/api/notifications/application-rejected', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${req.headers.authorization?.replace('Bearer ', '')}`
-      },
-      body: JSON.stringify({
-        applicationId,
-        studentId: application.studentId,
-        jobTitle: job.jobTitle
-      })
-    });
-  } catch (error) {
-    console.error('Failed to send notification:', error);
+  // Get notification service
+  const notificationService = (global as any).notificationService as any;
+  const studentId = typeof application.studentId === 'object' 
+    ? (application.studentId as any)._id 
+    : application.studentId;
+  
+  const employerId = req.user!._id;
+  const jobTitle = job.jobTitle;
+  const companyName = job.companyName || 'Unknown Company';
+
+  // Send notification to student (saves to DB and sends via Socket.io)
+  if (notificationService && studentId) {
+    try {
+      await notificationService.notifyApplicationRejected(
+        studentId,
+        employerId,
+        application._id,
+        jobTitle,
+        companyName,
+        rejectionReason
+      );
+      console.log(`✅ Notification sent to student ${studentId} for rejected application`);
+    } catch (error) {
+      console.error('❌ Failed to send notification:', error);
+      // Don't fail the rejection if notification fails
+    }
+  }
+
+  // Also send via socket for real-time updates (legacy compatibility)
+  const socketManager = (global as any).socketManager;
+  if (socketManager && studentId) {
+    const studentIdStr = studentId.toString();
+    const jobData = typeof application.jobId === 'object' ? application.jobId : job;
+    
+    socketManager.notifyApplicationStatusUpdate({
+      _id: application._id,
+      status: 'rejected',
+      jobId: job._id,
+      jobTitle: (jobData as any).jobTitle || job.jobTitle,
+      companyName: (jobData as any).companyName || job.companyName,
+      message: `Your application for ${(jobData as any).jobTitle || job.jobTitle} at ${(jobData as any).companyName || job.companyName} has been rejected.`
+    }, studentIdStr);
   }
 
   sendSuccessResponse(res, { application }, 'Application rejected successfully');

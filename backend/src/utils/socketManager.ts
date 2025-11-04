@@ -231,6 +231,21 @@ class SocketManager {
     });
   }
 
+  // Emit notification to specific user (specialized method)
+  public emitNotification(userId: string, notification: any) {
+    console.log(`📡 Emitting notification to user ${userId}`);
+    this.io.to(`user:${userId}`).emit('notification', {
+      ...notification,
+      timestamp: new Date()
+    });
+    
+    // Also emit to notification room for compatibility
+    this.io.to(`user:${userId}`).emit('notification:new', {
+      ...notification,
+      timestamp: new Date()
+    });
+  }
+
   // Get connected users count
   public getConnectedUsersCount(): number {
     return this.connectedUsers.size;

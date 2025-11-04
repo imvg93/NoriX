@@ -52,11 +52,32 @@ interface Student {
 const isStudentApprovalStatus = (status: unknown): status is Student['approvalStatus'] =>
   status === 'pending' || status === 'approved' || status === 'rejected';
 
-const normalizeStudent = (student: any): Student => ({
-  ...student,
-  approvalStatus: isStudentApprovalStatus(student?.approvalStatus) ? student.approvalStatus : 'pending',
-  rejectionReason: student?.rejectionReason ?? undefined,
-});
+const normalizeStudent = (student: any): Student => {
+  // Priority: approvalStatus -> kycStatus -> status -> default to pending
+  let approvalStatus: 'pending' | 'approved' | 'rejected' = 'pending';
+  
+  if (isStudentApprovalStatus(student?.approvalStatus)) {
+    approvalStatus = student.approvalStatus;
+  } else if (student?.kycStatus === 'approved') {
+    approvalStatus = 'approved';
+  } else if (student?.kycStatus === 'rejected') {
+    approvalStatus = 'rejected';
+  } else if (student?.kycStatus === 'pending') {
+    approvalStatus = 'pending';
+  } else if (student?.status === 'approved') {
+    approvalStatus = 'approved';
+  } else if (student?.status === 'rejected') {
+    approvalStatus = 'rejected';
+  } else if (student?.status === 'pending') {
+    approvalStatus = 'pending';
+  }
+  
+  return {
+    ...student,
+    approvalStatus,
+    rejectionReason: student?.rejectionReason ?? undefined,
+  };
+};
 
 interface Employer {
   _id: string;
@@ -76,11 +97,32 @@ interface Employer {
 const isEmployerApprovalStatus = (status: unknown): status is Employer['approvalStatus'] =>
   status === 'pending' || status === 'approved' || status === 'rejected';
 
-const normalizeEmployer = (employer: any): Employer => ({
-  ...employer,
-  approvalStatus: isEmployerApprovalStatus(employer?.approvalStatus) ? employer.approvalStatus : 'pending',
-  rejectionReason: employer?.rejectionReason ?? undefined,
-});
+const normalizeEmployer = (employer: any): Employer => {
+  // Priority: approvalStatus -> kycStatus -> status -> default to pending
+  let approvalStatus: 'pending' | 'approved' | 'rejected' = 'pending';
+  
+  if (isEmployerApprovalStatus(employer?.approvalStatus)) {
+    approvalStatus = employer.approvalStatus;
+  } else if (employer?.kycStatus === 'approved') {
+    approvalStatus = 'approved';
+  } else if (employer?.kycStatus === 'rejected') {
+    approvalStatus = 'rejected';
+  } else if (employer?.kycStatus === 'pending') {
+    approvalStatus = 'pending';
+  } else if (employer?.status === 'approved') {
+    approvalStatus = 'approved';
+  } else if (employer?.status === 'rejected') {
+    approvalStatus = 'rejected';
+  } else if (employer?.status === 'pending') {
+    approvalStatus = 'pending';
+  }
+  
+  return {
+    ...employer,
+    approvalStatus,
+    rejectionReason: employer?.rejectionReason ?? undefined,
+  };
+};
 
 interface Job {
   _id: string;
@@ -515,76 +557,184 @@ export default function AdminDashboard() {
   // Helper functions
   const handleApproval = async (itemId: string, type: 'student' | 'employer' | 'job' | 'kyc', action: 'approve' | 'reject', reason?: string) => {
     try {
+      console.log(`🔄 Starting ${action} for ${type} with ID:`, itemId);
+      
       if (type === 'student') {
         if (action === 'approve') {
-          await apiService.approveUser(itemId);
+          const response = await apiService.approveUser(itemId);
+          console.log('✅ Approval API response:', response);
         } else {
-          await apiService.rejectUser(itemId, reason || '');
+          const response = await apiService.rejectUser(itemId, reason || '');
+          console.log('✅ Rejection API response:', response);
         }
-        setData(prev => {
-          const previous = prev.students.find(student => student._id === itemId);
-          const prevStatus = previous?.approvalStatus;
-          const nextStatus = action === 'approve' ? 'approved' : 'rejected';
-
-          const updatedStudents = prev.students.map((student): Student =>
-            student._id === itemId
-              ? {
-                  ...student,
-                  approvalStatus: nextStatus,
-                  rejectionReason: action === 'reject' ? reason : undefined,
-                }
-              : student
-          );
-
-          let pendingStudentApprovals = prev.overview.pendingStudentApprovals;
-          if (prevStatus !== nextStatus) {
-            if (prevStatus === 'pending') pendingStudentApprovals = Math.max(0, pendingStudentApprovals - 1);
+        
+        // Wait a moment for backend to process
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Refresh the specific user data from server
+        try {
+          console.log('🔄 Refreshing student data from server...');
+          const usersResponse = await apiService.getAllUsers({ userType: 'student', page: 1, limit: 1000 }) as any;
+          console.log('📦 Raw API response:', usersResponse);
+          
+          const studentsRaw = usersResponse.data?.users || usersResponse.users || [];
+          console.log(`📊 Found ${studentsRaw.length} students in response`);
+          
+          const students = studentsRaw.map(normalizeStudent);
+          const updatedStudent = students.find((s: Student) => s._id === itemId);
+          
+          console.log('🔍 Updated student data:', updatedStudent ? {
+            id: updatedStudent._id,
+            name: updatedStudent.name,
+            approvalStatus: updatedStudent.approvalStatus,
+            kycStatus: studentsRaw.find((s: any) => s._id === itemId)?.kycStatus,
+            status: studentsRaw.find((s: any) => s._id === itemId)?.status
+          } : 'Student not found');
+          
+          if (updatedStudent) {
+            setData(prev => {
+              const updatedStudents = prev.students.map((student): Student =>
+                student._id === itemId ? updatedStudent : student
+              );
+              
+              const pendingStudentApprovals = updatedStudents.filter(s => s.approvalStatus === 'pending').length;
+              
+              console.log('✅ Updating UI with new status:', updatedStudent.approvalStatus);
+              
+              return {
+                ...prev,
+                students: updatedStudents,
+                overview: {
+                  ...prev.overview,
+                  pendingStudentApprovals,
+                },
+              };
+            });
+          } else {
+            console.error('❌ Updated student not found in response');
+            throw new Error('Student not found in refresh response');
           }
+        } catch (refreshError) {
+          console.error('❌ Error refreshing student data:', refreshError);
+          // Fallback to optimistic update
+          setData(prev => {
+            const previous = prev.students.find(student => student._id === itemId);
+            const prevStatus = previous?.approvalStatus;
+            const nextStatus = action === 'approve' ? 'approved' : 'rejected';
 
-          return {
-            ...prev,
-            students: updatedStudents,
-            overview: {
-              ...prev.overview,
-              pendingStudentApprovals,
-            },
-          };
-        });
+            const updatedStudents = prev.students.map((student): Student =>
+              student._id === itemId
+                ? {
+                    ...student,
+                    approvalStatus: nextStatus,
+                    rejectionReason: action === 'reject' ? reason : undefined,
+                  }
+                : student
+            );
+
+            let pendingStudentApprovals = prev.overview.pendingStudentApprovals;
+            if (prevStatus !== nextStatus) {
+              if (prevStatus === 'pending') pendingStudentApprovals = Math.max(0, pendingStudentApprovals - 1);
+            }
+
+            return {
+              ...prev,
+              students: updatedStudents,
+              overview: {
+                ...prev.overview,
+                pendingStudentApprovals,
+              },
+            };
+          });
+        }
       } else if (type === 'employer') {
         if (action === 'approve') {
-          await apiService.approveUser(itemId);
+          const response = await apiService.approveUser(itemId);
+          console.log('✅ Approval API response:', response);
         } else {
-          await apiService.rejectUser(itemId, reason || '');
+          const response = await apiService.rejectUser(itemId, reason || '');
+          console.log('✅ Rejection API response:', response);
         }
-        setData(prev => {
-          const previous = prev.employers.find(employer => employer._id === itemId);
-          const prevStatus = previous?.approvalStatus;
-          const nextStatus = action === 'approve' ? 'approved' : 'rejected';
-
-          const updatedEmployers = prev.employers.map((employer): Employer =>
-            employer._id === itemId
-              ? {
-                  ...employer,
-                  approvalStatus: nextStatus,
-                  rejectionReason: action === 'reject' ? reason : undefined,
-                }
-              : employer
-          );
-
-          let pendingEmployerApprovals = prev.overview.pendingEmployerApprovals;
-          if (prevStatus !== nextStatus) {
-            if (prevStatus === 'pending') pendingEmployerApprovals = Math.max(0, pendingEmployerApprovals - 1);
+        
+        // Wait a moment for backend to process
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Refresh the specific user data from server
+        try {
+          console.log('🔄 Refreshing employer data from server...');
+          const usersResponse = await apiService.getAllUsers({ userType: 'employer', page: 1, limit: 1000 }) as any;
+          console.log('📦 Raw API response:', usersResponse);
+          
+          const employersRaw = usersResponse.data?.users || usersResponse.users || [];
+          console.log(`📊 Found ${employersRaw.length} employers in response`);
+          
+          const employers = employersRaw.map(normalizeEmployer);
+          const updatedEmployer = employers.find((e: Employer) => e._id === itemId);
+          
+          console.log('🔍 Updated employer data:', updatedEmployer ? {
+            id: updatedEmployer._id,
+            name: updatedEmployer.name,
+            approvalStatus: updatedEmployer.approvalStatus,
+            kycStatus: employersRaw.find((e: any) => e._id === itemId)?.kycStatus,
+            status: employersRaw.find((e: any) => e._id === itemId)?.status
+          } : 'Employer not found');
+          
+          if (updatedEmployer) {
+            setData(prev => {
+              const updatedEmployers = prev.employers.map((employer): Employer =>
+                employer._id === itemId ? updatedEmployer : employer
+              );
+              
+              const pendingEmployerApprovals = updatedEmployers.filter(e => e.approvalStatus === 'pending').length;
+              
+              console.log('✅ Updating UI with new status:', updatedEmployer.approvalStatus);
+              
+              return {
+                ...prev,
+                employers: updatedEmployers,
+                overview: {
+                  ...prev.overview,
+                  pendingEmployerApprovals,
+                },
+              };
+            });
+          } else {
+            console.error('❌ Updated employer not found in response');
+            throw new Error('Employer not found in refresh response');
           }
+        } catch (refreshError) {
+          console.error('❌ Error refreshing employer data:', refreshError);
+          // Fallback to optimistic update
+          setData(prev => {
+            const previous = prev.employers.find(employer => employer._id === itemId);
+            const prevStatus = previous?.approvalStatus;
+            const nextStatus = action === 'approve' ? 'approved' : 'rejected';
 
-          return {
-            ...prev,
-            employers: updatedEmployers,
-            overview: {
-              ...prev.overview,
-              pendingEmployerApprovals,
-            },
-          };
-        });
+            const updatedEmployers = prev.employers.map((employer): Employer =>
+              employer._id === itemId
+                ? {
+                    ...employer,
+                    approvalStatus: nextStatus,
+                    rejectionReason: action === 'reject' ? reason : undefined,
+                  }
+                : employer
+            );
+
+            let pendingEmployerApprovals = prev.overview.pendingEmployerApprovals;
+            if (prevStatus !== nextStatus) {
+              if (prevStatus === 'pending') pendingEmployerApprovals = Math.max(0, pendingEmployerApprovals - 1);
+            }
+
+            return {
+              ...prev,
+              employers: updatedEmployers,
+              overview: {
+                ...prev.overview,
+                pendingEmployerApprovals,
+              },
+            };
+          });
+        }
       } else if (type === 'job') {
         if (action === 'approve') {
           await apiService.approveJob(itemId);

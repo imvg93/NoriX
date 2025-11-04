@@ -4,7 +4,10 @@ const nextConfig: NextConfig = {
   // Vercel-optimized configuration
   trailingSlash: false,
   images: {
-    unoptimized: false, // Enable image optimization for better performance
+    // Disable optimization for static images in production to avoid loading issues
+    unoptimized: process.env.NODE_ENV === 'production',
+    // Allow local static images
+    domains: [],
     remotePatterns: [
       {
         protocol: 'https',

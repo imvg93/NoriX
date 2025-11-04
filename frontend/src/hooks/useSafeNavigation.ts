@@ -9,6 +9,27 @@ export const useSafeNavigation = () => {
   const router = useRouter();
   const { isAuthenticated, user } = useAuth();
 
+  const navigateToRoleBasedHome = useCallback(() => {
+    if (!isAuthenticated || !user) {
+      router.push('/');
+      return;
+    }
+
+    switch (user.userType) {
+      case 'student':
+        router.push('/');
+        break;
+      case 'employer':
+        router.push('/');
+        break;
+      case 'admin':
+        router.push('/admin');
+        break;
+      default:
+        router.push('/');
+    }
+  }, [router, isAuthenticated, user]);
+
   const navigateBack = useCallback(() => {
     // Track the back navigation
     if (typeof window !== 'undefined') {
@@ -22,7 +43,7 @@ export const useSafeNavigation = () => {
       // Fallback to role-based home if no history
       navigateToRoleBasedHome();
     }
-  }, [router, user?.userType]);
+  }, [router, user?.userType, navigateToRoleBasedHome]);
 
   const navigateTo = useCallback((path: string, options?: { replace?: boolean }) => {
     // Track navigation
@@ -53,27 +74,6 @@ export const useSafeNavigation = () => {
       router.push('/login');
     }
   }, [router, isAuthenticated, user?.userType]);
-
-  const navigateToRoleBasedHome = useCallback(() => {
-    if (!isAuthenticated || !user) {
-      router.push('/');
-      return;
-    }
-
-    switch (user.userType) {
-      case 'student':
-        router.push('/');
-        break;
-      case 'employer':
-        router.push('/');
-        break;
-      case 'admin':
-        router.push('/admin');
-        break;
-      default:
-        router.push('/');
-    }
-  }, [router, isAuthenticated, user]);
 
   return {
     navigateBack,

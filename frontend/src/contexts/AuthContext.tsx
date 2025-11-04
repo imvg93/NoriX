@@ -25,6 +25,7 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   refreshToken: () => Promise<boolean>;
+  updateUser: (updates: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -204,6 +205,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateUser = (updates: Partial<User>) => {
+    setUser(prev => {
+      if (!prev) {
+        return prev;
+      }
+
+      const merged = { ...prev, ...updates } as User;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('user', JSON.stringify(merged));
+      }
+
+      return merged;
+    });
+  };
+
   const value: AuthContextType = {
     user,
     login,
@@ -211,7 +227,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAuthenticated: !!user && !!token,
     token,
     loading,
-    refreshToken
+    refreshToken,
+    updateUser
   };
 
   return (

@@ -61,12 +61,13 @@ router.get('/profile', authenticateToken, asyncHandler(async (req: AuthRequest, 
 router.put('/profile', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const {
     name,
+    phone,
+    address,
     college,
     skills,
     availability,
     companyName,
-    businessType,
-    address
+    businessType
   } = req.body;
 
   const user = await User.findById(req.user!._id);
@@ -74,24 +75,95 @@ router.put('/profile', authenticateToken, asyncHandler(async (req: AuthRequest, 
     throw new ValidationError('User not found');
   }
 
+  // Store previous values for comparison
+  const previousValues: any = {
+    name: user.name,
+    phone: user.phone || '',
+    address: user.address || '',
+  };
+
+  const newValues: any = {};
+  const changedFields: string[] = [];
+
   // Update basic fields
-  if (name) user.name = name;
+  if (name !== undefined && name !== user.name) {
+    previousValues.name = user.name;
+    user.name = name;
+    newValues.name = name;
+    changedFields.push('name');
+  }
+
+  if (phone !== undefined && phone !== user.phone) {
+    previousValues.phone = user.phone || '';
+    user.phone = phone;
+    newValues.phone = phone;
+    changedFields.push('phone');
+  }
+
+  if (address !== undefined && address !== user.address) {
+    previousValues.address = user.address || '';
+    user.address = address;
+    newValues.address = address;
+    changedFields.push('address');
+  }
 
   // Update student-specific fields
   if (user.userType === 'student') {
-    if (college) user.college = college;
-    if (skills) user.skills = skills.split(',').map((s: string) => s.trim());
-    if (availability) user.availability = availability;
+    if (college !== undefined && college !== user.college) {
+      previousValues.college = user.college || '';
+      user.college = college;
+      newValues.college = college;
+      changedFields.push('college');
+    }
+
+    if (skills !== undefined) {
+      const skillsArray = typeof skills === 'string' 
+        ? skills.split(',').map((s: string) => s.trim()).filter(Boolean)
+        : skills;
+      
+      const prevSkills = (user.skills || []).join(', ');
+      const newSkills = Array.isArray(skillsArray) ? skillsArray.join(', ') : '';
+      
+      if (prevSkills !== newSkills) {
+        previousValues.skills = prevSkills;
+        user.skills = skillsArray;
+        newValues.skills = newSkills;
+        changedFields.push('skills');
+      }
+    }
+
+    if (availability !== undefined && availability !== user.availability) {
+      previousValues.availability = user.availability || '';
+      user.availability = availability;
+      newValues.availability = availability;
+      changedFields.push('availability');
+    }
   }
 
   // Update employer-specific fields
   if (user.userType === 'employer') {
-    if (companyName) user.companyName = companyName;
-    if (businessType) user.businessType = businessType;
-    if (address) user.address = address;
+    if (companyName !== undefined && companyName !== user.companyName) {
+      previousValues.companyName = user.companyName || '';
+      user.companyName = companyName;
+      newValues.companyName = companyName;
+      changedFields.push('companyName');
+    }
+
+    if (businessType !== undefined && businessType !== user.businessType) {
+      previousValues.businessType = user.businessType || '';
+      user.businessType = businessType;
+      newValues.businessType = businessType;
+      changedFields.push('businessType');
+    }
   }
 
+  // Save changes directly to MongoDB
   await user.save();
+
+  console.log(`✅ Profile updated successfully for user: ${user.email}`);
+  if (changedFields.length > 0) {
+    console.log(`📝 Changed fields: ${changedFields.join(', ')}`);
+  }
 
   sendSuccessResponse(res, { user }, 'Profile updated successfully');
 }));

@@ -3,10 +3,12 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import Footer from '@/components/Footer';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { apiService } from '@/services/api';
+import { motion, AnimatePresence } from 'framer-motion';
+import { normalizeEmployerApplication, normalizeEmployerJob } from '@/utils/employerDataUtils';
 
 // Job statistics data with Indian prices
 const jobStats = {
@@ -94,7 +96,7 @@ export default function Home() {
       }
     };
     fetchKycStatus();
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user?.userType]); // Only depend on userType instead of whole user object
 
   const handleKycClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -105,17 +107,26 @@ export default function Home() {
     }
   };
 
-  // Fetch user data when authenticated
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      fetchUserData();
-    }
-  }, [isAuthenticated, user]);
+  // Use ref to prevent multiple simultaneous fetches
+  const fetchingRef = useRef(false);
+  const hasFetchedRef = useRef<string | null>(null);
 
-  const fetchUserData = async () => {
+  // Fetch user data when authenticated - memoized to prevent infinite loops
+  const fetchUserData = useCallback(async () => {
+    // Prevent multiple simultaneous calls
+    if (!isAuthenticated || !user || fetchingRef.current) {
+      return;
+    }
+
+    // Skip if we already fetched for this user
+    if (hasFetchedRef.current === user._id) {
+      return;
+    }
+
+    fetchingRef.current = true;
     setJobsLoading(true);
     try {
-      if (user?.userType === 'student') {
+      if (user.userType === 'student') {
         // Fetch student applications
         const applications = await apiService.getStudentApplications();  
         setUserApplications(applications.applications || []);
@@ -123,21 +134,45 @@ export default function Home() {
         // Fetch recent jobs for student
         const jobs = await apiService.getJobs();
         setUserJobs(jobs.jobs?.slice(0, 6) || []);
-      } else if (user?.userType === 'employer') {
+      } else if (user.userType === 'employer') {
         // Fetch employer jobs
         const jobs = await apiService.getEmployerJobs();
-        setUserJobs(jobs.jobs || []);
+        const normalizedJobs = (jobs.jobs || [])
+          .map((job: any) => normalizeEmployerJob(job))
+          .filter((job: any) => !!job);
+        setUserJobs(normalizedJobs.slice(0, 6));
         
         // Fetch employer applications
         const applications = await apiService.getEmployerApplications();
-        setUserApplications(applications.applications || []);
+        const normalizedApplications = (applications.applications || [])
+          .map((app: any) => normalizeEmployerApplication(app))
+          .filter((app: any) => !!app);
+        setUserApplications(normalizedApplications);
       }
+      
+      // Mark as fetched for this user
+      hasFetchedRef.current = user._id;
     } catch (error) {
       console.error('Error fetching user data:', error);
     } finally {
       setJobsLoading(false);
+      fetchingRef.current = false;
     }
-  };
+  }, [isAuthenticated, user?._id, user?.userType]); // Include isAuthenticated but use refs to prevent infinite loops
+
+  // Reset fetching ref when user changes
+  useEffect(() => {
+    fetchingRef.current = false;
+    hasFetchedRef.current = null;
+  }, [user?._id]);
+
+  // Fetch user data when authenticated - only once per user login
+  useEffect(() => {
+    if (isAuthenticated && user?._id && !fetchingRef.current && hasFetchedRef.current !== user._id) {
+      fetchUserData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user?._id]); // Only depend on isAuthenticated and user._id
 
   return (
     <div className="min-h-screen bg-white">
@@ -279,46 +314,46 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             
             {/* User Profile Card */}
-            <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+            <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 mb-6 sm:mb-8">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
                 {/* Profile Avatar */}
                 <div className="flex-shrink-0">
-                  <div className="w-20 h-20 bg-[#32A4A6] rounded-full flex items-center justify-center text-white text-2xl font-bold">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-[#32A4A6] rounded-full flex items-center justify-center text-white text-xl sm:text-2xl font-bold">
                     {user?.name?.charAt(0)?.toUpperCase() || 'U'}
                   </div>
                 </div>
                 
                 {/* User Info */}
-                <div className="flex-1">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                <div className="flex-1 min-w-0 w-full sm:w-auto">
+                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2 break-words">
                     Welcome back, {user?.name}! 👋
                   </h2>
-                  <p className="text-gray-600 mb-4">
-                    {user?.userType === 'student' ? '🎓 Student' : '💼 Employer'} • {user?.email}
+                  <p className="text-sm sm:text-base text-gray-600 mb-3 sm:mb-4 break-words">
+                    {user?.userType === 'student' ? '🎓 Student' : '💼 Employer'} • <span className="truncate block sm:inline">{user?.email}</span>
                   </p>
                   
                   {/* Quick Stats */}
-                  <div className="flex flex-wrap gap-4">
-                    <div className="bg-[#32A4A6]/10 px-4 py-2 rounded-lg">
-                      <span className="text-sm text-gray-600">Applications:</span>
-                      <span className="ml-2 font-semibold text-[#32A4A6]">{userApplications.length}</span>
+                  <div className="flex flex-wrap gap-2 sm:gap-4">
+                    <div className="bg-[#32A4A6]/10 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg">
+                      <span className="text-xs sm:text-sm text-gray-600">Applications:</span>
+                      <span className="ml-1 sm:ml-2 font-semibold text-[#32A4A6] text-sm sm:text-base">{userApplications.length}</span>
                     </div>
-                    <div className="bg-[#32A4A6]/10 px-4 py-2 rounded-lg">
-                      <span className="text-sm text-gray-600">Jobs:</span>
-                      <span className="ml-2 font-semibold text-[#32A4A6]">{userJobs.length}</span>
+                    <div className="bg-[#32A4A6]/10 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg">
+                      <span className="text-xs sm:text-sm text-gray-600">Jobs:</span>
+                      <span className="ml-1 sm:ml-2 font-semibold text-[#32A4A6] text-sm sm:text-base">{userJobs.length}</span>
                     </div>
                     {user?.userType === 'student' && (
-                      <div className="bg-green-100 px-4 py-2 rounded-lg">
-                        <span className="text-sm text-gray-600">Active Applications:</span>
-                        <span className="ml-2 font-semibold text-green-700">
+                      <div className="bg-green-100 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg">
+                        <span className="text-xs sm:text-sm text-gray-600">Active Applications:</span>
+                        <span className="ml-1 sm:ml-2 font-semibold text-green-700 text-sm sm:text-base">
                           {userApplications.filter((app: any) => app.status === 'pending').length}
                         </span>
                       </div>
                     )}
                     {user?.userType === 'employer' && (
-                      <div className="bg-blue-100 px-4 py-2 rounded-lg">
-                        <span className="text-sm text-gray-600">Active Jobs:</span>
-                        <span className="ml-2 font-semibold text-blue-700">
+                      <div className="bg-blue-100 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg">
+                        <span className="text-xs sm:text-sm text-gray-600">Active Jobs:</span>
+                        <span className="ml-1 sm:ml-2 font-semibold text-blue-700 text-sm sm:text-base">
                           {userJobs.filter((job: any) => job.status === 'active').length}
                         </span>
                       </div>
@@ -383,7 +418,15 @@ export default function Home() {
                 
                 {jobsLoading ? (
                   <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#32A4A6]"></div>
+                    <div className="relative">
+                      <Image
+                        src="/img/norixnobg.jpg"
+                        alt="Loading"
+                        width={48}
+                        height={48}
+                        className="animate-pulse"
+                      />
+                    </div>
                   </div>
                 ) : userJobs.length > 0 ? (
                   <div className="space-y-4">
@@ -969,76 +1012,170 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Job Statistics Popup */}
-      {showPopup && selectedJob && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 relative">
-            {/* Close Button */}
-            <button
-              onClick={closePopup}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+      {/* Job Statistics Popup - Enhanced Animation */}
+      <AnimatePresence>
+        {showPopup && selectedJob && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            onClick={closePopup}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 20 }}
+              transition={{ 
+                type: "spring", 
+                stiffness: 300, 
+                damping: 30,
+                duration: 0.4 
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 relative overflow-hidden"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            
-            {/* Popup Content */}
-            <div className="p-6">
-              <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">
-                {selectedJob}
-              </h3>
+              {/* Animated Gradient Background */}
+              <div className="absolute inset-0 bg-gradient-to-br from-[#32A4A6]/5 via-transparent to-orange-500/5 pointer-events-none" />
               
-              <div className="space-y-4">
-                {/* Daily Earning */}
-                <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-3">
-                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                      </svg>
+              {/* Close Button */}
+              <motion.button
+                initial={{ opacity: 0, rotate: -90 }}
+                animate={{ opacity: 1, rotate: 0 }}
+                transition={{ delay: 0.2 }}
+                onClick={closePopup}
+                className="absolute top-4 right-4 z-10 p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200"
+              >
+                <motion.svg
+                  whileHover={{ rotate: 90 }}
+                  transition={{ duration: 0.2 }}
+                  className="w-6 h-6" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </motion.svg>
+              </motion.button>
+              
+              {/* Popup Content */}
+              <div className="p-6 relative z-[1]">
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                >
+                  <h3 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6 text-center bg-gradient-to-r from-[#32A4A6] to-orange-600 bg-clip-text text-transparent">
+                    {selectedJob}
+                  </h3>
+                </motion.div>
+              
+                <div className="space-y-4">
+                  {/* Daily Earning */}
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2, type: "spring", stiffness: 300, damping: 20 }}
+                    whileHover={{ scale: 1.02, x: 5 }}
+                    className="flex items-center justify-between p-5 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-100 shadow-sm hover:shadow-md transition-all duration-300"
+                  >
+                    <div className="flex items-center">
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ delay: 0.3, type: "spring", stiffness: 300 }}
+                        className="w-12 h-12 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center mr-4 shadow-lg"
+                      >
+                        <motion.svg
+                          animate={{ rotate: [0, 10, -10, 0] }}
+                          transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+                          className="w-6 h-6 text-white" 
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                        </motion.svg>
+                      </motion.div>
+                      <div>
+                        <p className="text-sm text-gray-600 font-medium">Daily Earning</p>
+                        <p className="text-xl font-bold text-green-700">{jobStats[selectedJob as keyof typeof jobStats]?.dailyEarning}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Daily Earning</p>
-                      <p className="text-lg font-semibold text-green-700">{jobStats[selectedJob as keyof typeof jobStats]?.dailyEarning}</p>
-                    </div>
-                  </div>
-                </div>
+                  </motion.div>
 
-                {/* Monthly Earning */}
-                <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                      </svg>
+                  {/* Monthly Earning */}
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.3, type: "spring", stiffness: 300, damping: 20 }}
+                    whileHover={{ scale: 1.02, x: 5 }}
+                    className="flex items-center justify-between p-5 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border border-blue-100 shadow-sm hover:shadow-md transition-all duration-300"
+                  >
+                    <div className="flex items-center">
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ delay: 0.4, type: "spring", stiffness: 300 }}
+                        className="w-12 h-12 bg-gradient-to-br from-blue-400 to-cyan-500 rounded-full flex items-center justify-center mr-4 shadow-lg"
+                      >
+                        <motion.svg
+                          animate={{ y: [0, -3, 0] }}
+                          transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+                          className="w-6 h-6 text-white" 
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </motion.svg>
+                      </motion.div>
+                      <div>
+                        <p className="text-sm text-gray-600 font-medium">Monthly Earning</p>
+                        <p className="text-xl font-bold text-blue-700">{jobStats[selectedJob as keyof typeof jobStats]?.monthlyEarning}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Monthly Earning</p>
-                      <p className="text-lg font-semibold text-blue-700">{jobStats[selectedJob as keyof typeof jobStats]?.monthlyEarning}</p>
-                    </div>
-                  </div>
-                </div>
+                  </motion.div>
 
-                {/* Workers Count */}
-                <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg">
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mr-3">
-                      <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
+                  {/* Workers Count */}
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.4, type: "spring", stiffness: 300, damping: 20 }}
+                    whileHover={{ scale: 1.02, x: 5 }}
+                    className="flex items-center justify-between p-5 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border border-purple-100 shadow-sm hover:shadow-md transition-all duration-300"
+                  >
+                    <div className="flex items-center">
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ delay: 0.5, type: "spring", stiffness: 300 }}
+                        className="w-12 h-12 bg-gradient-to-br from-purple-400 to-pink-500 rounded-full flex items-center justify-center mr-4 shadow-lg"
+                      >
+                        <motion.svg
+                          animate={{ scale: [1, 1.1, 1] }}
+                          transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+                          className="w-6 h-6 text-white" 
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </motion.svg>
+                      </motion.div>
+                      <div>
+                        <p className="text-sm text-gray-600 font-medium">Active Workers</p>
+                        <p className="text-xl font-bold text-purple-700">{jobStats[selectedJob as keyof typeof jobStats]?.workersCount}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Active Workers</p>
-                      <p className="text-lg font-semibold text-purple-700">{jobStats[selectedJob as keyof typeof jobStats]?.workersCount}</p>
-                    </div>
-                  </div>
+                  </motion.div>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* KYC Pending Modal */}
       {showKycPendingModal && (

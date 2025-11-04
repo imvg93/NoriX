@@ -7,8 +7,10 @@ export interface IEmployerKYCDocument extends Document {
   companyName: string;
   companyEmail?: string;
   companyPhone?: string;
+  businessRegNo?: string;
   
   // Authorized Person Details
+  fullName?: string;
   authorizedName?: string;
   designation?: string;
   
@@ -30,6 +32,14 @@ export interface IEmployerKYCDocument extends Document {
     addressProofUrl?: string;
     companyRegistrationUrl?: string;
     additionalDocs?: string[];
+    idProof?: {
+      url?: string;
+      publicId?: string;
+    };
+    companyProof?: {
+      url?: string;
+      publicId?: string;
+    };
   };
   
   // KYC Status and Management
@@ -84,8 +94,18 @@ const employerKYCSchema = new Schema<IEmployerKYCDocument>(
         message: 'Please provide a valid phone number'
       }
     },
+    businessRegNo: {
+      type: String,
+      trim: true,
+      maxlength: 100
+    },
     
     // Authorized Person Details
+    fullName: {
+      type: String,
+      trim: true,
+      maxlength: 150
+    },
     authorizedName: {
       type: String,
       trim: true,
@@ -217,7 +237,39 @@ const employerKYCSchema = new Schema<IEmployerKYCDocument>(
           },
           message: 'Please provide a valid URL'
         }
-      }]
+      }],
+      idProof: {
+        url: {
+          type: String,
+          trim: true,
+          validate: {
+            validator: function(v: string) {
+              return !v || /^https?:\/\/.+/.test(v);
+            },
+            message: 'Please provide a valid URL'
+          }
+        },
+        publicId: {
+          type: String,
+          trim: true
+        }
+      },
+      companyProof: {
+        url: {
+          type: String,
+          trim: true,
+          validate: {
+            validator: function(v: string) {
+              return !v || /^https?:\/\/.+/.test(v);
+            },
+            message: 'Please provide a valid URL'
+          }
+        },
+        publicId: {
+          type: String,
+          trim: true
+        }
+      }
     },
     
     // KYC Status and Management

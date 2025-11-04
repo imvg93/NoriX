@@ -23,6 +23,7 @@ import {
   Eye,
   X,
   Download,
+  Clock,
 } from 'lucide-react';
 
 type AdminSection = 'overview' | 'users' | 'jobs' | 'applications' | 'kyc' | 'analytics' | 'notifications' | 'settings';
@@ -35,6 +36,8 @@ interface AdminUser {
   userType?: 'student' | 'employer' | 'admin' | string;
   status?: 'active' | 'suspended' | string;
   approvalStatus?: 'pending' | 'approved' | 'rejected' | string;
+  isActive?: boolean;
+  kycStatus?: string;
   createdAt?: string;
 }
 
@@ -65,6 +68,8 @@ export default function AdminDashboardPage(): React.JSX.Element {
   const [allUsers, setAllUsers] = useState<AdminUser[]>([]);
   const [pendingUsers, setPendingUsers] = useState<AdminUser[]>([]);
   const [jobs, setJobs] = useState<AdminJob[]>([]);
+  const [jobFilter, setJobFilter] = useState<'all' | 'approved' | 'rejected' | 'pending'>('all');
+  const [userTypeFilter, setUserTypeFilter] = useState<'all' | 'student' | 'employer' | 'admin'>('all');
   const [applications, setApplications] = useState<any[]>([]);
   const [kycRecords, setKycRecords] = useState<any[]>([]);
   const [employerKycRecords, setEmployerKycRecords] = useState<any[]>([]);
@@ -223,11 +228,10 @@ export default function AdminDashboardPage(): React.JSX.Element {
         setAllUsers(usersData.users || []);
         
         // Separate pending users (users with pending KYC or other pending statuses)
-        const pendingUsersList = (usersData.users || []).filter((user: any) => 
-          user.kycStatus === 'pending' || 
-          user.approvalStatus === 'pending' ||
-          !user.isActive
-        );
+        const pendingUsersList = (usersData.users || []).filter((user: any) => {
+          const status = user.kycStatus || user.approvalStatus;
+          return status === 'pending' || !status || !user.isActive;
+        });
         setPendingUsers(pendingUsersList);
       } else {
         // Fallback to individual API calls
@@ -454,11 +458,10 @@ export default function AdminDashboardPage(): React.JSX.Element {
         }
         
         // Set pending users from the data
-        const pendingUsersList = (data.users?.data || []).filter((user: any) => 
-          user.kycStatus === 'pending' || 
-          user.approvalStatus === 'pending' ||
-          !user.isActive
-        );
+        const pendingUsersList = (data.users?.data || []).filter((user: any) => {
+          const status = user.kycStatus || user.approvalStatus;
+          return status === 'pending' || !status || !user.isActive;
+        });
         setPendingUsers(pendingUsersList);
       }
     } catch (error) {
@@ -541,9 +544,24 @@ export default function AdminDashboardPage(): React.JSX.Element {
   async function handleApproveJob(jobId: string): Promise<void> {
     try {
       setLoadingAction(`approve-job-${jobId}`);
+      console.log('✅ Admin dashboard: Approving job:', jobId);
       await apiService.approveJob(jobId);
-      // Refresh comprehensive data and individual data
+      console.log('✅ Job approved successfully');
+      
+      // Update local state immediately to reflect the change
+      setJobs(prevJobs => prevJobs.map(job => 
+        job._id === jobId 
+          ? { ...job, approvalStatus: 'approved', status: 'active' }
+          : job
+      ));
+      
+      alert('Job approved successfully! The job has been moved to the approved section.');
+      
+      // Refresh data to ensure consistency
       await Promise.all([fetchComprehensiveData(), fetchJobs()]);
+    } catch (error: any) {
+      console.error('❌ Error approving job:', error);
+      alert(`Failed to approve job: ${error.message || 'Unknown error'}`);
     } finally {
       setLoadingAction(null);
     }
@@ -552,10 +570,29 @@ export default function AdminDashboardPage(): React.JSX.Element {
   async function handleRejectJob(jobId: string): Promise<void> {
     try {
       const rejectionReason = window.prompt('Reason for job rejection:') || '';
+      if (!rejectionReason.trim()) {
+        alert('Rejection reason is required');
+        return;
+      }
       setLoadingAction(`reject-job-${jobId}`);
+      console.log('❌ Admin dashboard: Rejecting job:', jobId, 'Reason:', rejectionReason);
       await apiService.rejectJob(jobId, rejectionReason);
-      // Refresh comprehensive data and individual data
+      console.log('✅ Job rejected successfully');
+      
+      // Update local state immediately to reflect the change
+      setJobs(prevJobs => prevJobs.map(job => 
+        job._id === jobId 
+          ? { ...job, approvalStatus: 'rejected', status: 'closed' }
+          : job
+      ));
+      
+      alert('Job rejected successfully! The job has been moved to the rejected section.');
+      
+      // Refresh data to ensure consistency
       await Promise.all([fetchComprehensiveData(), fetchJobs()]);
+    } catch (error: any) {
+      console.error('❌ Error rejecting job:', error);
+      alert(`Failed to reject job: ${error.message || 'Unknown error'}`);
     } finally {
       setLoadingAction(null);
     }
@@ -684,6 +721,188 @@ export default function AdminDashboardPage(): React.JSX.Element {
   }
 
   function renderUsers(): React.JSX.Element {
+    // Separate users by type for counts
+    const students = allUsers.filter(u => u.userType === 'student');
+    const employers = allUsers.filter(u => u.userType === 'employer');
+    const admins = allUsers.filter(u => u.userType === 'admin');
+    
+    // Separate pending users by type for counts
+    const pendingStudents = pendingUsers.filter(u => u.userType === 'student');
+    const pendingEmployers = pendingUsers.filter(u => u.userType === 'employer');
+    const pendingAdmins = pendingUsers.filter(u => u.userType === 'admin');
+    
+    // Filter users based on selected type filter
+    const getFilteredUsers = () => {
+      if (userTypeFilter === 'all') {
+        return allUsers;
+      }
+      return allUsers.filter(u => u.userType === userTypeFilter);
+    };
+    
+    const getFilteredPendingUsers = () => {
+      if (userTypeFilter === 'all') {
+        return pendingUsers;
+      }
+      return pendingUsers.filter(u => u.userType === userTypeFilter);
+    };
+    
+    const displayedUsers = getFilteredUsers();
+    const displayedPendingUsers = getFilteredPendingUsers();
+
+    const renderUserTable = (users: AdminUser[], showActions: boolean = true, showApprovalStatus: boolean = false) => (
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-gray-500 bg-gray-50">
+              <th className="py-2 pr-4">Name</th>
+              <th className="py-2 pr-4">Email</th>
+              <th className="py-2 pr-4">Phone</th>
+              {showApprovalStatus && <th className="py-2 pr-4">Approval Status</th>}
+              <th className="py-2 pr-4">Status</th>
+              {showActions && <th className="py-2 pr-4">Actions</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {users.length === 0 ? (
+              <tr>
+                <td colSpan={showActions ? (showApprovalStatus ? 6 : 5) : (showApprovalStatus ? 5 : 4)} className="py-6 text-center text-gray-500">
+                  No users found
+                </td>
+              </tr>
+            ) : (
+              users.map((u) => (
+                <tr key={u._id} className="align-top border-b border-gray-100 hover:bg-gray-50">
+                  <td className="py-3 pr-4 font-medium text-gray-900">{u.name || 'N/A'}</td>
+                  <td className="py-3 pr-4 text-gray-700 break-words">{u.email || '-'}</td>
+                  <td className="py-3 pr-4 text-gray-600">{u.phone || '-'}</td>
+                  {showApprovalStatus && (
+                    <td className="py-3 pr-4">
+                      {/* Use kycStatus as the primary indicator - if not set, fall back to approvalStatus */}
+                      {(() => {
+                        const status = u.kycStatus || u.approvalStatus;
+                        
+                        if (status === 'approved' || status === 'verified') {
+                          return (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              Approved
+                            </span>
+                          );
+                        } else if (status === 'pending' || (!status && !u.isActive)) {
+                          return (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                              <Clock className="w-3 h-3 mr-1" />
+                              Pending
+                            </span>
+                          );
+                        } else if (status === 'rejected') {
+                          return (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              <XCircle className="w-3 h-3 mr-1" />
+                              Rejected
+                            </span>
+                          );
+                        } else if (status === 'not-submitted' || !status) {
+                          return (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                              Not Submitted
+                            </span>
+                          );
+                        } else {
+                          return (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 capitalize">
+                              {status}
+                            </span>
+                          );
+                        }
+                      })()}
+                    </td>
+                  )}
+                  <td className="py-3 pr-4">
+                    <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
+                      u.status === 'active' || u.isActive ? 'bg-green-100 text-green-800' :
+                      u.status === 'suspended' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {u.status || (u.isActive ? 'active' : 'inactive')}
+                    </span>
+                  </td>
+                  {showActions && (
+                    <td className="py-3 pr-4">
+                      {(() => {
+                        const status = u.kycStatus || u.approvalStatus;
+                        const isPending = status === 'pending' || !status || !u.isActive;
+                        const isApproved = status === 'approved' || status === 'verified';
+                        
+                        if (isPending) {
+                          return (
+                            <div className="flex items-center gap-2 whitespace-nowrap">
+                              <button
+                                onClick={() => handleApproveUser(u._id)}
+                                disabled={loadingAction === `approve-user-${u._id}`}
+                                className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-white hover:bg-green-700 disabled:opacity-50 text-xs whitespace-nowrap"
+                              >
+                                {loadingAction === `approve-user-${u._id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />} Approve
+                              </button>
+                              <button
+                                onClick={() => handleRejectUser(u._id)}
+                                disabled={loadingAction === `reject-user-${u._id}`}
+                                className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-white hover:bg-red-700 disabled:opacity-50 text-xs whitespace-nowrap"
+                              >
+                                {loadingAction === `reject-user-${u._id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />} Reject
+                              </button>
+                            </div>
+                          );
+                        } else if (isApproved) {
+                          return (
+                            <div className="flex items-center gap-2 whitespace-nowrap">
+                              <button
+                                onClick={() => handleSuspendUser(u._id)}
+                                disabled={loadingAction === `suspend-user-${u._id}`}
+                                className="inline-flex items-center gap-1 rounded-lg bg-gray-200 px-3 py-1.5 text-gray-900 hover:bg-gray-300 disabled:opacity-50 text-xs whitespace-nowrap"
+                              >
+                                {loadingAction === `suspend-user-${u._id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <PauseCircle className="w-3 h-3" />} Suspend
+                              </button>
+                              <button
+                                onClick={() => handleRejectUser(u._id)}
+                                disabled={loadingAction === `reject-user-${u._id}`}
+                                className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-white hover:bg-red-700 disabled:opacity-50 text-xs whitespace-nowrap"
+                              >
+                                {loadingAction === `reject-user-${u._id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />} Reject
+                              </button>
+                            </div>
+                          );
+                        } else {
+                          return (
+                            <div className="flex items-center gap-2 whitespace-nowrap">
+                              <button
+                                onClick={() => handleApproveUser(u._id)}
+                                disabled={loadingAction === `approve-user-${u._id}`}
+                                className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-white hover:bg-green-700 disabled:opacity-50 text-xs whitespace-nowrap"
+                              >
+                                {loadingAction === `approve-user-${u._id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />} Approve
+                              </button>
+                              <button
+                                onClick={() => handleRejectUser(u._id)}
+                                disabled={loadingAction === `reject-user-${u._id}`}
+                                className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-white hover:bg-red-700 disabled:opacity-50 text-xs whitespace-nowrap"
+                              >
+                                {loadingAction === `reject-user-${u._id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />} Reject
+                              </button>
+                            </div>
+                          );
+                        }
+                      })()}
+                    </td>
+                  )}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+
     return (
       <div>
         <SectionHeader title="User Management" action={
@@ -693,110 +912,108 @@ export default function AdminDashboardPage(): React.JSX.Element {
           </button>
         } />
 
-        {/* Pending Users */}
-        <div className="rounded-xl bg-white shadow-sm p-5">
-          <h3 className="text-sm font-medium text-gray-900">Pending Approvals</h3>
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-500">
-                  <th className="py-2 pr-4">Name</th>
-                  <th className="py-2 pr-4">Email</th>
-                  <th className="py-2 pr-4">Type</th>
-                  <th className="py-2 pr-4">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pendingUsers.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="py-6 text-center text-gray-500">No pending users</td>
-                  </tr>
-                )}
-                {pendingUsers.map((u) => (
-                  <tr key={u._id} className="align-top">
-                    <td className="py-2 pr-4 font-medium text-gray-900">{u.name || 'N/A'}</td>
-                    <td className="py-2 pr-4 text-gray-700">{u.email || '-'}</td>
-                    <td className="py-2 pr-4 capitalize">{u.userType || '-'}</td>
-                    <td className="py-2 pr-4">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleApproveUser(u._id)}
-                          disabled={loadingAction === `approve-user-${u._id}`}
-                          className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-white hover:bg-green-700 disabled:opacity-50"
-                        >
-                          {loadingAction === `approve-user-${u._id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Approve
-                        </button>
-                        <button
-                          onClick={() => handleRejectUser(u._id)}
-                          disabled={loadingAction === `reject-user-${u._id}`}
-                          className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-white hover:bg-red-700 disabled:opacity-50"
-                        >
-                          {loadingAction === `reject-user-${u._id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />} Reject
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Type Filter Buttons */}
+        <div className="mb-6 rounded-xl bg-white shadow-sm p-4">
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setUserTypeFilter('all')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                userTypeFilter === 'all' 
+                  ? 'bg-indigo-600 text-white' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              All Users ({allUsers.length})
+            </button>
+            <button
+              onClick={() => setUserTypeFilter('student')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                userTypeFilter === 'student' 
+                  ? 'bg-indigo-600 text-white' 
+                  : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+              }`}
+            >
+              <User className="w-4 h-4" />
+              Students ({students.length})
+              <span className="text-xs opacity-75">({pendingStudents.length} pending)</span>
+            </button>
+            <button
+              onClick={() => setUserTypeFilter('employer')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                userTypeFilter === 'employer' 
+                  ? 'bg-purple-600 text-white' 
+                  : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+              }`}
+            >
+              <Briefcase className="w-4 h-4" />
+              Employers ({employers.length})
+              <span className="text-xs opacity-75">({pendingEmployers.length} pending)</span>
+            </button>
+            <button
+              onClick={() => setUserTypeFilter('admin')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                userTypeFilter === 'admin' 
+                  ? 'bg-red-600 text-white' 
+                  : 'bg-red-100 text-red-700 hover:bg-red-200'
+              }`}
+            >
+              <Shield className="w-4 h-4" />
+              Admins ({admins.length})
+              <span className="text-xs opacity-75">({pendingAdmins.length} pending)</span>
+            </button>
           </div>
         </div>
 
-        {/* All Users */}
-        <div className="mt-6 rounded-xl bg-white shadow-sm p-5">
-          <h3 className="text-sm font-medium text-gray-900">All Users</h3>
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-500">
-                  <th className="py-2 pr-4">Name</th>
-                  <th className="py-2 pr-4">Email</th>
-                  <th className="py-2 pr-4">Type</th>
-                  <th className="py-2 pr-4">Status</th>
-                  <th className="py-2 pr-4">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allUsers.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="py-6 text-center text-gray-500">No users found</td>
-                  </tr>
-                )}
-                {allUsers.map((u) => (
-                  <tr key={u._id} className="align-top">
-                    <td className="py-2 pr-4 font-medium text-gray-900">{u.name || 'N/A'}</td>
-                    <td className="py-2 pr-4 text-gray-700">{u.email || '-'}</td>
-                    <td className="py-2 pr-4 capitalize">{u.userType || '-'}</td>
-                    <td className="py-2 pr-4 capitalize">{u.status || 'active'}</td>
-                    <td className="py-2 pr-4">
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() => handleSuspendUser(u._id)}
-                          disabled={loadingAction === `suspend-user-${u._id}`}
-                          className="inline-flex items-center gap-1 rounded-lg bg-gray-200 px-3 py-1.5 text-gray-900 hover:bg-gray-300 disabled:opacity-50"
-                        >
-                          {loadingAction === `suspend-user-${u._id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <PauseCircle className="w-4 h-4" />} Suspend
-                        </button>
-                        <button
-                          onClick={() => handleActivateUser(u._id)}
-                          disabled={loadingAction === `activate-user-${u._id}`}
-                          className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-white hover:bg-indigo-700 disabled:opacity-50"
-                        >
-                          {loadingAction === `activate-user-${u._id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />} Activate
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Pending Approvals Section */}
+        {displayedPendingUsers.length > 0 && (
+          <div className="mb-6 rounded-xl bg-white shadow-sm p-5 border-l-4 border-yellow-500">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <Clock className="w-5 h-5 text-yellow-600" />
+              Pending Approvals ({displayedPendingUsers.length})
+            </h3>
+            {renderUserTable(displayedPendingUsers, true, true)}
           </div>
+        )}
+
+        {/* All Users Section */}
+        <div className="rounded-xl bg-white shadow-sm p-5">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Users className="w-5 h-5 text-indigo-600" />
+            {userTypeFilter === 'all' ? 'All Users' : 
+             userTypeFilter === 'student' ? 'Students' :
+             userTypeFilter === 'employer' ? 'Employers' : 'Admins'}
+            <span className="text-sm font-normal text-gray-500">
+              ({displayedUsers.length} total)
+            </span>
+          </h3>
+          {renderUserTable(displayedUsers, true, true)}
         </div>
       </div>
     );
   }
 
   function renderJobs(): React.JSX.Element {
+    // Separate pending jobs from approved/rejected jobs
+    const pendingJobs = jobs.filter(j => j.approvalStatus === 'pending' || !j.approvalStatus);
+    const approvedJobs = jobs.filter(j => j.approvalStatus === 'approved');
+    const rejectedJobs = jobs.filter(j => j.approvalStatus === 'rejected');
+    
+    // Filter jobs based on selected filter
+    const getFilteredJobs = () => {
+      switch (jobFilter) {
+        case 'approved':
+          return approvedJobs;
+        case 'rejected':
+          return rejectedJobs;
+        case 'pending':
+          return pendingJobs;
+        default:
+          return jobs;
+      }
+    };
+    
+    const displayedJobs = getFilteredJobs();
+
     return (
       <div>
         <SectionHeader title="Job Management" action={
@@ -806,7 +1023,111 @@ export default function AdminDashboardPage(): React.JSX.Element {
           </button>
         } />
 
+        {/* Pending Approval Section */}
+        {pendingJobs.length > 0 && (
+          <div className="mb-6 rounded-xl bg-white shadow-sm p-5 border-l-4 border-yellow-500">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <Clock className="w-5 h-5 text-yellow-600" />
+              Pending Approval ({pendingJobs.length})
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500">
+                    <th className="py-2 pr-4">Title</th>
+                    <th className="py-2 pr-4">Company</th>
+                    <th className="py-2 pr-4">Location</th>
+                    <th className="py-2 pr-4">Apps</th>
+                    <th className="py-2 pr-4">Status</th>
+                    <th className="py-2 pr-4">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingJobs.map((j) => (
+                    <tr key={j._id} className="align-top border-b border-gray-100">
+                      <td className="py-3 pr-4 font-medium text-gray-900">{j.title || 'Untitled'}</td>
+                      <td className="py-3 pr-4 text-gray-700">{j.company || '-'}</td>
+                      <td className="py-3 pr-4">{j.location || '-'}</td>
+                      <td className="py-3 pr-4">{typeof j.applicationsCount === 'number' ? j.applicationsCount : '-'}</td>
+                      <td className="py-3 pr-4">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                          Pending
+                        </span>
+                      </td>
+                      <td className="py-3 pr-4">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => handleApproveJob(j._id)}
+                            disabled={loadingAction === `approve-job-${j._id}`}
+                            className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-white hover:bg-green-700 disabled:opacity-50 text-xs"
+                          >
+                            {loadingAction === `approve-job-${j._id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />} Approve
+                          </button>
+                          <button
+                            onClick={() => handleRejectJob(j._id)}
+                            disabled={loadingAction === `reject-job-${j._id}`}
+                            className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-white hover:bg-red-700 disabled:opacity-50 text-xs"
+                          >
+                            {loadingAction === `reject-job-${j._id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />} Reject
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* All Jobs Section */}
         <div className="rounded-xl bg-white shadow-sm p-5">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Briefcase className="w-5 h-5 text-indigo-600" />
+            All Jobs ({jobs.length})
+          </h3>
+          <div className="mb-4 flex flex-wrap gap-2">
+            <button
+              onClick={() => setJobFilter('all')}
+              className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                jobFilter === 'all' 
+                  ? 'bg-indigo-600 text-white' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              All ({jobs.length})
+            </button>
+            <button
+              onClick={() => setJobFilter('approved')}
+              className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                jobFilter === 'approved' 
+                  ? 'bg-green-600 text-white' 
+                  : 'bg-green-100 text-green-700 hover:bg-green-200'
+              }`}
+            >
+              Approved ({approvedJobs.length})
+            </button>
+            <button
+              onClick={() => setJobFilter('rejected')}
+              className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                jobFilter === 'rejected' 
+                  ? 'bg-red-600 text-white' 
+                  : 'bg-red-100 text-red-700 hover:bg-red-200'
+              }`}
+            >
+              Rejected ({rejectedJobs.length})
+            </button>
+            <button
+              onClick={() => setJobFilter('pending')}
+              className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                jobFilter === 'pending' 
+                  ? 'bg-yellow-600 text-white' 
+                  : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+              }`}
+            >
+              Pending ({pendingJobs.length})
+            </button>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -815,40 +1136,71 @@ export default function AdminDashboardPage(): React.JSX.Element {
                   <th className="py-2 pr-4">Company</th>
                   <th className="py-2 pr-4">Location</th>
                   <th className="py-2 pr-4">Apps</th>
-                  <th className="py-2 pr-4">Approval</th>
+                  <th className="py-2 pr-4">Approval Status</th>
+                  <th className="py-2 pr-4">Job Status</th>
                   <th className="py-2 pr-4">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {jobs.length === 0 && (
+                {displayedJobs.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-6 text-center text-gray-500">No jobs found</td>
+                    <td colSpan={7} className="py-6 text-center text-gray-500">No jobs found</td>
                   </tr>
                 )}
-                {jobs.map((j) => (
-                  <tr key={j._id} className="align-top">
-                    <td className="py-2 pr-4 font-medium text-gray-900">{j.title || 'Untitled'}</td>
-                    <td className="py-2 pr-4 text-gray-700">{j.company || '-'}</td>
-                    <td className="py-2 pr-4">{j.location || '-'}</td>
-                    <td className="py-2 pr-4">{typeof j.applicationsCount === 'number' ? j.applicationsCount : '-'}</td>
-                    <td className="py-2 pr-4 capitalize">{j.approvalStatus || 'unknown'}</td>
-                    <td className="py-2 pr-4">
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() => handleApproveJob(j._id)}
-                          disabled={loadingAction === `approve-job-${j._id}`}
-                          className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-white hover:bg-green-700 disabled:opacity-50"
-                        >
-                          {loadingAction === `approve-job-${j._id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Approve
-                        </button>
-                        <button
-                          onClick={() => handleRejectJob(j._id)}
-                          disabled={loadingAction === `reject-job-${j._id}`}
-                          className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-white hover:bg-red-700 disabled:opacity-50"
-                        >
-                          {loadingAction === `reject-job-${j._id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />} Reject
-                        </button>
-                      </div>
+                {displayedJobs.map((j) => (
+                  <tr key={j._id} className="align-top border-b border-gray-100">
+                    <td className="py-3 pr-4 font-medium text-gray-900">{j.title || 'Untitled'}</td>
+                    <td className="py-3 pr-4 text-gray-700">{j.company || '-'}</td>
+                    <td className="py-3 pr-4">{j.location || '-'}</td>
+                    <td className="py-3 pr-4">{typeof j.applicationsCount === 'number' ? j.applicationsCount : '-'}</td>
+                    <td className="py-3 pr-4">
+                      {j.approvalStatus === 'approved' ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Approved
+                        </span>
+                      ) : j.approvalStatus === 'rejected' ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          <XCircle className="w-3 h-3 mr-1" />
+                          Rejected
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                          <Clock className="w-3 h-3 mr-1" />
+                          Pending
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 pr-4 capitalize">
+                      <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        j.status === 'active' ? 'bg-blue-100 text-blue-800' :
+                        j.status === 'closed' ? 'bg-gray-100 text-gray-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {j.status || 'unknown'}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-4">
+                      {j.approvalStatus === 'pending' || !j.approvalStatus ? (
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => handleApproveJob(j._id)}
+                            disabled={loadingAction === `approve-job-${j._id}`}
+                            className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-white hover:bg-green-700 disabled:opacity-50 text-xs"
+                          >
+                            {loadingAction === `approve-job-${j._id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />} Approve
+                          </button>
+                          <button
+                            onClick={() => handleRejectJob(j._id)}
+                            disabled={loadingAction === `reject-job-${j._id}`}
+                            className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-white hover:bg-red-700 disabled:opacity-50 text-xs"
+                          >
+                            {loadingAction === `reject-job-${j._id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />} Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-500">No actions</span>
+                      )}
                     </td>
                   </tr>
                 ))}

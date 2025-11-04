@@ -6,8 +6,16 @@ import { Application } from '../models/Application';
 import { Notification } from '../models/Notification';
 import { authenticateToken, requireRole, AuthRequest, requireEmployer, requireStudent } from '../middleware/auth';
 import { asyncHandler, sendSuccessResponse, sendErrorResponse, ValidationError } from '../middleware/errorHandler';
+import NotificationService from '../services/notificationService';
 
 const router = express.Router();
+
+// Notification service will be injected
+let notificationService: NotificationService | null = null;
+
+export const setNotificationService = (service: NotificationService) => {
+  notificationService = service;
+};
 
 // @route   POST /api/notifications/application-submitted
 // @desc    Send notification to employer when student applies
@@ -55,6 +63,21 @@ router.post('/application-submitted', authenticateToken, asyncHandler(async (req
   // 3. Send push notification
   // 4. Send real-time notification via WebSocket
 
+  let createdNotification = null;
+  if (notificationService) {
+    try {
+      createdNotification = await notificationService.createNotification({
+        receiverId: ((job.employerId as any)?._id || job.employerId) as any,
+        senderId: req.user!._id,
+        message: notification.message,
+        type: 'application',
+        metadata: notification.data,
+      });
+    } catch (serviceErr) {
+      console.error('❌ Failed to persist employer notification:', serviceErr);
+    }
+  }
+
   console.log('📧 Notification to Employer:', {
     employer: (job.employerId as any).name,
     employerEmail: (job.employerId as any).email,
@@ -64,7 +87,7 @@ router.post('/application-submitted', authenticateToken, asyncHandler(async (req
     message: notification.message
   });
 
-  sendSuccessResponse(res, { notification }, 'Employer notification sent successfully');
+  sendSuccessResponse(res, { notification: createdNotification || notification }, 'Employer notification sent successfully');
 }));
 
 // @route   POST /api/notifications/application-approved
@@ -107,6 +130,21 @@ router.post('/application-approved', authenticateToken, asyncHandler(async (req:
     createdAt: new Date()
   };
 
+  let createdNotification = null;
+  if (notificationService) {
+    try {
+      createdNotification = await notificationService.createNotification({
+        receiverId: studentId,
+        senderId: employerId,
+        message: notification.message,
+        type: 'application',
+        metadata: notification.data,
+      });
+    } catch (serviceErr) {
+      console.error('❌ Failed to persist student notification (approved):', serviceErr);
+    }
+  }
+
   console.log('📧 Notification to Student:', {
     studentId: studentId,
     jobTitle: job.jobTitle,
@@ -115,7 +153,7 @@ router.post('/application-approved', authenticateToken, asyncHandler(async (req:
     message: notification.message
   });
 
-  sendSuccessResponse(res, { notification }, 'Student notification sent successfully');
+  sendSuccessResponse(res, { notification: createdNotification || notification }, 'Student notification sent successfully');
 }));
 
 // @route   POST /api/notifications/application-rejected
@@ -159,6 +197,21 @@ router.post('/application-rejected', authenticateToken, asyncHandler(async (req:
     createdAt: new Date()
   };
 
+  let createdNotification = null;
+  if (notificationService) {
+    try {
+      createdNotification = await notificationService.createNotification({
+        receiverId: studentId,
+        senderId: employerId,
+        message: notification.message,
+        type: 'application',
+        metadata: notification.data,
+      });
+    } catch (serviceErr) {
+      console.error('❌ Failed to persist student notification (rejected):', serviceErr);
+    }
+  }
+
   console.log('📧 Notification to Student:', {
     studentId: studentId,
     jobTitle: job.jobTitle,
@@ -168,7 +221,7 @@ router.post('/application-rejected', authenticateToken, asyncHandler(async (req:
     message: notification.message
   });
 
-  sendSuccessResponse(res, { notification }, 'Student notification sent successfully');
+  sendSuccessResponse(res, { notification: createdNotification || notification }, 'Student notification sent successfully');
 }));
 
 // @route   GET /api/notifications/student
@@ -257,39 +310,105 @@ router.patch('/:notificationId/read', authenticateToken, asyncHandler(async (req
     throw new ValidationError('Invalid notification ID');
   }
 
-  const notification = await Notification.findByIdAndUpdate(
-    notificationId,
-    { read: true, readAt: new Date() },
-    { new: true }
-  );
+  // Use notification service if available
+  if (notificationService) {
+    const notification = await notificationService.markAsRead(notificationId, req.user!._id);
+    return sendSuccessResponse(res, { notification }, 'Notification marked as read');
+  }
 
+  // Fallback to direct database update
+  const notification = await Notification.findById(notificationId);
   if (!notification) {
     throw new ValidationError('Notification not found');
   }
 
+  // Verify ownership
+  if (notification.receiverId.toString() !== req.user!._id.toString()) {
+    throw new ValidationError('Access denied: Not your notification');
+  }
+
+  notification.isRead = true;
+  notification.read = true; // Sync legacy field
+  notification.readAt = new Date();
+  await notification.save();
+
   sendSuccessResponse(res, { notification }, 'Notification marked as read');
+}));
+
+// @route   PATCH /api/notifications/mark-all-read
+// @desc    Mark all notifications as read for the current user
+// @access  Private
+router.patch('/mark-all-read', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  // Use notification service if available
+  if (notificationService) {
+    const count = await notificationService.markAllAsRead(req.user!._id);
+    return sendSuccessResponse(res, { count }, `${count} notifications marked as read`);
+  }
+
+  // Fallback to direct database update
+  const result = await Notification.updateMany(
+    { receiverId: req.user!._id, isRead: false },
+    { 
+      isRead: true,
+      read: true, // Sync legacy field
+      readAt: new Date()
+    }
+  );
+
+  sendSuccessResponse(res, { count: result.modifiedCount || 0 }, 'All notifications marked as read');
 }));
 
 // @route   GET /api/notifications/my-notifications
 // @desc    Get user's notifications
 // @access  Private
 router.get('/my-notifications', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
-  const { page = 1, limit = 20, unreadOnly = false } = req.query;
+  const { page = 1, limit = 20, unreadOnly = false, type } = req.query;
 
-  const query: any = { userId: req.user!._id };
+  // Use notification service if available
+  if (notificationService) {
+    const result = await notificationService.getUserNotifications(
+      req.user!._id,
+      {
+        unreadOnly: unreadOnly === 'true',
+        type: type as 'application' | 'system' | 'alert' | undefined,
+        limit: Number(limit),
+        page: Number(page)
+      }
+    );
+
+    return sendSuccessResponse(res, {
+      notifications: result.notifications,
+      unreadCount: result.unreadCount,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total: result.total,
+        pages: Math.ceil(result.total / Number(limit))
+      }
+    }, 'Notifications retrieved successfully');
+  }
+
+  // Fallback to direct database query
+  const query: any = { receiverId: req.user!._id };
   if (unreadOnly === 'true') {
-    query.read = false;
+    query.isRead = false;
+  }
+  if (type) {
+    query.type = type;
   }
 
   const notifications = await Notification.find(query)
+    .populate('senderId', 'name email')
     .sort({ createdAt: -1 })
     .limit(Number(limit))
     .skip((Number(page) - 1) * Number(limit));
 
   const total = await Notification.countDocuments(query);
+  const unreadCount = await Notification.countDocuments({ receiverId: req.user!._id, isRead: false });
 
   sendSuccessResponse(res, {
     notifications,
+    unreadCount,
     pagination: {
       page: Number(page),
       limit: Number(limit),

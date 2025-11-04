@@ -40,7 +40,8 @@ export const KYCRedirect: React.FC<KYCRedirectProps> = ({ children }) => {
     };
 
     checkKYCAndRedirect();
-  }, [isAuthenticated, user, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user?._id, user?.userType]); // Only depend on stable user properties
 
   if (isChecking) {
     return (
