@@ -21,7 +21,11 @@ export const setNotificationService = (service: NotificationService) => {
 // @desc    Send notification to employer when student applies
 // @access  Private (Internal use)
 router.post('/application-submitted', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
-  const { jobId, studentId, applicationId } = req.body;
+  const { jobId, studentId, applicationId } = req.body as {
+    jobId: string | mongoose.Types.ObjectId;
+    studentId: string | mongoose.Types.ObjectId;
+    applicationId: string | mongoose.Types.ObjectId;
+  };
 
   if (!jobId || !studentId || !applicationId) {
     throw new ValidationError('Missing required fields: jobId, studentId, applicationId');
@@ -37,21 +41,32 @@ router.post('/application-submitted', authenticateToken, asyncHandler(async (req
     throw new ValidationError('Job or student not found');
   }
 
+  const jobIdValue = job._id as mongoose.Types.ObjectId | string;
+  const studentIdValue = student._id as mongoose.Types.ObjectId | string;
+  const recipientId = ((job.employerId as any)?._id ?? job.employerId) as
+    | mongoose.Types.ObjectId
+    | string
+    | undefined;
+
+  if (!recipientId) {
+    throw new ValidationError('Job does not have an associated employer');
+  }
+
   // Create notification data
   const notification = {
     type: 'application_submitted',
     title: 'New Job Application',
     message: `A new student has applied for your job posting: ${job.jobTitle}`,
     data: {
-      jobId: job._id,
+      jobId: jobIdValue,
       jobTitle: job.jobTitle,
-      studentId: student._id,
+      studentId: studentIdValue,
       studentName: student.name,
       studentEmail: student.email,
       applicationId: applicationId,
       appliedAt: new Date()
     },
-    recipientId: job.employerId,
+    recipientId,
     recipientType: 'employer',
     isRead: false,
     createdAt: new Date()
@@ -67,7 +82,7 @@ router.post('/application-submitted', authenticateToken, asyncHandler(async (req
   if (notificationService) {
     try {
       createdNotification = await notificationService.createNotification({
-        receiverId: ((job.employerId as any)?._id || job.employerId) as any,
+        receiverId: recipientId,
         senderId: req.user!._id,
         message: notification.message,
         type: 'application',
@@ -94,7 +109,12 @@ router.post('/application-submitted', authenticateToken, asyncHandler(async (req
 // @desc    Send notification to student when application is approved
 // @access  Private (Internal use)
 router.post('/application-approved', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
-  const { jobId, studentId, applicationId, employerId } = req.body;
+  const { jobId, studentId, applicationId, employerId } = req.body as {
+    jobId: string | mongoose.Types.ObjectId;
+    studentId: string | mongoose.Types.ObjectId;
+    applicationId: string | mongoose.Types.ObjectId;
+    employerId: string | mongoose.Types.ObjectId;
+  };
 
   if (!jobId || !studentId || !applicationId || !employerId) {
     throw new ValidationError('Missing required fields: jobId, studentId, applicationId, employerId');
@@ -110,15 +130,18 @@ router.post('/application-approved', authenticateToken, asyncHandler(async (req:
     throw new ValidationError('Job or employer not found');
   }
 
+  const jobIdValue = job._id as mongoose.Types.ObjectId | string;
+  const employerIdValue = employer._id as mongoose.Types.ObjectId | string;
+
   // Create notification data
   const notification = {
     type: 'application_approved',
     title: 'Application Approved!',
     message: `Your profile has been shortlisted for the job: ${job.jobTitle}. Wait for employer contact.`,
     data: {
-      jobId: job._id,
+      jobId: jobIdValue,
       jobTitle: job.jobTitle,
-      employerId: employer._id,
+      employerId: employerIdValue,
       employerName: employer.name,
       employerEmail: employer.email,
       applicationId: applicationId,
@@ -160,7 +183,13 @@ router.post('/application-approved', authenticateToken, asyncHandler(async (req:
 // @desc    Send notification to student when application is rejected
 // @access  Private (Internal use)
 router.post('/application-rejected', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
-  const { jobId, studentId, applicationId, employerId, reason } = req.body;
+  const { jobId, studentId, applicationId, employerId, reason } = req.body as {
+    jobId: string | mongoose.Types.ObjectId;
+    studentId: string | mongoose.Types.ObjectId;
+    applicationId: string | mongoose.Types.ObjectId;
+    employerId: string | mongoose.Types.ObjectId;
+    reason?: string;
+  };
 
   if (!jobId || !studentId || !applicationId || !employerId) {
     throw new ValidationError('Missing required fields: jobId, studentId, applicationId, employerId');
@@ -176,15 +205,18 @@ router.post('/application-rejected', authenticateToken, asyncHandler(async (req:
     throw new ValidationError('Job or employer not found');
   }
 
+  const jobIdValue = job._id as mongoose.Types.ObjectId | string;
+  const employerIdValue = employer._id as mongoose.Types.ObjectId | string;
+
   // Create notification data
   const notification = {
     type: 'application_rejected',
     title: 'Application Rejected',
     message: `Your application was rejected for the job: ${job.jobTitle}. Please review details and apply for other jobs.`,
     data: {
-      jobId: job._id,
+      jobId: jobIdValue,
       jobTitle: job.jobTitle,
-      employerId: employer._id,
+      employerId: employerIdValue,
       employerName: employer.name,
       employerEmail: employer.email,
       applicationId: applicationId,

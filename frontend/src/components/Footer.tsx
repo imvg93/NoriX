@@ -66,7 +66,11 @@ export default function Footer() {
                 <li><a href="/careers" className="text-gray-400 hover:text-white transition-colors">Careers</a></li>
                 <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Press</a></li>
                 <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Blog</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Contact</a></li>
+                <li>
+                  <Link href="/help-and-support#contact" className="text-gray-400 hover:text-white transition-colors">
+                    Contact
+                  </Link>
+                </li>
               </ul>
             </div>
 
@@ -74,12 +78,36 @@ export default function Footer() {
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Support</h3>
               <ul className="space-y-2 text-sm">
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Help Center</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Safety</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Terms of Service</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Privacy Policy</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Cookie Policy</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Accessibility</a></li>
+                <li>
+                  <Link href="/help-and-support#faq-section" className="text-gray-400 hover:text-white transition-colors">
+                    Help Center
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/help-and-support#contact" className="text-gray-400 hover:text-white transition-colors">
+                    Safety
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/terms" className="text-gray-400 hover:text-white transition-colors">
+                    Terms of Service
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/privacy-policy" className="text-gray-400 hover:text-white transition-colors">
+                    Privacy Policy
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/help-and-support#support-form" className="text-gray-400 hover:text-white transition-colors">
+                    Feedback
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/help-and-support#community" className="text-gray-400 hover:text-white transition-colors">
+                    Accessibility
+                  </Link>
+                </li>
               </ul>
             </div>
           </div>

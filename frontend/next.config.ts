@@ -1,5 +1,9 @@
 import type { NextConfig } from "next";
 
+if (typeof (globalThis as Record<string, unknown>).self === "undefined") {
+  (globalThis as Record<string, unknown>).self = globalThis;
+}
+
 const nextConfig: NextConfig = {
   // Vercel-optimized configuration
   trailingSlash: false,
@@ -52,7 +56,7 @@ const nextConfig: NextConfig = {
     }
     
     // Optimize bundle size
-    if (!dev) {
+    if (!dev && !isServer) {
       config.optimization.splitChunks = {
         chunks: 'all',
         cacheGroups: {

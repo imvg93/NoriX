@@ -492,8 +492,9 @@ router.post('/:jobId/apply', authenticateToken, requireStudent, asyncHandler(asy
     // Emit real-time notification to employer about new application
     try {
       const socketManager = (global as any).socketManager;
-      if (socketManager && job.employerId) {
-        socketManager.emitNewApplication(job.employerId.toString(), {
+      const employerIdValue = job.employerId as mongoose.Types.ObjectId | string | undefined;
+      if (socketManager && employerIdValue) {
+        socketManager.emitNewApplication(String(employerIdValue), {
           applicationId: application._id,
           studentId: req.user!._id,
           studentName: (req as any).user?.name || 'Student',
