@@ -206,8 +206,10 @@ class NotificationService {
     }
 
     // Create notifications for all admins
-    const notifications = admins.map(admin => ({
-      receiverId: admin._id,
+    const notifications = admins.map(admin => {
+      const receiverId = admin._id as mongoose.Types.ObjectId | string;
+      return {
+        receiverId,
       message: `🔔 System Alert: ${activityType}. ${details}`,
       type: 'system' as const,
       metadata: {
@@ -215,7 +217,8 @@ class NotificationService {
         details,
         ...metadata
       }
-    }));
+      };
+    });
 
     return this.createBulkNotifications(notifications);
   }

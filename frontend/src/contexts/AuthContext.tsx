@@ -4,12 +4,14 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import socketService from '../services/socketService';
 import { requestNotificationPermission } from './NotificationContext';
 import { AuthPreservation } from '../utils/authPreservation';
+import { apiService } from '../services/api';
 
 interface User {
   _id: string;
   name: string;
   email: string;
   userType: 'student' | 'employer' | 'admin';
+  role: 'user' | 'admin';
   companyName?: string;
   company?: string;
   isActive?: boolean;
@@ -29,6 +31,23 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const resolveUserRole = (user?: { userType?: 'student' | 'employer' | 'admin'; role?: 'user' | 'admin' }): 'user' | 'admin' => {
+  if (user?.role === 'admin') {
+    return 'admin';
+  }
+  if (user?.role === 'user') {
+    return 'user';
+  }
+  return user?.userType === 'admin' ? 'admin' : 'user';
+};
+
+const normalizeUserWithRole = <T extends { userType?: 'student' | 'employer' | 'admin'; role?: 'user' | 'admin' }>(user: T): T & { role: 'user' | 'admin' } => {
+  return {
+    ...user,
+    role: resolveUserRole(user),
+  };
+};
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -90,18 +109,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (savedUser && savedToken) {
           try {
             const parsedUser = JSON.parse(savedUser);
-            console.log('🔍 Found saved user:', parsedUser.name);
+            const normalizedUser = normalizeUserWithRole(parsedUser);
+            console.log('🔍 Found saved user:', normalizedUser.name);
             
             // Validate the token
             const isValid = await validateToken(savedToken);
             
             if (isValid) {
-              setUser(parsedUser);
+              setUser(normalizedUser as User);
               setToken(savedToken);
               console.log('✅ Authentication restored successfully');
               
               // Start authentication backup for future reloads
               AuthPreservation.startAuthBackup();
+
+              if (parsedUser.role !== normalizedUser.role) {
+                localStorage.setItem('user', JSON.stringify(normalizedUser));
+              }
             } else {
               console.log('❌ Invalid token, clearing storage');
               localStorage.removeItem('user');
@@ -119,11 +143,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const backupAuth = AuthPreservation.restoreAuth();
           if (backupAuth) {
             console.log('🔍 Restoring authentication from backup');
-            setUser(backupAuth.user);
+            const normalizedUser = normalizeUserWithRole(backupAuth.user);
+            setUser(normalizedUser as User);
             setToken(backupAuth.token);
             
             // Save to normal storage
-            localStorage.setItem('user', JSON.stringify(backupAuth.user));
+            localStorage.setItem('user', JSON.stringify(normalizedUser));
             localStorage.setItem('token', backupAuth.token);
             
             // Start authentication backup
@@ -143,13 +168,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (userData: User, authToken: string) => {
-    console.log('✅ User logged in:', userData.name);
-    setUser(userData);
+    const normalizedUser = normalizeUserWithRole(userData);
+    console.log('✅ User logged in:', normalizedUser.name);
+    setUser(normalizedUser);
     setToken(authToken);
     
     // Save to localStorage
     if (typeof window !== 'undefined') {
-      localStorage.setItem('user', JSON.stringify(userData));
+      localStorage.setItem('user', JSON.stringify(normalizedUser));
       localStorage.setItem('token', authToken);
     }
 
@@ -165,6 +191,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     setToken(null);
     
+    apiService.logout().catch((error) => {
+      console.warn('Failed to clear server session during logout:', error);
+    });
+
     // Clear localStorage and backup
     if (typeof window !== 'undefined') {
       localStorage.removeItem('user');
@@ -211,7 +241,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return prev;
       }
 
-      const merged = { ...prev, ...updates } as User;
+      const merged = normalizeUserWithRole({ ...prev, ...updates }) as User;
       if (typeof window !== 'undefined') {
         localStorage.setItem('user', JSON.stringify(merged));
       }
@@ -253,6 +283,7 @@ export const createMockEmployerSession = () => {
     name: 'Test Employer',
     email: 'employer@test.com',
     userType: 'employer',
+    role: 'user',
     companyName: 'Test Company',
     company: 'Test Company'
   };

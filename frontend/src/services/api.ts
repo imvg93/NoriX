@@ -101,6 +101,7 @@ interface User {
   email: string;
   phone: string;
   userType: 'student' | 'employer' | 'admin';
+  role: 'user' | 'admin';
   college?: string;
   skills?: string[];
   availability?: string;
@@ -260,6 +261,22 @@ class ApiService {
     return (resp && typeof resp === 'object' && 'data' in resp) ? resp.data as T : resp as T;
   }
 
+  private ensureRole<T extends { userType?: string; role?: 'user' | 'admin' }>(user: T): T & { role: 'user' | 'admin' } {
+    const resolvedRole: 'user' | 'admin' =
+      user?.role === 'admin'
+        ? 'admin'
+        : user?.role === 'user'
+          ? 'user'
+          : user?.userType === 'admin'
+            ? 'admin'
+            : 'user';
+
+    return {
+      ...user,
+      role: resolvedRole,
+    };
+  }
+
   // Mapping helpers to normalize backend → frontend shapes
   private mapEnhancedJobToFrontendJob(raw: any): Job {
     const jobId = raw._id || raw.jobId || '';
@@ -332,7 +349,11 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify({ email, password, userType }),
     });
-    return this.unwrap<AuthResponse>(raw);
+    const payload = this.unwrap<AuthResponse>(raw);
+    if (payload?.user) {
+      payload.user = this.ensureRole(payload.user);
+    }
+    return payload;
   }
 
   async loginAuto(email: string, password: string): Promise<AuthResponse> {
@@ -341,7 +362,11 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
-    return this.unwrap<AuthResponse>(raw);
+    const payload = this.unwrap<AuthResponse>(raw);
+    if (payload?.user) {
+      payload.user = this.ensureRole(payload.user);
+    }
+    return payload;
   }
 
   async loginRequestOTP(email: string, userType: string): Promise<{ message: string; email: string; userType: string }> {
@@ -352,17 +377,27 @@ class ApiService {
   }
 
   async loginVerifyOTP(email: string, userType: string, otp: string): Promise<AuthResponse> {
-    return this.request('/auth/login-verify-otp', {
+    const raw = await this.request('/auth/login-verify-otp', {
       method: 'POST',
       body: JSON.stringify({ email, userType, otp }),
     });
+    const payload = this.unwrap<AuthResponse>(raw);
+    if (payload?.user) {
+      payload.user = this.ensureRole(payload.user);
+    }
+    return payload;
   }
 
   async register(userData: any): Promise<AuthResponse> {
-    return this.request('/auth/register', {
+    const raw = await this.request('/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
     });
+    const payload = this.unwrap<AuthResponse>(raw);
+    if (payload?.user) {
+      payload.user = this.ensureRole(payload.user);
+    }
+    return payload;
   }
 
   async sendOTP(
@@ -395,9 +430,21 @@ class ApiService {
     });
   }
 
+  async logout(): Promise<void> {
+    try {
+      await this.request('/auth/logout', {
+        method: 'POST',
+        skipAuth: true,
+      });
+    } catch (error) {
+      console.error('API logout failed:', error);
+    }
+  }
+
   async getProfile(): Promise<User> {
     const response = await this.request<{ user: User }>('/users/profile');
-    return response.user;
+    const user = (response as any)?.user ?? response;
+    return this.ensureRole(user as User);
   }
 
   // Employer KYC APIs

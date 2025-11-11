@@ -1,8 +1,8 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import SavedJob from '../models/SavedJob';
 import Job from '../models/Job';
-import { authenticateToken } from '../middleware/auth';
-import { AuthRequest } from '../types';
+import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { asyncHandler, sendSuccessResponse, sendErrorResponse } from '../middleware/errorHandler';
 
 const router = express.Router();
@@ -41,11 +41,14 @@ router.get('/', authenticateToken, asyncHandler(async (req: AuthRequest, res: ex
 
   // Transform to match frontend format
   const formattedSavedJobs = savedJobs.map(savedJob => {
+    const savedJobId = savedJob._id as mongoose.Types.ObjectId | string;
     const job = savedJob.jobId as any;
+    const jobIdValue = job?._id as mongoose.Types.ObjectId | string;
+    const savedAt = savedJob.savedAt instanceof Date ? savedJob.savedAt : new Date(savedJob.savedAt);
     return {
-      _id: savedJob._id.toString(),
+      _id: String(savedJobId),
       job: {
-        _id: job._id.toString(),
+        _id: String(jobIdValue),
         title: job.jobTitle || job.title,
         company: job.companyName || job.company,
         location: job.location,
@@ -55,7 +58,7 @@ router.get('/', authenticateToken, asyncHandler(async (req: AuthRequest, res: ex
         requirements: job.skillsRequired || job.requirements || [],
         highlighted: job.highlighted || false
       },
-      savedDate: savedJob.savedAt.toISOString().split('T')[0]
+      savedDate: savedAt.toISOString().split('T')[0]
     };
   });
 
@@ -101,10 +104,11 @@ router.post('/:jobId', authenticateToken, asyncHandler(async (req: AuthRequest, 
   });
 
   const jobData = savedJob.jobId as any;
+  const savedJobId = savedJob._id as mongoose.Types.ObjectId | string;
   const formattedSavedJob = {
-    _id: savedJob._id.toString(),
+    _id: String(savedJobId),
     job: {
-      _id: jobData._id.toString(),
+      _id: String(jobData._id as mongoose.Types.ObjectId | string),
       title: jobData.jobTitle || jobData.title,
       company: jobData.companyName || jobData.company,
       location: jobData.location,

@@ -47,6 +47,19 @@ export const authenticateToken = async (
       return;
     }
 
+    const resolvedRole = user.role === 'admin' || user.role === 'user'
+      ? user.role
+      : (user.userType === 'admin' ? 'admin' : 'user');
+
+    if (user.role !== resolvedRole) {
+      user.role = resolvedRole as any;
+      try {
+        await user.save();
+      } catch (saveError) {
+        console.error('Failed to persist user role during authentication:', saveError);
+      }
+    }
+
     req.user = user as any;
     next();
   } catch (error) {

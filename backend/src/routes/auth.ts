@@ -2,7 +2,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import cors from 'cors';
-import User from '../models/User';
+import User, { IUser } from '../models/User';
 import OTP from '../models/OTP';
 import { AdminLogin } from '../models/AdminLogin';
 import { authenticateToken, rateLimit, AuthRequest } from '../middleware/auth';
@@ -16,7 +16,7 @@ const router = express.Router();
 // @access  Private
 router.get('/verify-token', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
   try {
-    const user = req.user;
+    const user = req.user as IUser | undefined;
     
     if (!user) {
       return res.status(401).json({
@@ -25,18 +25,22 @@ router.get('/verify-token', authenticateToken, asyncHandler(async (req: AuthRequ
       });
     }
 
+    const role = resolveUserRole(user);
+
     // Return user data without sensitive information
     const userData = {
       _id: user._id,
       name: user.name,
       email: user.email,
+      role,
       userType: user.userType,
       companyName: user.companyName,
-      company: user.company,
       isActive: user.isActive,
       emailVerified: user.emailVerified,
       createdAt: user.createdAt
     };
+
+    res.setHeader('X-User-Role', role);
 
     return res.json({
       success: true,
@@ -67,11 +71,11 @@ router.post('/refresh-token', authenticateToken, asyncHandler(async (req: AuthRe
     }
 
     // Generate new token
-    const token = jwt.sign(
-      { userId: user._id, userType: user.userType },
-      process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
-    );
+    const role = resolveUserRole(user);
+
+    const token = generateToken(user as IUser);
+    setAuthCookie(res, token);
+    res.setHeader('X-User-Role', role);
 
     return res.json({
       success: true,
@@ -82,8 +86,8 @@ router.post('/refresh-token', authenticateToken, asyncHandler(async (req: AuthRe
         name: user.name,
         email: user.email,
         userType: user.userType,
+        role,
         companyName: user.companyName,
-        company: user.company,
         isActive: user.isActive,
         emailVerified: user.emailVerified
       }
@@ -95,6 +99,15 @@ router.post('/refresh-token', authenticateToken, asyncHandler(async (req: AuthRe
       message: 'Token refresh failed'
     });
   }
+}));
+
+// @route   POST /api/auth/logout
+// @desc    Clear auth cookie and invalidate client session
+// @access  Public (client-only)
+router.post('/logout', asyncHandler(async (_req: express.Request, res: express.Response) => {
+  clearAuthCookie(res);
+  res.setHeader('Access-Control-Expose-Headers', 'X-User-Role');
+  sendSuccessResponse(res, {}, 'Logged out successfully');
 }));
 
 // Enhanced CORS configuration for OTP endpoints
@@ -160,13 +173,48 @@ router.use('/forgot-password', cors(otpCorsOptions));
 router.use('/reset-password', cors(otpCorsOptions));
 
 // Generate JWT token
-const generateToken = (userId: string): string => {
+const resolveUserRole = (user: Pick<IUser, 'userType' | 'role'>): 'user' | 'admin' => {
+  if (user.role === 'admin' || user.role === 'user') {
+    return user.role;
+  }
+  return user.userType === 'admin' ? 'admin' : 'user';
+};
+
+const setAuthCookie = (res: express.Response, token: string) => {
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  res.cookie('norix_token', token, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    path: '/'
+  });
+};
+
+const clearAuthCookie = (res: express.Response) => {
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  res.clearCookie('norix_token', {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'lax',
+    path: '/'
+  });
+};
+
+const generateToken = (user: IUser): string => {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
     throw new Error('JWT_SECRET is not defined');
   }
   return jwt.sign(
-    { userId },
+    { 
+      userId: user._id,
+      email: user.email,
+      userType: user.userType,
+      role: resolveUserRole(user)
+    },
     secret,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
@@ -255,6 +303,7 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
     phone,
     password,
     userType,
+    role: userType === 'admin' ? 'admin' : 'user',
     emailVerified: true, // Mark as verified since OTP was verified
     submittedAt: new Date()
   };
@@ -278,12 +327,14 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
   const user = await User.create(userData);
 
   // Generate token
-  const token = generateToken((user._id as any).toString());
+  const token = generateToken(user);
+  setAuthCookie(res, token);
 
   // Set headers BEFORE sending body
   res.setHeader('X-OTP-Status', 'verified');
   res.setHeader('X-Verification-Status', 'success');
   res.setHeader('X-User-Type', user.userType);
+  res.setHeader('X-User-Role', resolveUserRole(user));
 
   // Send response
   sendSuccessResponse(res, {
@@ -293,6 +344,7 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
       email: user.email,
       phone: user.phone,
       userType: user.userType,
+      role: resolveUserRole(user),
       college: user.college,
       skills: user.skills,
       availability: user.availability,
@@ -343,16 +395,16 @@ router.post('/login-auto', asyncHandler(async (req: express.Request, res: expres
     throw new ValidationError('Invalid email or password');
   }
 
+  const role = resolveUserRole(user);
+
+  if (user.role !== role) {
+    user.role = role;
+    await user.save();
+  }
+
   // Generate JWT token
-  const token = jwt.sign(
-    { 
-      userId: user._id, 
-      email: user.email, 
-      userType: user.userType 
-    },
-    process.env.JWT_SECRET!,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-  );
+  const token = generateToken(user);
+  setAuthCookie(res, token);
 
   // Log successful login for admin users
   if (user.userType === 'admin') {
@@ -372,6 +424,8 @@ router.post('/login-auto', asyncHandler(async (req: express.Request, res: expres
 
   console.log('✅ Auto-login successful:', { email, userType: user.userType });
 
+  res.setHeader('X-User-Role', role);
+
   sendSuccessResponse(res, {
     user: {
       _id: user._id,
@@ -379,6 +433,7 @@ router.post('/login-auto', asyncHandler(async (req: express.Request, res: expres
       email: user.email,
       phone: user.phone,
       userType: user.userType,
+      role,
       college: user.college,
       skills: user.skills,
       availability: user.availability,
@@ -507,8 +562,16 @@ router.post('/login', asyncHandler(async (req: express.Request, res: express.Res
 
   console.log('✅ Password verified for:', email);
 
+  const role = resolveUserRole(user);
+
+  if (user.role !== role) {
+    user.role = role;
+    await user.save();
+  }
+
   // Generate token
-  const token = generateToken((user._id as any).toString());
+  const token = generateToken(user);
+  setAuthCookie(res, token);
 
   console.log('🎉 Login successful for:', email);
 
@@ -529,6 +592,8 @@ router.post('/login', asyncHandler(async (req: express.Request, res: express.Res
     }
   }
 
+  res.setHeader('X-User-Role', role);
+
   // Send response
   sendSuccessResponse(res, {
     user: {
@@ -537,6 +602,7 @@ router.post('/login', asyncHandler(async (req: express.Request, res: express.Res
       email: user.email,
       phone: user.phone,
       userType: user.userType,
+      role,
       college: user.college,
       skills: user.skills,
       availability: user.availability,
@@ -730,8 +796,16 @@ router.post('/login-verify-otp', asyncHandler(async (req: express.Request, res: 
     console.log('🧪 Test OTP used for login:', normalizedEmail);
   }
 
+  const role = resolveUserRole(user);
+
+  if (user.role !== role) {
+    user.role = role;
+    await user.save();
+  }
+
   // Generate token
-  const token = generateToken((user._id as any).toString());
+  const token = generateToken(user);
+  setAuthCookie(res, token);
 
   // Send response
   sendSuccessResponse(res, {
@@ -741,6 +815,7 @@ router.post('/login-verify-otp', asyncHandler(async (req: express.Request, res: 
       email: user.email,
       phone: user.phone,
       userType: user.userType,
+      role,
       college: user.college,
       skills: user.skills,
       availability: user.availability,
@@ -755,7 +830,8 @@ router.post('/login-verify-otp', asyncHandler(async (req: express.Request, res: 
   }, 'Login successful');
   
   // Expose headers
-  res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status, X-Verification-Status, X-User-Type');
+  res.setHeader('X-User-Role', role);
+  res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status, X-Verification-Status, X-User-Type, X-User-Role');
 }));
 
 // @route   POST /api/auth/forgot-password
