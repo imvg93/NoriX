@@ -9,7 +9,9 @@
     "dev": "nodemon src/index.ts",
     "build": "tsc",
     "seed": "ts-node src/scripts/seed.ts",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch",
+    "migrate:students": "ts-node src/scripts/studentsMigration.ts",
     "test:email": "node test-otp.js",
     "test:models": "node test-models.js",
     "test:env": "node test-env.js"
@@ -42,12 +44,17 @@
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
+    "@types/jest": "^29.5.12",
     "@types/jsonwebtoken": "^8.5.9",
     "@types/multer": "^2.0.0",
     "@types/node": "^20.10.4",
     "@types/nodemailer": "^7.0.1",
+    "jest": "^29.7.0",
+    "mongodb-memory-server": "^10.1.4",
     "nodemon": "^3.0.2",
+    "supertest": "^7.0.0",
     "ts-node": "^10.9.1",
+    "ts-jest": "^29.2.5",
     "typescript": "^5.3.3"
   },
   "types": "./dist/index.d.ts"
