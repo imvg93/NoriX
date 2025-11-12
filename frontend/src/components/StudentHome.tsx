@@ -589,6 +589,7 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
   };
 
   const quickActions = [
+    { name: 'Get Verified', icon: Shield, href: '/verification', color: 'indigo' },
     { name: 'Search Jobs', icon: Search, href: '/jobs', color: 'blue' },
     { name: 'My Applications', icon: FileText, href: '/applications', color: 'green' },
     { name: 'Approved Applications', icon: CheckCircle, href: '/student/approved-applications', color: 'green' },

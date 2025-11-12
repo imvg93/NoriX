@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import socketService from '../../../services/socketService';
+import apiService from '../../../services/api';
 
 type PendingItem = {
   _id: string;
@@ -39,16 +40,11 @@ export default function AdminVerificationPage() {
     setLoading(true);
     setError(null);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
-      const res = await fetch(`${baseUrl}/admin/verification/pending?page=${p}&limit=10`, {
-        headers: authHeaders(),
-        credentials: 'include',
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error?.message || 'Failed to load');
-      setItems(json.data.items);
-      setPage(json.data.pagination.current);
-      setTotalPages(json.data.pagination.pages);
+      const resp = await apiService.get(`/admin/verification/pending?page=${p}&limit=10`);
+      const data = (resp as any)?.data ?? resp;
+      setItems(data.items);
+      setPage(data.pagination.current);
+      setTotalPages(data.pagination.pages);
     } catch (e: any) {
       setError(e.message || 'Failed to load');
     } finally {
@@ -71,14 +67,10 @@ export default function AdminVerificationPage() {
     async (studentId: string, action: 'approve' | 'reject' | 'require_trial', body: any = {}) => {
       setActionBusyId(studentId);
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
-        const res = await fetch(`${baseUrl}/admin/verification/${studentId}`, {
+        await apiService.request(`/admin/verification/${studentId}`, {
           method: 'PATCH',
-          headers: authHeaders(),
           body: JSON.stringify({ action, ...body }),
-        });
-        const json = await res.json();
-        if (!json.success) throw new Error(json.error?.message || 'Action failed');
+        } as any);
         await load(page);
       } catch (e: any) {
         setError(e.message || 'Action failed');

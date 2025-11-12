@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import socketService from '../services/socketService';
+import apiService from '../services/api';
 
 type VerificationStatus = {
   verified: boolean;
@@ -22,14 +23,6 @@ type UploadResponse = {
   video_read_url?: string;
 };
 
-function authHeaders() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
-
 export function useVerification() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,15 +32,9 @@ export function useVerification() {
   const fetchStatus = useCallback(async () => {
     try {
       setError(null);
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
-      const res = await fetch(`${baseUrl}/verification/status`, {
-        method: 'GET',
-        headers: authHeaders(),
-        credentials: 'include',
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error?.message || 'Failed to load status');
-      if (mountedRef.current) setStatus(json.data);
+      const resp = await apiService.get('/verification/status');
+      const data = (resp as any)?.data ?? resp;
+      if (mountedRef.current) setStatus(data);
     } catch (e: any) {
       if (mountedRef.current) setError(e.message || 'Failed to load status');
     }
@@ -76,20 +63,12 @@ export function useVerification() {
       setLoading(true);
       setError(null);
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
-        const res = await fetch(`${baseUrl}/verification/upload-id`, {
-          method: 'POST',
-          headers: authHeaders(),
-          body: JSON.stringify({
-            fileName: file.name,
-            contentType: file.type,
-            size: file.size,
-            sha256,
-          }),
+        const { data } = await apiService.post<UploadResponse>('/verification/upload-id', {
+          fileName: file.name,
+          contentType: file.type,
+          size: file.size,
+          sha256,
         });
-        const json = await res.json();
-        if (!json.success) throw new Error(json.error?.message || 'Failed to get upload URL');
-        const data: UploadResponse = json.data;
         await performUpload(data.upload, file);
         await fetchStatus();
         return data;
@@ -108,21 +87,13 @@ export function useVerification() {
       setLoading(true);
       setError(null);
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
-        const res = await fetch(`${baseUrl}/verification/upload-video`, {
-          method: 'POST',
-          headers: authHeaders(),
-          body: JSON.stringify({
-            fileName: file.name,
-            contentType: file.type,
-            size: file.size,
-            sha256,
-            durationSec,
-          }),
+        const { data } = await apiService.post<UploadResponse>('/verification/upload-video', {
+          fileName: file.name,
+          contentType: file.type,
+          size: file.size,
+          sha256,
+          durationSec,
         });
-        const json = await res.json();
-        if (!json.success) throw new Error(json.error?.message || 'Failed to get upload URL');
-        const data: UploadResponse = json.data;
         await performUpload(data.upload, file);
         await fetchStatus();
         return data;
@@ -140,15 +111,9 @@ export function useVerification() {
     setLoading(true);
     setError(null);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
-      const res = await fetch(`${baseUrl}/verification/request-trial`, {
-        method: 'POST',
-        headers: authHeaders(),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error?.message || 'Failed to request trial');
+      const json = await apiService.post('/verification/request-trial', {});
       await fetchStatus();
-      return json.data;
+      return (json as any)?.data ?? json;
     } catch (e: any) {
       setError(e.message || 'Request failed');
       throw e;
