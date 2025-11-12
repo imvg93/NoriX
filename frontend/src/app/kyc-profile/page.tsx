@@ -123,6 +123,12 @@ const KYCProfilePage: React.FC = () => {
                         Congratulations! Your KYC verification has been approved. You can now access all job opportunities.
                       </p>
                       <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                        <a
+                          href="/verification"
+                          className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-center"
+                        >
+                          Get Verified to Unlock More Shifts
+                        </a>
                         <button
                           onClick={() => router.push('/student-home')}
                           className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
@@ -157,6 +163,12 @@ const KYCProfilePage: React.FC = () => {
                         </div>
                       </div>
                       <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                        <a
+                          href="/verification"
+                          className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-center"
+                        >
+                          Get Verified Now
+                        </a>
                         <button
                           onClick={() => router.push('/')}
                           className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"

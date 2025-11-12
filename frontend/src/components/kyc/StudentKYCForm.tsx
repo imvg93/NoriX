@@ -146,7 +146,17 @@ export default function StudentKYCForm() {
 				</div>
 			</div>
 
-			{message && <div className="text-sm text-green-700 bg-green-50 border border-green-200 p-2 rounded">{message}</div>}
+			{message && (
+				<div className="text-sm text-green-700 bg-green-50 border border-green-200 p-3 rounded flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+					<span>{message}</span>
+					<a
+						href="/verification"
+						className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-white text-xs font-medium hover:bg-indigo-700"
+					>
+						Proceed to Get Verified
+					</a>
+				</div>
+			)}
 			{error && <div className="text-sm text-red-700 bg-red-50 border border-red-200 p-2 rounded">{error}</div>}
 
 			<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
