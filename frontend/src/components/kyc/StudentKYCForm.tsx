@@ -121,8 +121,15 @@ export default function StudentKYCForm() {
 			if (student) {
 				setVerified(Boolean(student.verified));
 				setMessage('Saved successfully');
+				// Persist an immediate prompt to verify after KYC save
+				try {
+					localStorage.setItem('kycSubmitted', 'true');
+				} catch {}
 			} else {
 				setMessage('Saved');
+				try {
+					localStorage.setItem('kycSubmitted', 'true');
+				} catch {}
 			}
 		} catch (e: any) {
 			setError(e?.message || 'Save failed');

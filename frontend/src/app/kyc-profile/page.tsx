@@ -40,7 +40,16 @@ const KYCProfilePage: React.FC = () => {
       }
 
       try {
-        // New flow: always show StudentKYCForm, status banner is optional
+        // If the user has recently submitted KYC, show the post-submit state and CTA to Verify
+        try {
+          const flag = typeof window !== 'undefined' ? localStorage.getItem('kycSubmitted') : null;
+          if (flag === 'true') {
+            setKycStatus('pending');
+            setShowForm(false);
+            return;
+          }
+        } catch {}
+        // Default: show form
         setShowForm(true);
       } finally {
         setIsLoading(false);
