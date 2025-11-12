@@ -12,6 +12,7 @@ export default function VerificationPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const [videoDurationSec, setVideoDurationSec] = useState<number | undefined>(undefined);
+  const liveVideoRef = useRef<HTMLVideoElement | null>(null);
 
   // Steps - all steps remain visible and actionable to reduce friction
   const steps = useMemo(() => {
@@ -40,6 +41,19 @@ export default function VerificationPage() {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     const mr = new MediaRecorder(stream, { mimeType: 'video/webm' });
     mediaRecorderRef.current = mr;
+    // Live preview
+    try {
+      if (liveVideoRef.current) {
+        (liveVideoRef.current as any).srcObject = stream;
+        liveVideoRef.current.muted = true;
+        liveVideoRef.current.playsInline = true;
+        // play may need to be awaited in some browsers
+        const p = liveVideoRef.current.play();
+        if (p && typeof (p as Promise<void>).catch === 'function') {
+          (p as Promise<void>).catch(() => {});
+        }
+      }
+    } catch {}
     mr.ondataavailable = (e) => {
       if (e.data && e.data.size > 0) {
         recordedChunksRef.current.push(e.data);
@@ -54,7 +68,13 @@ export default function VerificationPage() {
       video.onloadedmetadata = () => {
         setVideoDurationSec(video.duration || undefined);
       };
+      // Stop stream and clear live preview
       stream.getTracks().forEach((t) => t.stop());
+      if (liveVideoRef.current) {
+        try {
+          (liveVideoRef.current as any).srcObject = null;
+        } catch {}
+      }
     };
     mr.start();
     setRecording(true);
@@ -167,6 +187,12 @@ export default function VerificationPage() {
                 </button>
               )}
             </div>
+            {/* Live preview while recording */}
+            {recording && (
+              <div className="rounded-lg overflow-hidden border border-gray-200">
+                <video ref={liveVideoRef} className="w-full h-auto bg-black rounded-lg" />
+              </div>
+            )}
             {videoBlobUrl && <video src={videoBlobUrl} controls className="w-full rounded-lg" />}
             <div className="mt-2">
               <FileUploader

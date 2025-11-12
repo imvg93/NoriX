@@ -6,6 +6,10 @@ import Student from '../models/Student';
 import VerificationLog from '../models/VerificationLog';
 import mongoose from 'mongoose';
 import { requireEmployer } from '../middleware/auth';
+import multer from 'multer';
+import { uploadImage } from '../config/cloudinary';
+import fs from 'fs';
+import crypto from 'crypto';
 
 const router = express.Router();
 
@@ -19,6 +23,19 @@ function isAllowedVideoMime(mime?: string): boolean {
   if (!mime) return false;
   return /^video\/(mp4|webm|quicktime|x-matroska|ogg)$/i.test(mime);
 }
+
+// Multer for direct file uploads (Cloudinary path)
+const diskStorage = multer.diskStorage({
+  destination: function (_req, _file, cb) {
+    cb(null, 'uploads/');
+  },
+  filename: function (_req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = file.originalname.split('.').pop();
+    cb(null, `${file.fieldname}-${uniqueSuffix}.${ext}`);
+  }
+});
+const upload = multer({ storage: diskStorage });
 
 // POST /api/verification/upload-id
 router.post(
@@ -105,6 +122,57 @@ router.post(
   })
 );
 
+// POST /api/verification/upload-id-file (Cloudinary; multipart)
+router.post(
+  '/upload-id-file',
+  authenticateToken,
+  requireStudent,
+  upload.single('file'),
+  asyncHandler(async (req: AuthRequest, res: express.Response) => {
+    const file = (req as any).file as Express.Multer.File | undefined;
+    if (!file) throw new ValidationError('No file uploaded');
+    const { MAX_ID_SIZE } = getMaxSizes();
+    if (!isAllowedIdMime(file.mimetype)) throw new ValidationError('Unsupported ID document type');
+    if (file.size > MAX_ID_SIZE) throw new ValidationError(`ID document exceeds max size of ${MAX_ID_SIZE} bytes`);
+
+    // Compute sha256
+    const buf = fs.readFileSync(file.path);
+    const sha256 = crypto.createHash('sha256').update(buf).digest('hex');
+
+    // Upload to Cloudinary
+    const result = await uploadImage(file, 'norix/verification/id');
+    const secureUrl = result.secure_url;
+
+    await Student.findOneAndUpdate(
+      { _id: req.user!._id },
+      {
+        $set: {
+          id_doc_url: secureUrl,
+          id_doc_hash: sha256,
+          id_submitted_at: new Date(),
+        },
+        $push: {
+          verification_history: { action: 'upload_id', by: req.user!._id, details: file.originalname, at: new Date() } as any
+        }
+      },
+      { new: true }
+    );
+
+    try {
+      await VerificationLog.create({
+        studentId: req.user!._id,
+        adminId: null,
+        action: 'upload_id',
+        code: 'ID_UPLOADED',
+        details: { mimetype: file.mimetype, size: file.size, sha256, secureUrl },
+        timestamp: new Date(),
+      });
+    } catch {}
+
+    sendSuccessResponse(res, { status: 'uploaded', id_doc_url: secureUrl, id_doc_hash: sha256 }, 'ID uploaded to Cloudinary');
+  })
+);
+
 // POST /api/verification/upload-video
 router.post(
   '/upload-video',
@@ -183,6 +251,51 @@ router.post(
       },
       'Video upload URL generated'
     );
+  })
+);
+
+// POST /api/verification/upload-video-file (Cloudinary; multipart)
+router.post(
+  '/upload-video-file',
+  authenticateToken,
+  requireStudent,
+  upload.single('file'),
+  asyncHandler(async (req: AuthRequest, res: express.Response) => {
+    const file = (req as any).file as Express.Multer.File | undefined;
+    if (!file) throw new ValidationError('No file uploaded');
+    const { MAX_VIDEO_SIZE } = getMaxSizes();
+    if (!isAllowedVideoMime(file.mimetype)) throw new ValidationError('Unsupported video type');
+    if (file.size > MAX_VIDEO_SIZE) throw new ValidationError(`Video exceeds max size of ${MAX_VIDEO_SIZE} bytes`);
+
+    const result = await uploadImage(file, 'norix/verification/video');
+    const secureUrl = result.secure_url;
+
+    await Student.findOneAndUpdate(
+      { _id: req.user!._id },
+      {
+        $set: {
+          video_url: secureUrl,
+          video_submitted_at: new Date(),
+        },
+        $push: {
+          verification_history: { action: 'upload_video', by: req.user!._id, details: file.originalname, at: new Date() } as any
+        }
+      },
+      { new: true }
+    );
+
+    try {
+      await VerificationLog.create({
+        studentId: req.user!._id,
+        adminId: null,
+        action: 'upload_video',
+        code: 'VIDEO_UPLOADED',
+        details: { mimetype: file.mimetype, size: file.size, secureUrl },
+        timestamp: new Date(),
+      });
+    } catch {}
+
+    sendSuccessResponse(res, { status: 'uploaded', video_url: secureUrl }, 'Video uploaded to Cloudinary');
   })
 );
 

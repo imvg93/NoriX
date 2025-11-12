@@ -63,15 +63,23 @@ export function useVerification() {
       setLoading(true);
       setError(null);
       try {
-        const { data } = await apiService.post<UploadResponse>('/verification/upload-id', {
-          fileName: file.name,
-          contentType: file.type,
-          size: file.size,
-          sha256,
-        });
-        await performUpload(data.upload, file);
+        // Try Cloudinary (multipart) first
+        try {
+          const fd = new FormData();
+          fd.append('file', file);
+          await apiService.post('/verification/upload-id-file', fd as any);
+        } catch {
+          // Fallback to presigned upload flow
+          const { data } = await apiService.post<UploadResponse>('/verification/upload-id', {
+            fileName: file.name,
+            contentType: file.type,
+            size: file.size,
+            sha256,
+          });
+          await performUpload(data.upload, file);
+        }
         await fetchStatus();
-        return data;
+        return true;
       } catch (e: any) {
         setError(e.message || 'Upload failed');
         throw e;
@@ -87,16 +95,24 @@ export function useVerification() {
       setLoading(true);
       setError(null);
       try {
-        const { data } = await apiService.post<UploadResponse>('/verification/upload-video', {
-          fileName: file.name,
-          contentType: file.type,
-          size: file.size,
-          sha256,
-          durationSec,
-        });
-        await performUpload(data.upload, file);
+        // Try Cloudinary (multipart) first
+        try {
+          const fd = new FormData();
+          fd.append('file', file);
+          await apiService.post('/verification/upload-video-file', fd as any);
+        } catch {
+          // Fallback to presigned upload flow
+          const { data } = await apiService.post<UploadResponse>('/verification/upload-video', {
+            fileName: file.name,
+            contentType: file.type,
+            size: file.size,
+            sha256,
+            durationSec,
+          });
+          await performUpload(data.upload, file);
+        }
         await fetchStatus();
-        return data;
+        return true;
       } catch (e: any) {
         setError(e.message || 'Upload failed');
         throw e;
