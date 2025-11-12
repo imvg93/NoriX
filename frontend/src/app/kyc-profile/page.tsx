@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ProfileVerification } from '../../components/kyc';
+import StudentKYCForm from '../../components/kyc/StudentKYCForm';
 import ProtectedRoute from '../../components/auth/ProtectedRoute';
 import { useAuth } from '../../contexts/AuthContext';
 import { kycStatusService } from '../../services/kycStatusService';
@@ -22,7 +22,7 @@ const KYCProfilePage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [kycStatus, setKycStatus] = useState<string | null>(null);
   const [isKYCCompleted, setIsKYCCompleted] = useState(false);
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(true);
 
   useEffect(() => {
     const checkKYCStatus = async () => {
@@ -40,18 +40,7 @@ const KYCProfilePage: React.FC = () => {
       }
 
       try {
-        const status = await kycStatusService.checkKYCStatus();
-        setKycStatus(status.status);
-        setIsKYCCompleted(status.isCompleted);
-        
-        // Determine if form should be shown
-        // Show form only if: not-submitted or rejected
-        // Do NOT show form if pending or in-review
-        setShowForm(status.status === 'not_submitted' || status.status === 'rejected');
-        
-      } catch (error) {
-        console.error('Error checking KYC status:', error);
-        // If error, show form by default
+        // New flow: always show StudentKYCForm, status banner is optional
         setShowForm(true);
       } finally {
         setIsLoading(false);
@@ -117,11 +106,7 @@ const KYCProfilePage: React.FC = () => {
 
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {showForm ? (
-            // Show KYC Form
-            <ProfileVerification 
-              isDisabled={false} 
-              onFormSubmitted={handleFormSubmitted}
-            />
+            <StudentKYCForm />
           ) : (
             // Show Status Messages
             <div className="space-y-6">

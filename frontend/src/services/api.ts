@@ -256,6 +256,29 @@ class ApiService {
     }
   }
 
+  // Students (new)
+  async getMyStudentProfile() {
+    return this.request('/students/me', { method: 'GET' });
+  }
+
+  async saveMyStudentProfile(data: {
+    name: string;
+    phone: string;
+    college: string;
+    college_email?: string;
+    id_doc_url?: string;
+    skills?: string[];
+    availability?: string[];
+  }) {
+    return this.request('/students/me', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async verifyStudent(studentId: string) {
+    return this.request(`/students/verify/${studentId}`, { method: 'PUT' });
+  }
   // Helper to unwrap { data } when present
   private unwrap<T = any>(resp: any): T {
     return (resp && typeof resp === 'object' && 'data' in resp) ? resp.data as T : resp as T;
