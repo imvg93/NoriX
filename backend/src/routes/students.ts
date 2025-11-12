@@ -59,6 +59,26 @@ router.put(
 			{ upsert: true, new: true }
 		);
 
+		// Notify admins that a student submitted/updated their profile
+		try {
+			const notificationService = (global as any).notificationService as any;
+			if (notificationService) {
+				await notificationService.notifyAdmin(
+					'Student KYC Submitted/Updated',
+					`Student ${payload.name} (${payload.college_email}) submitted/updated KYC profile.`,
+					{
+						studentId: student._id?.toString?.(),
+						name: payload.name,
+						college: payload.college,
+						college_email: payload.college_email,
+						has_id_doc: !!payload.id_doc_url
+					}
+				);
+			}
+		} catch (e) {
+			console.error('Failed to notify admin about student KYC submission:', (e as any)?.message || e);
+		}
+
 		return sendSuccessResponse(res, { student }, 'Student profile saved');
 	})
 );
