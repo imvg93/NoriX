@@ -25,6 +25,8 @@ import notificationRoutes, { setNotificationService as setNotificationRouteServi
 import savedJobsRoutes from './routes/saved-jobs';
 import profileRoutes from './routes/profile';
 import studentsRoutes from './routes/students';
+import verificationRoutes from './routes/verification';
+import adminVerificationRoutes from './routes/admin-verification';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -140,6 +142,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/saved-jobs', savedJobsRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/students', studentsRoutes);
+app.use('/api/verification', verificationRoutes);
+app.use('/api/admin/verification', adminVerificationRoutes);
 
 // Debug: Log saved-jobs route registration
 console.log('✅ Saved jobs routes registered at /api/saved-jobs');

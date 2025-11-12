@@ -6,9 +6,31 @@ export interface IStudent extends Document {
 	college: string;
 	college_email: string;
 	id_doc_url: string;
+	id_doc_hash?: string;
+	id_submitted_at?: Date;
+	video_url?: string;
+	video_submitted_at?: Date;
 	skills: string[];
 	availability: string[];
 	verified: boolean;
+	trial_shift_status?: 'not_requested' | 'pending' | 'assigned' | 'completed' | 'failed';
+	rejection_code?: string;
+	admin_notes?: string;
+	auto_checks?: {
+		ocr_confidence?: number;
+		face_match_score?: number;
+		duplicate_flag?: boolean;
+		last_checked_at?: Date;
+	};
+	last_reviewed_by?: Schema.Types.ObjectId | null;
+	last_reviewed_at?: Date | null;
+	verification_history?: Array<{
+		action: string;
+		by?: Schema.Types.ObjectId | null;
+		code?: string;
+		details?: string;
+		at: Date;
+	}>;
 	reliability_score: number;
 	total_shifts: number;
 	no_shows: number;
@@ -46,6 +68,20 @@ const studentSchema = new Schema<IStudent>(
 			type: String,
 			default: ''
 		},
+		id_doc_hash: {
+			type: String,
+			default: '',
+		},
+		id_submitted_at: {
+			type: Date,
+		},
+		video_url: {
+			type: String,
+			default: '',
+		},
+		video_submitted_at: {
+			type: Date,
+		},
 		skills: [
 			{
 				type: String,
@@ -66,6 +102,43 @@ const studentSchema = new Schema<IStudent>(
 			default: false,
 			index: true
 		},
+		trial_shift_status: {
+			type: String,
+			enum: ['not_requested', 'pending', 'assigned', 'completed', 'failed'],
+			default: 'not_requested'
+		},
+		rejection_code: {
+			type: String,
+			default: ''
+		},
+		admin_notes: {
+			type: String,
+			default: ''
+		},
+		auto_checks: {
+			ocr_confidence: { type: Number, min: 0, max: 1 },
+			face_match_score: { type: Number, min: 0, max: 1 },
+			duplicate_flag: { type: Boolean, default: false },
+			last_checked_at: { type: Date }
+		},
+		last_reviewed_by: {
+			type: Schema.Types.ObjectId,
+			ref: 'User',
+			default: null
+		},
+		last_reviewed_at: {
+			type: Date,
+			default: null
+		},
+		verification_history: [
+			{
+				action: { type: String, required: true },
+				by: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+				code: { type: String, default: '' },
+				details: { type: String, default: '' },
+				at: { type: Date, default: Date.now }
+			}
+		],
 		reliability_score: {
 			type: Number,
 			default: 0,
@@ -91,6 +164,8 @@ const studentSchema = new Schema<IStudent>(
 
 // Unique index on college_email
 studentSchema.index({ college_email: 1 }, { unique: true });
+// Optional index to speed up duplicate detection via hashes (not unique to allow resubmission)
+studentSchema.index({ id_doc_hash: 1 }, { name: 'id_doc_hash_idx' });
 // Optional indexes to help querying
 studentSchema.index({ skills: 1 }, { name: 'skills_idx' });
 studentSchema.index({ availability: 1 }, { name: 'availability_idx' });

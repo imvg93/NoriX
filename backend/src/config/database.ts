@@ -59,6 +59,9 @@ export const connectDB = async (): Promise<void> => {
     
     // Clean up duplicate indexes after connection
     await cleanupDuplicateIndexes();
+
+    // Apply students validator and indexes
+    await applyStudentValidatorAndIndexes();
   } catch (error) {
     console.error('Failed to connect to MongoDB:', error);
     process.exit(1);
@@ -162,6 +165,78 @@ const ensureRequiredIndexes = async (): Promise<void> => {
     console.log('✅ Index creation deferred to prevent conflicts');
   } catch (error) {
     console.error('❌ Error in index management:', error);
+  }
+};
+
+// Ensure JSON Schema validator and performance indexes for `students`
+const applyStudentValidatorAndIndexes = async (): Promise<void> => {
+  try {
+    const db = mongoose.connection.db;
+    if (!db) return;
+
+    const path = await import('path');
+    const fs = await import('fs');
+
+    // Resolve schema JSON (works from dist at runtime)
+    const schemaPath = path.resolve(__dirname, '../../../schemas/student.schema.json');
+    let jsonSchema: any | null = null;
+    try {
+      const content = fs.readFileSync(schemaPath, 'utf8');
+      jsonSchema = JSON.parse(content);
+    } catch (e) {
+      console.log('⚠️ Unable to read student.schema.json; skipping validator apply.');
+    }
+
+    // Apply validator if schema is available
+    if (jsonSchema) {
+      const collections = await db.listCollections({ name: 'students' }).toArray();
+      if (collections.length > 0) {
+        try {
+          await db.command({
+            collMod: 'students',
+            validator: { $jsonSchema: jsonSchema },
+            validationLevel: 'strict',
+            validationAction: 'error'
+          });
+          console.log('✅ Applied JSON Schema validator to students');
+        } catch (err) {
+          console.log('⚠️ collMod failed, attempting create with validator if collection missing:', (err as Error).message);
+          try {
+            await db.createCollection('students', {
+              validator: { $jsonSchema: jsonSchema },
+              validationLevel: 'strict',
+              validationAction: 'error'
+            });
+            console.log('✅ Created students collection with validator');
+          } catch (e2) {
+            console.log('⚠️ Could not create collection with validator:', (e2 as Error).message);
+          }
+        }
+      } else {
+        try {
+          await db.createCollection('students', {
+            validator: { $jsonSchema: jsonSchema },
+            validationLevel: 'strict',
+            validationAction: 'error'
+          });
+          console.log('✅ Created students collection with validator');
+        } catch (e3) {
+          console.log('⚠️ Could not create students with validator:', (e3 as Error).message);
+        }
+      }
+    }
+
+    // Create indexes (idempotent)
+    const coll = db.collection('students');
+    await Promise.allSettled([
+      coll.createIndex({ verified: 1 }, { name: 'verified_1', background: true }),
+      coll.createIndex({ reliability_score: -1 }, { name: 'reliability_score_-1', background: true }),
+      coll.createIndex({ skills: 1 }, { name: 'skills_1', background: true }),
+      coll.createIndex({ college: 1 }, { name: 'college_1', background: true })
+    ]);
+    console.log('✅ Ensured students indexes (verified, reliability_score, skills, college)');
+  } catch (error) {
+    console.error('❌ Error applying students validator/indexes:', error);
   }
 };
 

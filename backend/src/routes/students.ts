@@ -83,6 +83,58 @@ router.put(
 	})
 );
 
+// Accept POST as an alias for PUT /me (some clients may submit POST)
+router.post(
+	'/me',
+	authenticateToken,
+	requireStudent,
+	asyncHandler(async (req: AuthRequest, res: express.Response) => {
+		// Delegate to the same logic by calling next route handler? Duplicate minimal logic for clarity.
+		const body = req.body || {};
+		const email = (req.user?.email || '').toLowerCase();
+
+		const payload: any = {
+			name: String(body.name || req.user?.name || '').trim(),
+			phone: String(body.phone || req.user?.phone || '').trim(),
+			college: String(body.college || '').trim(),
+			college_email: String(body.college_email || email).toLowerCase().trim(),
+			id_doc_url: String(body.id_doc_url || '').trim(),
+			skills: Array.isArray(body.skills) ? body.skills.map((s: any) => String(s).trim()).filter(Boolean) : [],
+			availability: Array.isArray(body.availability) ? body.availability.map((a: any) => String(a).toLowerCase().trim()).filter(Boolean) : [],
+		};
+
+		if (!payload.name || !payload.phone || !payload.college || !payload.college_email) {
+			throw new ValidationError('name, phone, college and college_email are required');
+		}
+
+		const student = await Student.findOneAndUpdate(
+			{ college_email: payload.college_email },
+			{ $set: payload, $setOnInsert: { verified: false, reliability_score: 0, total_shifts: 0, no_shows: 0 } },
+			{ upsert: true, new: true }
+		);
+
+		try {
+			const notificationService = (global as any).notificationService as any;
+			if (notificationService) {
+				await notificationService.notifyAdmin(
+					'Student KYC Submitted/Updated',
+					`Student ${payload.name} (${payload.college_email}) submitted/updated KYC profile.`,
+					{
+						studentId: student._id?.toString?.(),
+						name: payload.name,
+						college: payload.college,
+						college_email: payload.college_email,
+						has_id_doc: !!payload.id_doc_url
+					}
+				);
+			}
+		} catch (e) {
+			console.error('Failed to notify admin about student KYC submission (POST):', (e as any)?.message || e);
+		}
+
+		return sendSuccessResponse(res, { student }, 'Student profile saved');
+	})
+);
 // @route   PUT /api/students/verify/:id
 // @desc    Verify a student (Admin only)
 // @access  Private (Admin)
