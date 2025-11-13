@@ -27,6 +27,11 @@ function isAllowedVideoMime(mime?: string): boolean {
 // Multer for direct file uploads (Cloudinary path)
 const diskStorage = multer.diskStorage({
   destination: function (_req, _file, cb) {
+    try {
+      if (!fs.existsSync('uploads')) {
+        fs.mkdirSync('uploads', { recursive: true });
+      }
+    } catch {}
     cb(null, 'uploads/');
   },
   filename: function (_req, file, cb) {
