@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Student",
+  "description": "NORIX students collection schema. college_email is optional; verification is based on id_doc_url and admin approval.",
+  "bsonType": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "phone",
+    "college",
+    "id_doc_url",
+    "skills",
+    "availability",
+    "verified",
+    "reliability_score",
+    "total_shifts",
+    "no_shows"
+  ],
+  "properties": {
+    "_id": {
+      "description": "MongoDB ObjectId",
+      "bsonType": "objectId"
+    },
+    "name": {
+      "description": "Student's full name",
+      "bsonType": "string"
+    },
+    "phone": {
+      "description": "Primary contact number (no strict pattern enforced)",
+      "bsonType": "string"
+    },
+    "college": {
+      "description": "College or university name",
+      "bsonType": "string"
+    },
+    "college_email": {
+      "description": "Optional college email; stored as plain string without validation",
+      "bsonType": "string"
+    },
+    "id_doc_url": {
+      "description": "URL to an ID document used for verification (presence required; can be empty until uploaded)",
+      "bsonType": "string"
+    },
+    "skills": {
+      "description": "List of skill tags",
+      "bsonType": "array",
+      "items": {
+        "bsonType": "string"
+      }
+    },
+    "availability": {
+      "description": "List of availability tags (e.g., days/time blocks)",
+      "bsonType": "array",
+      "items": {
+        "bsonType": "string"
+      }
+    },
+    "verified": {
+      "description": "Admin-controlled verification state (not tied to college_email)",
+      "bsonType": "bool",
+      "default": false
+    },
+    "reliability_score": {
+      "description": "0–100 score computed from attendance history",
+      "bsonType": [
+        "int",
+        "long",
+        "double",
+        "decimal"
+      ],
+      "default": 0
+    },
+    "total_shifts": {
+      "description": "Total number of shifts assigned",
+      "bsonType": [
+        "int",
+        "long",
+        "double",
+        "decimal"
+      ],
+      "default": 0
+    },
+    "no_shows": {
+      "description": "Number of missed (no-show) shifts",
+      "bsonType": [
+        "int",
+        "long",
+        "double",
+        "decimal"
+      ],
+      "default": 0
+    }
+  }
+}
+
+

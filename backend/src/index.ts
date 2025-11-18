@@ -24,6 +24,9 @@ import enhancedJobRoutes from './routes/enhanced-jobs';
 import notificationRoutes, { setNotificationService as setNotificationRouteService } from './routes/notifications';
 import savedJobsRoutes from './routes/saved-jobs';
 import profileRoutes from './routes/profile';
+import studentsRoutes from './routes/students';
+import verificationRoutes from './routes/verification';
+import adminVerificationRoutes from './routes/admin-verification';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -35,7 +38,7 @@ dotenv.config();
 
 const app = express();
 const server = createServer(app);
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5000;
 // Initialize Socket.IO
 const socketManager = new SocketManager(server);
 
@@ -138,6 +141,9 @@ app.use('/api/enhanced-jobs', enhancedJobRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/saved-jobs', savedJobsRoutes);
 app.use('/api/profile', profileRoutes);
+app.use('/api/students', studentsRoutes);
+app.use('/api/verification', verificationRoutes);
+app.use('/api/admin/verification', adminVerificationRoutes);
 
 // Debug: Log saved-jobs route registration
 console.log('✅ Saved jobs routes registered at /api/saved-jobs');

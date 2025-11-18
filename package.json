@@ -35,5 +35,8 @@
     "mongodb"
   ],
   "author": "StudentJobs Team",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "mongodb": "^6.20.0"
+  }
 }

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ProfileVerification } from '../../components/kyc';
+import StudentKYCForm from '../../components/kyc/StudentKYCForm';
 import ProtectedRoute from '../../components/auth/ProtectedRoute';
 import { useAuth } from '../../contexts/AuthContext';
 import { kycStatusService } from '../../services/kycStatusService';
@@ -22,7 +22,7 @@ const KYCProfilePage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [kycStatus, setKycStatus] = useState<string | null>(null);
   const [isKYCCompleted, setIsKYCCompleted] = useState(false);
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(true);
 
   useEffect(() => {
     const checkKYCStatus = async () => {
@@ -40,18 +40,16 @@ const KYCProfilePage: React.FC = () => {
       }
 
       try {
-        const status = await kycStatusService.checkKYCStatus();
-        setKycStatus(status.status);
-        setIsKYCCompleted(status.isCompleted);
-        
-        // Determine if form should be shown
-        // Show form only if: not-submitted or rejected
-        // Do NOT show form if pending or in-review
-        setShowForm(status.status === 'not_submitted' || status.status === 'rejected');
-        
-      } catch (error) {
-        console.error('Error checking KYC status:', error);
-        // If error, show form by default
+        // If the user has recently submitted KYC, show the post-submit state and CTA to Verify
+        try {
+          const flag = typeof window !== 'undefined' ? localStorage.getItem('kycSubmitted') : null;
+          if (flag === 'true') {
+            setKycStatus('pending');
+            setShowForm(false);
+            return;
+          }
+        } catch {}
+        // Default: show form
         setShowForm(true);
       } finally {
         setIsLoading(false);
@@ -117,11 +115,7 @@ const KYCProfilePage: React.FC = () => {
 
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {showForm ? (
-            // Show KYC Form
-            <ProfileVerification 
-              isDisabled={false} 
-              onFormSubmitted={handleFormSubmitted}
-            />
+            <StudentKYCForm />
           ) : (
             // Show Status Messages
             <div className="space-y-6">
@@ -138,6 +132,12 @@ const KYCProfilePage: React.FC = () => {
                         Congratulations! Your KYC verification has been approved. You can now access all job opportunities.
                       </p>
                       <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                        <a
+                          href="/verification"
+                          className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-center"
+                        >
+                          Get Verified to Unlock More Shifts
+                        </a>
                         <button
                           onClick={() => router.push('/student-home')}
                           className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
@@ -172,6 +172,12 @@ const KYCProfilePage: React.FC = () => {
                         </div>
                       </div>
                       <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                        <a
+                          href="/verification"
+                          className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-center"
+                        >
+                          Get Verified Now
+                        </a>
                         <button
                           onClick={() => router.push('/')}
                           className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
