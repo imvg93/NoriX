@@ -1,6 +1,6 @@
 import express from 'express';
 import mongoose from 'mongoose';
-import User from '../models/User';
+import User, { IUser } from '../models/User';
 import Job from '../models/Job';
 import KYC from '../models/KYC';
 import Application from '../models/Application';
@@ -1252,7 +1252,7 @@ router.patch('/users/:id/role', authenticateToken, requireRole(['admin']), async
   }
 
   // Prevent the currently authenticated admin from demoting their own role accidentally
-  const isSelf = String(user._id) === String(req.user!._id);
+  const isSelf = String((user as IUser)._id) === String(req.user!._id);
   if (isSelf && userType !== 'admin') {
     throw new ValidationError('You cannot change your own role to a non-admin type.');
   }
