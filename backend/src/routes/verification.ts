@@ -430,7 +430,7 @@ router.post(
 
     const socketManager = (global as any).socketManager;
     if (socketManager) {
-      socketManager.emitToUser(student._id.toString(), 'verification:update', {
+      socketManager.emitToUser(String(student._id), 'verification:update', {
         auto_checks: student.auto_checks,
       });
     }
@@ -480,7 +480,7 @@ router.post(
 
     const socketManager = (global as any).socketManager;
     if (socketManager) {
-      socketManager.emitToUser(student._id.toString(), 'verification:update', {
+      socketManager.emitToUser(String(student._id), 'verification:update', {
         verified: student.verified,
         trial_shift_status: student.trial_shift_status,
       });
