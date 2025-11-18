@@ -1252,7 +1252,7 @@ router.patch('/users/:id/role', authenticateToken, requireRole(['admin']), async
   }
 
   // Prevent the currently authenticated admin from demoting their own role accidentally
-  const isSelf = user._id.toString() === req.user!._id.toString();
+  const isSelf = String(user._id) === String(req.user!._id);
   if (isSelf && userType !== 'admin') {
     throw new ValidationError('You cannot change your own role to a non-admin type.');
   }
