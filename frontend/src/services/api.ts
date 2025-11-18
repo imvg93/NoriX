@@ -1055,6 +1055,35 @@ class ApiService {
     }
   }
 
+  async adminDeleteUser(id: string) {
+    try {
+      console.log('🗑️ Admin deleting user:', id);
+      const response = await this.request(`/admin/users/${id}`, {
+        method: 'DELETE',
+      });
+      console.log('✅ User deleted successfully:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error deleting user as admin:', error);
+      throw error;
+    }
+  }
+
+  async updateUserRoleAdmin(id: string, userType: 'student' | 'employer' | 'admin') {
+    try {
+      console.log('♻️ Updating user role:', { id, userType });
+      const response = await this.request(`/admin/users/${id}/role`, {
+        method: 'PATCH',
+        body: JSON.stringify({ userType }),
+      });
+      console.log('✅ User role updated successfully:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error updating user role:', error);
+      throw error;
+    }
+  }
+
   // Admin Dashboard APIs
   async getPendingUsers(userType: 'student' | 'employer') {
     return this.request(`/admin/users/pending?userType=${userType}`);
@@ -1251,6 +1280,40 @@ class ApiService {
       return response;
     } catch (error) {
       console.error('❌ Error suspending KYC:', error);
+      throw error;
+    }
+  }
+
+  // Admin Student Verification APIs
+  async getPendingVerifications(page = 1, limit = 10) {
+    try {
+      console.log('🔍 Fetching pending verifications...');
+      const response = await this.request(`/admin/verification/pending?page=${page}&limit=${limit}`, {
+        method: 'GET',
+      });
+      console.log('📊 Pending verifications response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error fetching pending verifications:', error);
+      throw error;
+    }
+  }
+
+  async updateStudentVerification(
+    studentId: string,
+    action: 'approve' | 'reject' | 'require_trial',
+    body: { rejection_code?: string; admin_notes?: string } = {}
+  ) {
+    try {
+      console.log('🔄 Updating student verification:', { studentId, action, body });
+      const response = await this.request(`/admin/verification/${studentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ action, ...body }),
+      });
+      console.log('✅ Student verification updated:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error updating student verification:', error);
       throw error;
     }
   }

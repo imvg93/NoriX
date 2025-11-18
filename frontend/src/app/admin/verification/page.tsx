@@ -17,6 +17,7 @@ type PendingItem = {
   trial_shift_status?: string;
   rejection_code?: string;
   admin_notes?: string;
+  duplicate_flag?: boolean;
 };
 
 function authHeaders() {
@@ -40,7 +41,7 @@ export default function AdminVerificationPage() {
     setLoading(true);
     setError(null);
     try {
-      const resp = await apiService.get(`/admin/verification/pending?page=${p}&limit=10`);
+      const resp = await apiService.getPendingVerifications(p, 10);
       const data = (resp as any)?.data ?? resp;
       setItems(data.items);
       setPage(data.pagination.current);
@@ -67,10 +68,7 @@ export default function AdminVerificationPage() {
     async (studentId: string, action: 'approve' | 'reject' | 'require_trial', body: any = {}) => {
       setActionBusyId(studentId);
       try {
-        await apiService.request(`/admin/verification/${studentId}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ action, ...body }),
-        } as any);
+        await apiService.updateStudentVerification(studentId, action, body);
         await load(page);
       } catch (e: any) {
         setError(e.message || 'Action failed');
@@ -195,7 +193,7 @@ export default function AdminVerificationPage() {
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3 text-sm">
               <p><span className="font-medium">OCR:</span> {modal.item.ocr_conf ?? '—'}</p>
               <p><span className="font-medium">Face:</span> {modal.item.face_score ?? '—'}</p>
-              <p><span className="font-medium">Duplicate:</span> {String(modal.item?.['duplicate_flag'] ?? false)}</p>
+              <p><span className="font-medium">Duplicate:</span> {String(modal.item?.duplicate_flag ?? false)}</p>
             </div>
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
               <button

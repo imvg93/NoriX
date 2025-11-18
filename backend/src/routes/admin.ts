@@ -1231,6 +1231,40 @@ router.patch('/users/:id/activate', authenticateToken, requireRole(['admin']), a
   sendSuccessResponse(res, { user }, 'User activated successfully');
 }));
 
+// @route   PATCH /api/admin/users/:id/role
+// @desc    Update a user's role/userType
+// @access  Private (Admin only)
+router.patch('/users/:id/role', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { id } = req.params;
+  const { userType } = req.body as { userType?: 'student' | 'employer' | 'admin' };
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ValidationError('Invalid user ID');
+  }
+
+  if (!userType || !['student', 'employer', 'admin'].includes(userType)) {
+    throw new ValidationError('Invalid user type. Allowed values are student, employer, admin.');
+  }
+
+  const user = await User.findById(id);
+  if (!user) {
+    throw new ValidationError('User not found');
+  }
+
+  // Prevent the currently authenticated admin from demoting their own role accidentally
+  const isSelf = user._id.toString() === req.user!._id.toString();
+  if (isSelf && userType !== 'admin') {
+    throw new ValidationError('You cannot change your own role to a non-admin type.');
+  }
+
+  user.userType = userType;
+  user.role = userType === 'admin' ? 'admin' : 'user';
+
+  await user.save();
+
+  sendSuccessResponse(res, { user }, 'User role updated successfully');
+}));
+
 // @route   GET /api/admin/login-history
 // @desc    Get admin login history
 // @access  Private (Admin only)
