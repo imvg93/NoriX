@@ -25,6 +25,7 @@ import notificationRoutes, { setNotificationService as setNotificationRouteServi
 import savedJobsRoutes from './routes/saved-jobs';
 import profileRoutes from './routes/profile';
 import studentsRoutes from './routes/students';
+import verificationRoutesNew from './routes/verificationRoutes';
 import verificationRoutes from './routes/verification';
 import adminVerificationRoutes from './routes/admin-verification';
 
@@ -168,8 +169,15 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/saved-jobs', savedJobsRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/students', studentsRoutes);
+
+// Register verification routes - IMPORTANT: Register new route FIRST so it matches /status before the old route
+console.log('🔧 Registering verification routes...');
+app.use('/api/verification', verificationRoutesNew);
+console.log('✅ verificationRoutesNew registered at /api/verification');
 app.use('/api/verification', verificationRoutes);
+console.log('✅ verificationRoutes registered at /api/verification');
 app.use('/api/admin/verification', adminVerificationRoutes);
+console.log('✅ adminVerificationRoutes registered at /api/admin/verification');
 
 // Debug: Log saved-jobs route registration
 console.log('✅ Saved jobs routes registered at /api/saved-jobs');

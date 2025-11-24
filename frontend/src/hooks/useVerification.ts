@@ -32,11 +32,87 @@ export function useVerification() {
   const fetchStatus = useCallback(async () => {
     try {
       setError(null);
+      console.log('🔍 Fetching verification status...');
       const resp = await apiService.get('/verification/status');
-      const data = (resp as any)?.data ?? resp;
-      if (mountedRef.current) setStatus(data);
+      console.log('✅ Verification status response:', resp);
+      
+      // Handle different response formats
+      let data;
+      if (resp && typeof resp === 'object') {
+        // Check if it's wrapped in a data property
+        if ('data' in resp) {
+          data = resp.data;
+        } else if ('success' in resp && resp.success && 'data' in resp) {
+          data = resp.data;
+        } else {
+          // Response is already the data
+          data = resp;
+        }
+      } else {
+        data = resp;
+      }
+      
+      // Ensure we have a valid status object
+      if (!data || typeof data !== 'object') {
+        console.warn('⚠️ Invalid response format, using defaults');
+        data = {
+          verified: false,
+          trial_shift_status: 'not_requested',
+          id_doc: { key: null, submitted_at: null, preview_url: null },
+          video: { key: null, submitted_at: null, preview_url: null },
+          auto_checks: {},
+          timeline: ['Not Started']
+        };
+      }
+      
+      if (mountedRef.current) {
+        setStatus(data);
+        console.log('✅ Status updated:', data);
+      }
     } catch (e: any) {
-      if (mountedRef.current) setError(e.message || 'Failed to load status');
+      // Check if this is a "student not found" error (expected for new students)
+      const isStudentNotFound = 
+        e.status === 404 || 
+        e.isVerificationNotFound || 
+        e.isStudentNotFound ||
+        e.message?.toLowerCase().includes('not found') || 
+        e.message?.toLowerCase().includes('student not found');
+      
+      if (isStudentNotFound) {
+        // This is expected for new students - don't log as error
+        console.log('ℹ️ Student record not found (expected for new students), using default status');
+      } else {
+        // Only log actual errors
+        console.error('❌ Error fetching verification status:', e);
+      }
+      
+      if (mountedRef.current) {
+        // Don't set error for 404 or "not found" - just use default status
+        // This is expected for new students who haven't started verification
+        if (isStudentNotFound) {
+          setError(null); // Clear error - this is not really an error
+          setStatus({
+            verified: false,
+            trial_shift_status: 'not_requested',
+            id_doc: { key: null, submitted_at: null, preview_url: null },
+            video: { key: null, submitted_at: null, preview_url: null },
+            auto_checks: {},
+            timeline: ['Not Started']
+          });
+        } else {
+          // Only show error for actual failures, not missing student records
+          setError(e.message || 'Failed to load status');
+          // Set default status on error
+          setStatus({
+            verified: false,
+            trial_shift_status: 'not_requested',
+            id_doc: { key: null, submitted_at: null, preview_url: null },
+            video: { key: null, submitted_at: null, preview_url: null },
+            auto_checks: {},
+            timeline: ['Not Started']
+          });
+        }
+      }
     }
   }, []);
 

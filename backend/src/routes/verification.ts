@@ -13,6 +13,11 @@ import crypto from 'crypto';
 
 const router = express.Router();
 
+// Test route to verify routing works
+router.get('/test', (req, res) => {
+  res.json({ message: 'Verification routes are working', path: req.path });
+});
+
 // Helper: validate mime type
 function isAllowedIdMime(mime?: string): boolean {
   if (!mime) return false;
@@ -305,51 +310,16 @@ router.post(
 );
 
 // GET /api/verification/status
-router.get(
-  '/status',
-  authenticateToken,
-  requireStudent,
-  asyncHandler(async (req: AuthRequest, res: express.Response) => {
-    const student = await Student.findById(req.user!._id).lean();
-    if (!student) {
-      return sendErrorResponse(res, 404, 'Student not found');
-    }
-
-    const statusTimeline = (() => {
-      const steps = [];
-      if (!student.id_doc_url) steps.push('Not Started');
-      else if (student.id_doc_url && !student.video_url) steps.push('Pending');
-      else if (student.video_url && student.trial_shift_status === 'pending') steps.push('Admin Review');
-      else if (student.trial_shift_status === 'assigned' || student.trial_shift_status === 'pending') steps.push('Trial Assigned');
-      else if (student.verified) steps.push('Verified');
-      if (student.rejection_code) steps.push('Rejected');
-      return steps;
-    })();
-
-    const data = {
-      verified: student.verified,
-      trial_shift_status: student.trial_shift_status,
-      id_doc: {
-        key: student.id_doc_url,
-        submitted_at: student.id_submitted_at,
-        preview_url: student.id_doc_url ? await getPresignedReadUrl({ key: student.id_doc_url }) : null,
-      },
-      video: {
-        key: student.video_url,
-        submitted_at: student.video_submitted_at,
-        preview_url: student.video_url ? await getPresignedReadUrl({ key: student.video_url }) : null,
-      },
-      auto_checks: student.auto_checks || {},
-      last_reviewed_by: student.last_reviewed_by,
-      last_reviewed_at: student.last_reviewed_at,
-      rejection_code: student.rejection_code || null,
-      admin_notes: student.admin_notes || '',
-      timeline: statusTimeline,
-    };
-
-    sendSuccessResponse(res, data, 'Verification status');
-  })
-);
+// NOTE: This route is now handled by verificationRoutes.ts to avoid conflicts
+// Keeping this commented out to prevent duplicate route registration
+// router.get(
+//   '/status',
+//   authenticateToken,
+//   requireStudent,
+//   asyncHandler(async (req: AuthRequest, res: express.Response) => {
+//     // Moved to verificationRoutes.ts
+//   })
+// );
 
 // POST /api/verification/request-trial
 router.post(
