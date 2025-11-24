@@ -7,6 +7,16 @@ import FileUploader from '../../components/FileUploader';
 
 export default function VerificationPage() {
   const { status, loading, error, uploadId, uploadVideo, requestTrial, refresh } = useVerification();
+  
+  // Ensure status has safe defaults to prevent errors
+  const safeStatus = status || {
+    verified: false,
+    trial_shift_status: 'not_requested',
+    id_doc: { key: null, submitted_at: null, preview_url: null },
+    video: { key: null, submitted_at: null, preview_url: null },
+    auto_checks: {},
+    timeline: ['Not Started']
+  };
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -16,15 +26,15 @@ export default function VerificationPage() {
 
   // Steps - all steps remain visible and actionable to reduce friction
   const steps = useMemo(() => {
-    const idDone = !!status?.id_doc?.key;
-    const videoDone = !!status?.video?.key;
-    const verified = !!status?.verified;
+    const idDone = !!safeStatus?.id_doc?.key;
+    const videoDone = !!safeStatus?.video?.key;
+    const verified = !!safeStatus?.verified;
     return [
       { title: 'Upload ID', subtitle: 'Image or PDF (≤10MB)', completed: idDone, current: !verified && !idDone },
       { title: 'Short Video', subtitle: '30–60 sec intro', completed: videoDone, current: !verified && idDone && !videoDone },
-      { title: 'Review & Trial', subtitle: verified ? 'Verified' : (status?.trial_shift_status || 'Pending'), completed: verified, current: !verified && idDone && videoDone },
+      { title: 'Review & Trial', subtitle: verified ? 'Verified' : (safeStatus?.trial_shift_status || 'Pending'), completed: verified, current: !verified && idDone && videoDone },
     ];
-  }, [status]);
+  }, [safeStatus]);
 
   const onPickId = useCallback(async (file: File, sha256: string) => {
     await uploadId(file, sha256);
@@ -108,7 +118,7 @@ export default function VerificationPage() {
               Unlock higher-paying shifts. Review usually in under 24 hours.
             </p>
           </div>
-          {!status?.verified && (
+          {!safeStatus?.verified && (
             <a
               href="#steps"
               className="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
@@ -119,17 +129,17 @@ export default function VerificationPage() {
         </div>
         {/* Status chips */}
         <div className="mt-4 flex flex-wrap gap-2 text-xs">
-          <span className={`px-2.5 py-1 rounded-full ${status?.verified ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-            {status?.verified ? 'Verified' : 'Not Verified'}
+          <span className={`px-2.5 py-1 rounded-full ${safeStatus?.verified ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+            {safeStatus?.verified ? 'Verified' : 'Not Verified'}
           </span>
-          {status?.trial_shift_status && (
+          {safeStatus?.trial_shift_status && (
             <span className="px-2.5 py-1 rounded-full bg-blue-100 text-blue-700">
-              Trial: {status.trial_shift_status}
+              Trial: {safeStatus.trial_shift_status}
             </span>
           )}
-          {status?.rejection_code && (
+          {safeStatus?.rejection_code && (
             <span className="px-2.5 py-1 rounded-full bg-rose-100 text-rose-700">
-              Rejected: {status.rejection_code}
+              Rejected: {safeStatus.rejection_code}
             </span>
           )}
         </div>
@@ -145,7 +155,7 @@ export default function VerificationPage() {
         <div className="rounded-2xl bg-white shadow-sm border border-gray-200 p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Upload your ID</h2>
-            {status?.id_doc?.key && <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">Received</span>}
+            {safeStatus?.id_doc?.key && <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">Received</span>}
           </div>
           <p className="mt-1 text-sm text-gray-600">JPG, PNG, WEBP, HEIC, or PDF. Clear and readable.</p>
           <div className="mt-4">
@@ -156,7 +166,7 @@ export default function VerificationPage() {
               onSelected={onPickId}
             />
           </div>
-          {status?.id_doc?.preview_url && (
+          {safeStatus?.id_doc?.preview_url && (
             <div className="mt-3 text-sm text-green-700">ID received. Processing…</div>
           )}
         </div>
@@ -167,7 +177,7 @@ export default function VerificationPage() {
         <div className="rounded-2xl bg-white shadow-sm border border-gray-200 p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Short introduction video</h2>
-            {status?.video?.key && <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">Received</span>}
+            {safeStatus?.video?.key && <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">Received</span>}
           </div>
           <p className="mt-1 text-sm text-gray-600">30–60 seconds. Introduce yourself and show your face clearly.</p>
           <div className="mt-4 flex flex-col gap-3">
@@ -203,7 +213,7 @@ export default function VerificationPage() {
                 preview={false}
               />
             </div>
-            {status?.video?.preview_url && (
+            {safeStatus?.video?.preview_url && (
               <div className="mt-2 text-sm text-green-700">Video received. Processing…</div>
             )}
           </div>
@@ -218,27 +228,27 @@ export default function VerificationPage() {
             <div className="rounded-lg bg-gray-50 p-3">
               <div className="text-gray-700">
                 <span className="font-medium">Status:</span>{' '}
-                {status?.verified ? 'Verified' : status?.rejection_code ? 'Rejected' : 'Pending'}
+                {safeStatus?.verified ? 'Verified' : safeStatus?.rejection_code ? 'Rejected' : 'Pending'}
               </div>
               <div className="mt-1 text-gray-700">
-                <span className="font-medium">Trial:</span> {status?.trial_shift_status || 'not_requested'}
+                <span className="font-medium">Trial:</span> {safeStatus?.trial_shift_status || 'not_requested'}
               </div>
             </div>
             <div className="rounded-lg bg-gray-50 p-3">
               <div className="text-gray-700">
-                <span className="font-medium">OCR:</span> {status?.auto_checks?.ocr_confidence ?? '—'}
+                <span className="font-medium">OCR:</span> {safeStatus?.auto_checks?.ocr_confidence ?? '—'}
               </div>
               <div className="mt-1 text-gray-700">
-                <span className="font-medium">Face match:</span> {status?.auto_checks?.face_match_score ?? '—'}
+                <span className="font-medium">Face match:</span> {safeStatus?.auto_checks?.face_match_score ?? '—'}
               </div>
             </div>
           </div>
-          {status?.rejection_code && (
+          {safeStatus?.rejection_code && (
             <div className="mt-3 rounded-lg bg-rose-50 text-rose-700 p-3 text-sm">
-              <span className="font-medium">Reason:</span> {status.rejection_code}. {status.admin_notes}
+              <span className="font-medium">Reason:</span> {safeStatus.rejection_code}. {safeStatus.admin_notes || ''}
             </div>
           )}
-          {!status?.verified && !status?.rejection_code && (
+          {!safeStatus?.verified && !safeStatus?.rejection_code && (
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <button
                 onClick={() => requestTrial()}
@@ -255,9 +265,9 @@ export default function VerificationPage() {
               <span className="text-xs text-gray-500">One free resubmission within 14 days if rejected.</span>
             </div>
           )}
-          {status?.verified && (
+          {safeStatus?.verified && (
             <div className="mt-4 rounded-lg bg-green-50 text-green-700 p-3 text-sm">
-              🎉 You’re verified! Start applying for higher-paying shifts.
+              🎉 You're verified! Start applying for higher-paying shifts.
             </div>
           )}
         </div>

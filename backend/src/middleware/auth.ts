@@ -17,7 +17,16 @@ export const authenticateToken = async (
     const authHeader = req.headers.authorization;
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
+    console.log('🔍 authenticateToken middleware:', {
+      path: req.path,
+      originalUrl: req.originalUrl,
+      hasAuthHeader: !!authHeader,
+      hasToken: !!token,
+      method: req.method
+    });
+
     if (!token) {
+      console.log('❌ authenticateToken: No token provided');
       res.status(401).json({
         success: false,
         message: 'Access token is required'
@@ -88,13 +97,31 @@ export const requireStudent = (
   res: Response,
   next: NextFunction
 ): void => {
-  if (!req.user || req.user.userType !== 'student') {
+  console.log('🔍 requireStudent middleware:', {
+    hasUser: !!req.user,
+    userType: req.user?.userType,
+    userId: req.user?._id
+  });
+  
+  if (!req.user) {
+    console.log('❌ requireStudent: No user found');
+    res.status(401).json({
+      success: false,
+      message: 'Authentication required. Please log in.'
+    });
+    return;
+  }
+  
+  if (req.user.userType !== 'student') {
+    console.log('❌ requireStudent: User is not a student:', req.user.userType);
     res.status(403).json({
       success: false,
       message: 'Access denied. Student account required.'
     });
     return;
   }
+  
+  console.log('✅ requireStudent: User is a student, proceeding');
   next();
 };
 

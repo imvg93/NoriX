@@ -164,46 +164,179 @@ class ApiService {
       console.log('🌐 Response status:', response.status);
       console.log('🌐 Response headers:', Object.fromEntries(response.headers.entries()));
       
+      // Handle non-OK responses
       if (!response.ok) {
         let errorData: any = null;
         let errorText: string = '';
         try {
           errorText = await response.text();
-          errorData = JSON.parse(errorText);
-        } catch (_) {
-          // ignore JSON parse failure
+          if (errorText && errorText.trim().length > 0) {
+            try {
+              const parsed = JSON.parse(errorText);
+              // Only set errorData if parsed result is meaningful (not empty object)
+              if (parsed && typeof parsed === 'object') {
+                const keys = Object.keys(parsed);
+                if (keys.length > 0) {
+                  // Check if at least one key has a meaningful value
+                  const hasMeaningfulValue = keys.some(key => {
+                    const val = parsed[key];
+                    return val !== null && val !== undefined && val !== '' && 
+                           !(Array.isArray(val) && val.length === 0) &&
+                           !(typeof val === 'object' && val !== null && Object.keys(val).length === 0);
+                  });
+                  if (hasMeaningfulValue) {
+                    errorData = parsed;
+                  }
+                }
+              } else if (typeof parsed === 'string' && parsed.trim().length > 0) {
+                errorData = { message: parsed };
+              }
+              
+              // If parsing didn't yield meaningful data, use text as message
+              if (!errorData) {
+                errorData = { message: errorText };
+              }
+            } catch (parseError) {
+              // If JSON parse fails, treat errorText as the message
+              errorData = { message: errorText };
+            }
+          }
+        } catch (textError) {
+          // If text() fails, create a basic error object
+          errorData = { message: `HTTP ${response.status} ${response.statusText}` };
         }
         
-        // Only log error details if there's actual error data
-        if (errorData && Object.keys(errorData).length > 0) {
+        // Check if we have meaningful error data to log
+        const hasErrorText = errorText && errorText.trim().length > 0;
+        let meaningfulErrorData: any = null;
+        let hasMeaningfulErrorData = false;
+        
+        if (errorData && typeof errorData === 'object' && !Array.isArray(errorData)) {
+          // Filter out empty/null/undefined values and empty nested objects
+          meaningfulErrorData = Object.keys(errorData).reduce((acc: any, key) => {
+            const value = errorData[key];
+            if (value !== null && value !== undefined && value !== '') {
+              if (Array.isArray(value)) {
+                if (value.length > 0) acc[key] = value;
+              } else if (typeof value === 'object' && value !== null) {
+                const objKeys = Object.keys(value);
+                if (objKeys.length > 0) {
+                  // Check if nested object has meaningful values
+                  const hasNestedValues = objKeys.some(k => {
+                    const v = value[k];
+                    return v !== null && v !== undefined && v !== '' && 
+                           !(Array.isArray(v) && v.length === 0) &&
+                           !(typeof v === 'object' && v !== null && Object.keys(v).length === 0);
+                  });
+                  if (hasNestedValues) acc[key] = value;
+                }
+              } else {
+                acc[key] = value;
+              }
+            }
+            return acc;
+          }, {});
+          
+          // Double-check: ensure we have at least one meaningful key
+          const meaningfulKeys = Object.keys(meaningfulErrorData || {});
+          hasMeaningfulErrorData = meaningfulKeys.length > 0 && 
+            meaningfulKeys.some(key => {
+              const val = meaningfulErrorData[key];
+              return val !== null && val !== undefined && val !== '' && 
+                     !(Array.isArray(val) && val.length === 0) &&
+                     !(typeof val === 'object' && val !== null && Object.keys(val).length === 0);
+            });
+        }
+        
+        // Only log if we have meaningful content - never log empty objects
+        if (hasMeaningfulErrorData && meaningfulErrorData) {
+          // Build log object with only meaningful data - never include empty objects
+          const logData: any = {
+            status: response.status,
+            statusText: response.statusText
+          };
+          
+          // Only add meaningful properties, filtering out empty values
+          const keys = Object.keys(meaningfulErrorData);
+          keys.forEach(key => {
+            const val = meaningfulErrorData[key];
+            // Only add if value is truly meaningful
+            if (val !== null && val !== undefined && val !== '') {
+              if (Array.isArray(val) && val.length > 0) {
+                logData[key] = val;
+              } else if (typeof val === 'object' && val !== null) {
+                const objKeys = Object.keys(val);
+                // Only add if object has at least one non-empty property
+                if (objKeys.length > 0 && objKeys.some(k => {
+                  const v = val[k];
+                  return v !== null && v !== undefined && v !== '';
+                })) {
+                  logData[key] = val;
+                }
+              } else {
+                // Primitive value that's not empty
+                logData[key] = val;
+              }
+            }
+          });
+          
+          // Only log if we have more than just status/statusText (i.e., actual error data)
+          if (Object.keys(logData).length > 2) {
+            console.error('🌐 Error response:', logData);
+          } else if (hasErrorText) {
+            console.error('🌐 Error response:', {
+              status: response.status,
+              statusText: response.statusText,
+              message: errorText.trim()
+            });
+          } else {
+            console.log(`🌐 HTTP ${response.status} ${response.statusText}`);
+          }
+        } else if (hasErrorText) {
+          // Log text if available
           console.error('🌐 Error response:', {
             status: response.status,
             statusText: response.statusText,
-            errorData
+            message: errorText.trim()
           });
         } else {
-          console.log(`🌐 HTTP ${response.status} ${response.statusText} - no error details`);
+          // Just log status if no meaningful data
+          console.log(`🌐 HTTP ${response.status} ${response.statusText}`);
         }
-        
-        // Log the full error response for debugging
-        console.error('🌐 Full error response:', errorText);
         
         // Handle authentication errors - don't logout automatically, just throw error
         if (response.status === 401) {
           // Don't clear token or redirect - let the calling component handle it
-          const errorMessage = errorData?.message || errorData?.error || 'Authentication failed. Your session may have expired.';
+          const errorMessage = errorData?.message || errorData?.error || errorText || 'Authentication failed. Your session may have expired.';
           throw new Error(errorMessage);
         }
         
+        // Handle 404 errors gracefully - return a structured error
+        // For verification/status endpoint, 404 means student not found, which is OK
+        if (response.status === 404) {
+          const errorMessage = errorData?.message || errorText || 'Resource not found';
+          const err: any = new Error(errorMessage);
+          err.status = response.status;
+          err.details = errorData || { message: errorMessage };
+          // Mark as a "soft" error for verification status - can be handled gracefully
+          err.isVerificationNotFound = url.includes('/verification/status');
+          err.isStudentNotFound = errorMessage.toLowerCase().includes('student not found');
+          throw err;
+        }
+        
+        // Extract error message from various possible formats
         const message =
           errorData?.message ||
           errorData?.error?.message ||
+          errorData?.error ||
           (Array.isArray(errorData?.errors) && errorData.errors[0]?.message) ||
-          (typeof errorData === 'string' ? errorData : `HTTP ${response.status} ${response.statusText}`);
+          (typeof errorData === 'string' ? errorData : null) ||
+          errorText ||
+          `HTTP ${response.status} ${response.statusText}`;
 
         const err: any = new Error(message);
         err.status = response.status;
-        err.details = errorData;
+        err.details = errorData || { message, errorText };
         throw err;
       }
 
