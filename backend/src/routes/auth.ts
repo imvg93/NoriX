@@ -2,7 +2,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import cors from 'cors';
-import User, { IUser } from '../models/User';
+  import User, { IUser } from '../models/User';
 import OTP from '../models/OTP';
 import { AdminLogin } from '../models/AdminLogin';
 import { authenticateToken, rateLimit, AuthRequest } from '../middleware/auth';
@@ -122,6 +122,7 @@ const otpCorsOptions = {
       'http://localhost:3002',
       'http://localhost:3003',
       'https://me-work.vercel.app',
+      'https://norixconnects.vercel.app',
       'https://studenting.vercel.app',
       'https://studentjobs-frontend.onrender.com',
       ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : []),
