@@ -2,7 +2,7 @@ import express from 'express';
 import { authenticateToken, requireAdmin, requireStudent, AuthRequest } from '../middleware/auth';
 import { asyncHandler, sendSuccessResponse, sendErrorResponse, ValidationError } from '../middleware/errorHandler';
 import { getPresignedUploadUrl, getPresignedReadUrl, getMaxSizes } from '../utils/storageProvider';
-import Student from '../models/Student';
+import Student, { IStudent } from '../models/Student';
 import VerificationLog from '../models/VerificationLog';
 import mongoose from 'mongoose';
 import { requireEmployer } from '../middleware/auth';
@@ -430,7 +430,7 @@ router.post(
 
     const socketManager = (global as any).socketManager;
     if (socketManager) {
-      socketManager.emitToUser(String(student._id), 'verification:update', {
+      socketManager.emitToUser(String(student._id as mongoose.Types.ObjectId), 'verification:update', {
         auto_checks: student.auto_checks,
       });
     }
@@ -480,12 +480,12 @@ router.post(
 
     const socketManager = (global as any).socketManager;
     if (socketManager) {
-      socketManager.emitToUser(String(student._id), 'verification:update', {
+      socketManager.emitToUser(String(student._id as mongoose.Types.ObjectId), 'verification:update', {
         verified: student.verified,
         trial_shift_status: student.trial_shift_status,
       });
       socketManager.emitToAdmins('verification:trial_result', {
-        studentId: student._id,
+        studentId: student._id as mongoose.Types.ObjectId,
         attended: !!attended,
         rating,
       });

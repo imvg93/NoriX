@@ -126,12 +126,11 @@ notificationSchema.pre('save', function(next) {
 });
 
 // Indexes for better query performance
+// Note: type and senderId indexes are already defined in schema fields above
 notificationSchema.index({ receiverId: 1, isRead: 1 });
 notificationSchema.index({ receiverId: 1, createdAt: -1 });
-notificationSchema.index({ type: 1 });
 notificationSchema.index({ userId: 1, read: 1 }); // Legacy index
 notificationSchema.index({ userId: 1, createdAt: -1 }); // Legacy index
-notificationSchema.index({ senderId: 1 }); // Index for sender lookups
 
 export const Notification = mongoose.model<INotification>('Notification', notificationSchema);
 export default Notification;

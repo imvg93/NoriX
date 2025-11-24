@@ -1,10 +1,13 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 if (typeof (globalThis as Record<string, unknown>).self === "undefined") {
   (globalThis as Record<string, unknown>).self = globalThis;
 }
 
 const nextConfig: NextConfig = {
+  // Set the workspace root to avoid multiple lockfile warnings
+  outputFileTracingRoot: path.resolve(__dirname, ".."),
   // Vercel-optimized configuration
   trailingSlash: false,
   images: {

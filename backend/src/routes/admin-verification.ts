@@ -2,7 +2,7 @@ import express from 'express';
 import mongoose from 'mongoose';
 import { authenticateToken, requireAdmin, AuthRequest } from '../middleware/auth';
 import { asyncHandler, sendSuccessResponse, ValidationError, sendErrorResponse } from '../middleware/errorHandler';
-import Student from '../models/Student';
+import Student, { IStudent } from '../models/Student';
 import VerificationLog from '../models/VerificationLog';
 import { getPresignedReadUrl } from '../utils/storageProvider';
 
@@ -100,7 +100,7 @@ router.patch(
 
     const socketManager = (global as any).socketManager;
     if (socketManager) {
-      socketManager.emitToUser(String(student._id), 'verification:update', {
+      socketManager.emitToUser(String(student._id as mongoose.Types.ObjectId), 'verification:update', {
         verified: student.verified,
         trial_shift_status: student.trial_shift_status,
         rejection_code: student.rejection_code,
