@@ -34,8 +34,16 @@ function AdminLoginContent() {
   const unauthorizedMessage = searchParams?.get('message') ?? (searchParams?.get('unauthorized') ? 'Access restricted to Norix Admins.' : null);
 
   useEffect(() => {
-    if (!authLoading && user?.role === 'admin') {
-      router.replace(redirectPath);
+    if (!authLoading && user) {
+      const userRole = user.role === 'admin' 
+        ? 'admin' 
+        : user.userType === 'admin' 
+          ? 'admin' 
+          : 'user';
+      
+      if (userRole === 'admin') {
+        router.replace(redirectPath);
+      }
     }
   }, [authLoading, user, redirectPath, router]);
 
@@ -52,23 +60,36 @@ function AdminLoginContent() {
         throw new Error('Login failed. Please verify your credentials.');
       }
 
-      if (response.user.role !== 'admin') {
+      // Check if user is admin (check both role and userType)
+      const userRole = response.user.role === 'admin' 
+        ? 'admin' 
+        : response.user.userType === 'admin' 
+          ? 'admin' 
+          : 'user';
+      
+      if (userRole !== 'admin') {
         setError('Access restricted to Norix Admins. Please use an authorised admin account.');
         await apiService.logout();
+        setSubmitting(false);
         return;
       }
 
+      // Login and wait for state to update
       await login(response.user, response.token);
       setSuccess('Welcome back, Norix Admin!');
+      
+      // Wait a bit longer to ensure backend cookie is set and state is updated
+      // The backend sets httpOnly cookie which we can't access from JS, but it should be set
       setTimeout(() => {
-        router.replace(redirectPath);
-      }, 400);
+        // Use window.location for a hard redirect
+        // This will trigger a full page reload and the middleware will check the cookie
+        window.location.href = redirectPath;
+      }, 1000);
     } catch (err: any) {
       const message =
         err?.message ||
         (typeof err === 'string' ? err : 'Unable to sign in. Please double-check your email and password.');
       setError(message);
-    } finally {
       setSubmitting(false);
     }
   };
