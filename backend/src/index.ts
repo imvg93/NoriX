@@ -62,12 +62,38 @@ setNotificationRouteService(notificationService);
 
 // Environment-aware CORS configuration
 const isProduction = process.env.NODE_ENV === 'production';
-const allowedOrigins = isProduction 
-  ? ['https://me-work.vercel.app']
-  : ['http://localhost:3000', 'http://localhost:3001'];
-
 const corsOptions = {
-  origin: allowedOrigins,
+  origin: function (origin: string | undefined, callback: Function) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://me-work.vercel.app',
+      'https://norixconnects.vercel.app',
+      'https://studenting.vercel.app',
+      ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : []),
+    ];
+    
+    // Allow all Vercel, Railway, and Render subdomains in production
+    if (isProduction && (
+      origin.includes('.vercel.app') || 
+      origin.includes('.railway.app') || 
+      origin.includes('.onrender.com')
+    )) {
+      console.log('✅ CORS: Allowing deployment origin:', origin);
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.includes(origin)) {
+      console.log('✅ CORS: Allowing configured origin:', origin);
+      return callback(null, true);
+    }
+    
+    console.log('🚫 CORS blocked origin:', origin);
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],

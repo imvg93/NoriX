@@ -14,11 +14,36 @@ export class SocketService {
   private connectedUsers: Map<string, AuthenticatedSocket> = new Map();
 
   constructor(server: HTTPServer) {
+    const isProduction = process.env.NODE_ENV === 'production';
     this.io = new SocketIOServer(server, {
       cors: {
-        origin: process.env.NODE_ENV === 'production' 
-          ? ['https://me-work.vercel.app'] 
-          : ['http://localhost:3000'],
+        origin: function (origin: string | undefined, callback: Function) {
+          // Allow requests with no origin
+          if (!origin) return callback(null, true);
+          
+          const allowedOrigins = [
+            'http://localhost:3000',
+            'https://me-work.vercel.app',
+            'https://norixconnects.vercel.app',
+            'https://studenting.vercel.app',
+            ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : []),
+          ];
+          
+          // Allow all Vercel, Railway, and Render subdomains in production
+          if (isProduction && (
+            origin.includes('.vercel.app') || 
+            origin.includes('.railway.app') || 
+            origin.includes('.onrender.com')
+          )) {
+            return callback(null, true);
+          }
+          
+          if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+          }
+          
+          callback(new Error('Not allowed by CORS'));
+        },
         methods: ['GET', 'POST'],
         credentials: true
       }
