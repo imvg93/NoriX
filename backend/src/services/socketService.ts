@@ -35,13 +35,16 @@ export class SocketService {
             origin.includes('.railway.app') || 
             origin.includes('.onrender.com')
           )) {
+            console.log('✅ Socket Service CORS: Allowing deployment origin:', origin);
             return callback(null, true);
           }
           
           if (allowedOrigins.includes(origin)) {
+            console.log('✅ Socket Service CORS: Allowing configured origin:', origin);
             return callback(null, true);
           }
           
+          console.log('🚫 Socket Service CORS blocked origin:', origin);
           callback(new Error('Not allowed by CORS'));
         },
         methods: ['GET', 'POST'],
