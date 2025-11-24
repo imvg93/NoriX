@@ -100,7 +100,7 @@ router.patch(
 
     const socketManager = (global as any).socketManager;
     if (socketManager) {
-      socketManager.emitToUser(String((student as IStudent)._id), 'verification:update', {
+      socketManager.emitToUser(String(student._id as mongoose.Types.ObjectId), 'verification:update', {
         verified: student.verified,
         trial_shift_status: student.trial_shift_status,
         rejection_code: student.rejection_code,

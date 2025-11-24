@@ -46,12 +46,27 @@ class SocketManager {
       try {
         const authSocket = socket as AuthenticatedSocket;
         
-        // Get token from auth object or headers
-        const token = authSocket.handshake.auth?.token || 
-                     authSocket.handshake.headers?.authorization?.replace('Bearer ', '');
+        // Get token from auth object or headers with better extraction
+        let token = authSocket.handshake.auth?.token;
+        
+        // If not in auth object, try Authorization header
+        if (!token) {
+          const authHeader = authSocket.handshake.headers?.authorization;
+          if (authHeader && typeof authHeader === 'string') {
+            token = authHeader.startsWith('Bearer ') 
+              ? authHeader.replace('Bearer ', '').trim()
+              : authHeader.trim();
+          }
+        }
+        
+        // Clean token - remove any whitespace
+        if (token) {
+          token = token.trim();
+        }
         
         console.log('🔐 Socket authentication attempt:', {
           hasToken: !!token,
+          tokenLength: token?.length || 0,
           socketId: authSocket.id,
           userAgent: authSocket.handshake.headers['user-agent']
         });
@@ -61,8 +76,32 @@ class SocketManager {
           return next(new Error('Authentication error: No token provided'));
         }
 
+        // Verify JWT_SECRET is set
+        if (!process.env.JWT_SECRET) {
+          console.error('❌ JWT_SECRET is not set in environment variables');
+          return next(new Error('Authentication error: Server configuration error'));
+        }
+
         // Verify JWT token
-        const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+        let decoded: any;
+        try {
+          decoded = jwt.verify(token, process.env.JWT_SECRET) as any;
+        } catch (jwtError: any) {
+          console.error('❌ JWT verification failed:', {
+            error: jwtError.name,
+            message: jwtError.message,
+            tokenPreview: token.substring(0, 20) + '...'
+          });
+          
+          if (jwtError.name === 'JsonWebTokenError') {
+            return next(new Error('Authentication error: Invalid token signature'));
+          } else if (jwtError.name === 'TokenExpiredError') {
+            return next(new Error('Authentication error: Token expired'));
+          } else {
+            return next(new Error('Authentication error: Token validation failed'));
+          }
+        }
+        
         console.log('🔐 Token decoded successfully:', { userId: decoded.userId });
         
         // Find user in database
@@ -85,8 +124,12 @@ class SocketManager {
         });
         
         next();
-      } catch (error) {
-        console.error('❌ Socket authentication error:', error);
+      } catch (error: any) {
+        console.error('❌ Socket authentication error:', {
+          error: error.name || 'Unknown',
+          message: error.message,
+          stack: error.stack
+        });
         next(new Error('Authentication error: Invalid token'));
       }
     });
