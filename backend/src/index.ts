@@ -62,19 +62,19 @@ setNotificationRouteService(notificationService);
 
 // Environment-aware CORS configuration
 const isProduction = process.env.NODE_ENV === 'production';
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'https://me-work.vercel.app',
+  'https://norixconnects.vercel.app',
+  'https://studenting.vercel.app',
+  ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : []),
+];
+
 const corsOptions = {
   origin: function (origin: string | undefined, callback: Function) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://me-work.vercel.app',
-      'https://norixconnects.vercel.app',
-      'https://studenting.vercel.app',
-      ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : []),
-    ];
     
     // Allow all Vercel, Railway, and Render subdomains in production
     if (isProduction && (
