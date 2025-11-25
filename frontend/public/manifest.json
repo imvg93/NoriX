@@ -1,0 +1,26 @@
+{
+  "name": "NoriX - Student Jobs Platform",
+  "short_name": "NoriX",
+  "description": "Find the perfect job opportunities for students",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "/Favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/img/norixlogo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/img/norixlogo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

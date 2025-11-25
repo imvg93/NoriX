@@ -1,22 +1,27 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import useVerification from '../../hooks/useVerification';
+import useVerification, { type VerificationStatus } from '../../hooks/useVerification';
 import VerificationStepper from '../../components/VerificationStepper';
 import FileUploader from '../../components/FileUploader';
+
+// Default status used when there is no status from the API yet
+const defaultStatus: VerificationStatus = {
+  verified: false,
+  trial_shift_status: 'not_requested',
+  id_doc: { submitted_at: null, preview_url: null },
+  video: { submitted_at: null, preview_url: null },
+  auto_checks: {},
+  timeline: ['Not Started'],
+  rejection_code: null,
+  admin_notes: '',
+};
 
 export default function VerificationPage() {
   const { status, loading, error, uploadId, uploadVideo, requestTrial, refresh } = useVerification();
   
   // Ensure status has safe defaults to prevent errors
-  const safeStatus = status || {
-    verified: false,
-    trial_shift_status: 'not_requested',
-    id_doc: { key: null, submitted_at: null, preview_url: null },
-    video: { key: null, submitted_at: null, preview_url: null },
-    auto_checks: {},
-    timeline: ['Not Started']
-  };
+  const safeStatus: VerificationStatus = status || defaultStatus;
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);

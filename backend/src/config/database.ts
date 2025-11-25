@@ -189,33 +189,44 @@ const applyStudentValidatorAndIndexes = async (): Promise<void> => {
 
     // Apply validator if schema is available
     if (jsonSchema) {
+      // MongoDB's $jsonSchema validator does not support the "$schema" meta keyword.
+      // Strip it to avoid "Parsing of collection validator failed" warnings.
+      const mongoJsonSchema: any = { ...jsonSchema };
+      if (mongoJsonSchema.$schema) {
+        delete mongoJsonSchema.$schema;
+      }
       const collections = await db.listCollections({ name: 'students' }).toArray();
       if (collections.length > 0) {
         try {
           await db.command({
             collMod: 'students',
-            validator: { $jsonSchema: jsonSchema },
+            validator: { $jsonSchema: mongoJsonSchema },
             validationLevel: 'strict',
             validationAction: 'error'
           });
           console.log('✅ Applied JSON Schema validator to students');
         } catch (err) {
-          console.log('⚠️ collMod failed, attempting create with validator if collection missing:', (err as Error).message);
-          try {
-            await db.createCollection('students', {
-              validator: { $jsonSchema: jsonSchema },
-              validationLevel: 'strict',
-              validationAction: 'error'
-            });
-            console.log('✅ Created students collection with validator');
-          } catch (e2) {
-            console.log('⚠️ Could not create collection with validator:', (e2 as Error).message);
+          const msg = (err as Error).message || String(err);
+          console.log('⚠️ collMod failed when applying students validator:', msg);
+
+          // Only attempt to create the collection if it truly does not exist.
+          if (/namespace.*not.*found/i.test(msg) || /NamespaceNotFound/i.test(msg)) {
+            try {
+              await db.createCollection('students', {
+                validator: { $jsonSchema: mongoJsonSchema },
+                validationLevel: 'strict',
+                validationAction: 'error'
+              });
+              console.log('✅ Created students collection with validator');
+            } catch (e2) {
+              console.log('⚠️ Could not create collection with validator:', (e2 as Error).message);
+            }
           }
         }
       } else {
         try {
           await db.createCollection('students', {
-            validator: { $jsonSchema: jsonSchema },
+            validator: { $jsonSchema: mongoJsonSchema },
             validationLevel: 'strict',
             validationAction: 'error'
           });
