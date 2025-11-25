@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import socketService from '../services/socketService';
 import apiService from '../services/api';
 
-type VerificationStatus = {
+export type VerificationStatus = {
   verified: boolean;
   trial_shift_status?: 'not_requested' | 'pending' | 'assigned' | 'completed' | 'failed';
   id_doc?: { key?: string; submitted_at?: string | Date | null; preview_url?: string | null };
@@ -13,6 +13,17 @@ type VerificationStatus = {
   rejection_code?: string | null;
   admin_notes?: string;
   timeline?: string[];
+};
+
+const DEFAULT_STATUS: VerificationStatus = {
+  verified: false,
+  trial_shift_status: 'not_requested',
+  id_doc: { submitted_at: null, preview_url: null },
+  video: { submitted_at: null, preview_url: null },
+  auto_checks: {},
+  timeline: ['Not Started'],
+  rejection_code: null,
+  admin_notes: '',
 };
 
 type UploadResponse = {
@@ -36,33 +47,29 @@ export function useVerification() {
       const resp = await apiService.get('/verification/status');
       console.log('✅ Verification status response:', resp);
       
-      // Handle different response formats
-      let data;
-      if (resp && typeof resp === 'object') {
-        // Check if it's wrapped in a data property
-        if ('data' in resp) {
-          data = resp.data;
-        } else if ('success' in resp && resp.success && 'data' in resp) {
-          data = resp.data;
+      // Handle different response formats in a type-safe way
+      let data: any;
+      const respAny: any = resp;
+
+      if (respAny && typeof respAny === 'object') {
+        if (respAny.data) {
+          // Common axios-style or wrapped response
+          data = respAny.data;
+        } else if (respAny.success && respAny.data) {
+          // { success, data } envelope
+          data = respAny.data;
         } else {
-          // Response is already the data
-          data = resp;
+          // Already the payload object
+          data = respAny;
         }
       } else {
-        data = resp;
+        data = respAny;
       }
       
       // Ensure we have a valid status object
       if (!data || typeof data !== 'object') {
         console.warn('⚠️ Invalid response format, using defaults');
-        data = {
-          verified: false,
-          trial_shift_status: 'not_requested',
-          id_doc: { key: null, submitted_at: null, preview_url: null },
-          video: { key: null, submitted_at: null, preview_url: null },
-          auto_checks: {},
-          timeline: ['Not Started']
-        };
+        data = DEFAULT_STATUS;
       }
       
       if (mountedRef.current) {
@@ -91,26 +98,12 @@ export function useVerification() {
         // This is expected for new students who haven't started verification
         if (isStudentNotFound) {
           setError(null); // Clear error - this is not really an error
-          setStatus({
-            verified: false,
-            trial_shift_status: 'not_requested',
-            id_doc: { key: null, submitted_at: null, preview_url: null },
-            video: { key: null, submitted_at: null, preview_url: null },
-            auto_checks: {},
-            timeline: ['Not Started']
-          });
+          setStatus(DEFAULT_STATUS);
         } else {
           // Only show error for actual failures, not missing student records
           setError(e.message || 'Failed to load status');
           // Set default status on error
-          setStatus({
-            verified: false,
-            trial_shift_status: 'not_requested',
-            id_doc: { key: null, submitted_at: null, preview_url: null },
-            video: { key: null, submitted_at: null, preview_url: null },
-            auto_checks: {},
-            timeline: ['Not Started']
-          });
+          setStatus(DEFAULT_STATUS);
         }
       }
     }

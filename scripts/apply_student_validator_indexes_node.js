@@ -71,7 +71,14 @@ async function run() {
   try {
     const db = client.db();
     const schemaPath = path.join(projectRoot, 'schemas', 'student.schema.json');
-    const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
+    const rawSchema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
+
+    // MongoDB $jsonSchema does not support the "$schema" meta keyword used by JSON Schema drafts.
+    // Strip it out so the validator parses cleanly.
+    const schema = { ...rawSchema };
+    if (schema.$schema) {
+      delete schema.$schema;
+    }
 
     const collections = await db.listCollections({ name: 'students' }).toArray();
     if (collections.length > 0) {
