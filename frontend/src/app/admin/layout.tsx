@@ -11,22 +11,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const { user, token, loading } = useAuth();
 
-  const isLoginRoute = pathname === '/admin/login';
-
+  // If user is not authenticated, push them to the main login page
   useEffect(() => {
-    if (isLoginRoute) {
-      return;
-    }
-
     if (!loading && !token) {
       const redirectTarget = pathname && pathname !== '/admin' ? pathname : '/admin/dashboard';
-      router.replace(`/admin/login?redirect=${encodeURIComponent(redirectTarget)}`);
+      router.replace(`/login?redirect=${encodeURIComponent(redirectTarget)}`);
     }
-  }, [isLoginRoute, loading, token, pathname, router]);
-
-  if (isLoginRoute) {
-    return <>{children}</>;
-  }
+  }, [loading, token, pathname, router]);
 
   if (loading) {
     return (
@@ -48,11 +39,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           Your session expired or you are not signed in. Please log in with an authorised Norix admin account to continue.
         </p>
         <Link
-          href={`/admin/login?redirect=${encodeURIComponent(pathname ?? '/admin/dashboard')}`}
+          href={`/login?redirect=${encodeURIComponent(pathname ?? '/admin/dashboard')}`}
           className="mt-6 inline-flex items-center gap-2 rounded-full bg-indigo-500 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/30 transition hover:bg-indigo-600"
         >
           <LogIn className="h-4 w-4" />
-          Sign in as Admin
+          Go to Login
         </Link>
       </div>
     );
@@ -75,14 +66,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             href="/login"
             className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-5 py-2.5 text-sm font-medium text-slate-200 transition hover:bg-slate-800/70"
           >
-            Back to User Login
-          </Link>
-          <Link
-            href={`/admin/login?redirect=${encodeURIComponent(pathname ?? '/admin/dashboard')}`}
-            className="inline-flex items-center gap-2 rounded-full bg-indigo-500 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/30 transition hover:bg-indigo-600"
-          >
-            <LogIn className="h-4 w-4" />
-            Switch to Admin Login
+            Back to Login
           </Link>
         </div>
       </div>

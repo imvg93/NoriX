@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const ADMIN_LOGIN_PATH = '/admin/login';
 const TOKEN_COOKIE = 'norix_token';
+const APP_LOGIN_PATH = '/login';
 
 const getApiBaseUrl = () => {
   if (process.env.NEXT_PUBLIC_API_URL) {
@@ -16,17 +16,17 @@ const getApiBaseUrl = () => {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow login page and non-admin routes
-  if (!pathname.startsWith('/admin') || pathname === ADMIN_LOGIN_PATH) {
+  // Only protect /admin routes; let everything else through
+  if (!pathname.startsWith('/admin')) {
     return NextResponse.next();
   }
 
   // Get token from cookie
   const token = request.cookies.get(TOKEN_COOKIE)?.value;
 
-  // If no token, redirect to login
+  // If no token, redirect to main login page with redirect back to admin path
   if (!token) {
-    const loginUrl = new URL(ADMIN_LOGIN_PATH, request.url);
+    const loginUrl = new URL(APP_LOGIN_PATH, request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
   }
@@ -65,7 +65,7 @@ export async function middleware(request: NextRequest) {
               : 'user';
 
       if (role !== 'admin') {
-        const loginUrl = new URL(ADMIN_LOGIN_PATH, request.url);
+        const loginUrl = new URL(APP_LOGIN_PATH, request.url);
         loginUrl.searchParams.set('redirect', pathname);
         loginUrl.searchParams.set('unauthorized', '1');
         loginUrl.searchParams.set('message', 'Access restricted to Norix Admins.');
