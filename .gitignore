@@ -167,14 +167,7 @@ jspm_packages/
 .pnp.*
 
 # Uploads
-uploads/
-*.jpg
-*.jpeg
-*.png
-*.gif
-*.pdf
-*.doc
-*.docx
+
 
 # OS generated files
 .DS_Store
