@@ -13,11 +13,12 @@ import {
   AlertCircle, 
   ArrowLeft,
   Shield,
-  RefreshCw
+  RefreshCw,
+  Video
 } from 'lucide-react';
 
 const KYCProfilePage: React.FC = () => {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [kycStatus, setKycStatus] = useState<string | null>(null);
@@ -26,38 +27,62 @@ const KYCProfilePage: React.FC = () => {
 
   useEffect(() => {
     const checkKYCStatus = async () => {
+      // Wait for auth to finish loading
+      if (authLoading) {
+        return;
+      }
+
+      // ProtectedRoute will handle redirect if not authenticated
       if (!isAuthenticated || !user) {
-        alert('You need to be logged in to access KYC verification.');
         setIsLoading(false);
         return;
       }
 
-      // Only allow students to access KYC
+      // Only allow students to access KYC (ProtectedRoute also checks this)
       if (user.userType !== 'student') {
-        alert('KYC verification is only available for students.');
         setIsLoading(false);
         return;
       }
 
       try {
-        // If the user has recently submitted KYC, show the post-submit state and CTA to Verify
-        try {
-          const flag = typeof window !== 'undefined' ? localStorage.getItem('kycSubmitted') : null;
-          if (flag === 'true') {
-            setKycStatus('pending');
-            setShowForm(false);
-            return;
-          }
-        } catch {}
-        // Default: show form
+        // Force refresh KYC status from MongoDB (bypass cache)
+        // This ensures we always get the latest status from the database
+        const status = await kycStatusService.forceRefreshKYCStatus();
+        const actualStatus = status.status;
+        
+        console.log('📊 KYC Status from MongoDB:', actualStatus);
+        
+        // Clear localStorage flag if status is approved (no longer needed)
+        if (actualStatus === 'approved') {
+          try {
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('kycSubmitted');
+            }
+          } catch {}
+        }
+        
+        setKycStatus(actualStatus);
+        setIsKYCCompleted(status.isCompleted);
+        
+        // If KYC is submitted (pending, approved, or rejected), don't show form
+        if (actualStatus === 'pending' || actualStatus === 'approved' || actualStatus === 'rejected' || actualStatus === 'suspended') {
+          setShowForm(false);
+        } else {
+          // Default: show form for not_submitted
+          setShowForm(true);
+        }
+      } catch (error) {
+        console.error('Error checking KYC status:', error);
+        // On error, default to showing form
         setShowForm(true);
+        setKycStatus('not_submitted');
       } finally {
         setIsLoading(false);
       }
     };
 
     checkKYCStatus();
-  }, [isAuthenticated, user, router]);
+  }, [isAuthenticated, user, authLoading, router]);
 
   const handleBackNavigation = () => {
     if (window.history.length > 1) {
@@ -77,12 +102,15 @@ const KYCProfilePage: React.FC = () => {
     setShowForm(false);
   };
 
-  if (isLoading) {
+  // Show loading while auth is loading or KYC status is being fetched
+  if (authLoading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Checking KYC status...</p>
+          <p className="text-gray-600">
+            {authLoading ? 'Loading...' : 'Checking KYC status...'}
+          </p>
         </div>
       </div>
     );
@@ -127,16 +155,38 @@ const KYCProfilePage: React.FC = () => {
                       <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
                         <CheckCircle className="h-8 w-8 text-green-600" />
                       </div>
-                      <h2 className="text-2xl font-semibold text-gray-900 mb-2">KYC Approved ✅</h2>
-                      <p className="text-gray-600 mb-6">
+                      <h2 className="text-2xl font-semibold text-gray-900 mb-2">Verified Successfully and Approved ✅</h2>
+                      <p className="text-gray-600 mb-6 text-lg">
                         Congratulations! Your KYC verification has been approved. You can now access all job opportunities.
                       </p>
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                        <div className="flex items-center gap-2 justify-center">
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                          <p className="text-sm text-green-800">
+                            <strong>Status:</strong> Approved - Your verification is complete
+                          </p>
+                        </div>
+                      </div>
+                      <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-6">
+                        <div className="flex items-start gap-3">
+                          <Video className="h-5 w-5 text-indigo-600 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-semibold text-indigo-900 mb-1">
+                              Complete Video KYC Verification
+                            </p>
+                            <p className="text-sm text-indigo-700">
+                              Get verified by Video KYC to unlock more opportunities and priority access to premium job listings.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                       <div className="flex flex-col sm:flex-row gap-3 justify-center">
                         <a
                           href="/verification"
-                          className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-center"
+                          className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-center flex items-center justify-center gap-2"
                         >
-                          Get Verified to Unlock More Shifts
+                          <Video className="w-4 h-4" />
+                          Get Verified by Video KYC
                         </a>
                         <button
                           onClick={() => router.push('/student-home')}

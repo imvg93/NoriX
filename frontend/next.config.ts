@@ -58,7 +58,7 @@ const nextConfig: NextConfig = {
       };
     }
     
-    // Optimize bundle size
+    // Optimize bundle size and chunk loading
     if (!dev && !isServer) {
       config.optimization.splitChunks = {
         chunks: 'all',
@@ -71,6 +71,15 @@ const nextConfig: NextConfig = {
             test: /node_modules/,
           },
         },
+      };
+    }
+    
+    // Improve chunk loading reliability in development
+    if (dev && !isServer) {
+      // Better error handling for failed chunks
+      config.optimization = {
+        ...config.optimization,
+        minimize: false, // Disable minification in dev for better debugging
       };
     }
     

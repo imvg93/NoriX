@@ -52,9 +52,19 @@ export function useVerification() {
       const respAny: any = resp;
 
       if (respAny && typeof respAny === 'object') {
+        // apiService.get returns { data: T }
         if (respAny.data) {
-          // Common axios-style or wrapped response
-          data = respAny.data;
+          // Check if data has a nested structure from sendSuccessResponse
+          if (respAny.data.data) {
+            // Response is { data: { success: true, data: {...}, message: ... } }
+            data = respAny.data.data;
+          } else if (respAny.data.success && respAny.data.data) {
+            // { success, data } envelope
+            data = respAny.data.data;
+          } else {
+            // Direct data object
+            data = respAny.data;
+          }
         } else if (respAny.success && respAny.data) {
           // { success, data } envelope
           data = respAny.data;
@@ -182,6 +192,21 @@ export function useVerification() {
     }
   }, [fetchStatus]);
 
+  const deleteVideo = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await apiService.delete('/verification/delete-video');
+      await fetchStatus();
+      return true;
+    } catch (e: any) {
+      setError(e.message || 'Delete failed');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchStatus]);
+
   // Real-time updates via socket
   useEffect(() => {
     mountedRef.current = true;
@@ -205,6 +230,7 @@ export function useVerification() {
     status,
     uploadId,
     uploadVideo,
+    deleteVideo,
     requestTrial,
     refresh: fetchStatus,
   };

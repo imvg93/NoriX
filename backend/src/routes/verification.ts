@@ -7,7 +7,7 @@ import VerificationLog from '../models/VerificationLog';
 import mongoose from 'mongoose';
 import { requireEmployer } from '../middleware/auth';
 import multer from 'multer';
-import { uploadImage } from '../config/cloudinary';
+import { uploadImage, deleteImage } from '../config/cloudinary';
 import fs from 'fs';
 import crypto from 'crypto';
 
@@ -277,6 +277,35 @@ router.post(
     if (!isAllowedVideoMime(file.mimetype)) throw new ValidationError('Unsupported video type');
     if (file.size > MAX_VIDEO_SIZE) throw new ValidationError(`Video exceeds max size of ${MAX_VIDEO_SIZE} bytes`);
 
+    // Get current student to check for existing video
+    const currentStudent = await Student.findOne({ _id: req.user!._id });
+    
+    // Delete old video from Cloudinary if exists
+    if (currentStudent?.video_url) {
+      try {
+        // Extract public_id from Cloudinary URL
+        // URL format: https://res.cloudinary.com/cloud_name/video/upload/v1234567890/norix/verification/video/filename
+        const urlParts = currentStudent.video_url.split('/');
+        const videoIndex = urlParts.findIndex(part => part === 'video');
+        if (videoIndex !== -1 && videoIndex < urlParts.length - 1) {
+          // Get the path after 'upload' or 'video'
+          const uploadIndex = urlParts.findIndex(part => part === 'upload');
+          if (uploadIndex !== -1) {
+            const pathAfterUpload = urlParts.slice(uploadIndex + 2).join('/'); // Skip 'upload' and version
+            const publicId = pathAfterUpload.replace(/\.[^/.]+$/, ''); // Remove file extension
+            if (publicId) {
+              console.log('🗑️ Deleting old video from Cloudinary:', publicId);
+              await deleteImage(publicId);
+              console.log('✅ Old video deleted successfully');
+            }
+          }
+        }
+      } catch (deleteError) {
+        console.warn('⚠️ Failed to delete old video from Cloudinary:', deleteError);
+        // Continue with upload even if deletion fails
+      }
+    }
+
     const result = await uploadImage(file, 'norix/verification/video');
     const secureUrl = result.secure_url;
 
@@ -305,7 +334,72 @@ router.post(
       });
     } catch {}
 
-    sendSuccessResponse(res, { status: 'uploaded', video_url: secureUrl }, 'Video uploaded to Cloudinary');
+    sendSuccessResponse(res, { status: 'uploaded', video_url: secureUrl }, 'Video uploaded successfully');
+  })
+);
+
+// DELETE /api/verification/delete-video
+// @desc    Delete video from Cloudinary and MongoDB
+// @access  Private
+router.delete(
+  '/delete-video',
+  authenticateToken,
+  requireStudent,
+  asyncHandler(async (req: AuthRequest, res: express.Response) => {
+    const student = await Student.findOne({ _id: req.user!._id });
+    
+    if (!student || !student.video_url) {
+      throw new ValidationError('No video found to delete');
+    }
+
+    const videoUrl = student.video_url;
+
+    // Delete from Cloudinary
+    try {
+      // Extract public_id from Cloudinary URL
+      const urlParts = videoUrl.split('/');
+      const uploadIndex = urlParts.findIndex(part => part === 'upload');
+      if (uploadIndex !== -1) {
+        const pathAfterUpload = urlParts.slice(uploadIndex + 2).join('/'); // Skip 'upload' and version
+        const publicId = pathAfterUpload.replace(/\.[^/.]+$/, ''); // Remove file extension
+        if (publicId) {
+          console.log('🗑️ Deleting video from Cloudinary:', publicId);
+          await deleteImage(publicId);
+          console.log('✅ Video deleted from Cloudinary');
+        }
+      }
+    } catch (deleteError) {
+      console.warn('⚠️ Failed to delete video from Cloudinary:', deleteError);
+      // Continue with database update even if Cloudinary deletion fails
+    }
+
+    // Remove from MongoDB
+    await Student.findOneAndUpdate(
+      { _id: req.user!._id },
+      {
+        $set: {
+          video_url: '',
+          video_submitted_at: undefined,
+        },
+        $push: {
+          verification_history: { action: 'delete_video', by: req.user!._id, details: 'Video deleted', at: new Date() } as any
+        }
+      },
+      { new: true }
+    );
+
+    try {
+      await VerificationLog.create({
+        studentId: req.user!._id,
+        adminId: null,
+        action: 'delete_video',
+        code: 'VIDEO_DELETED',
+        details: { videoUrl },
+        timestamp: new Date(),
+      });
+    } catch {}
+
+    sendSuccessResponse(res, {}, 'Video deleted successfully');
   })
 );
 

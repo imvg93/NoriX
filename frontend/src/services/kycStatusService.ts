@@ -29,7 +29,8 @@ class KYCStatusService {
     try {
       // Use the canonical student profile endpoint as single source of truth
       const response = await apiService.get('/kyc/student/profile');
-      const data = response.data;
+      // Handle response structure - could be wrapped in { data: ... } or direct
+      const data = response?.data || response;
       
       const status: KYCStatus = {
         isCompleted: data.status?.status === 'approved',
@@ -114,24 +115,44 @@ class KYCStatusService {
   // Force refresh KYC status (bypasses cache)
   async forceRefreshKYCStatus(): Promise<KYCStatus> {
     try {
-      // Clear cache first
+      // Clear cache first to ensure fresh data
       this.clearCache();
       
-      // Use the refresh endpoint
-      const response = await apiService.post('/kyc/refresh-status');
-      const data = response.data;
+      // Call the regular endpoint (which will fetch fresh data from MongoDB)
+      const response = await apiService.get('/kyc/student/profile');
+      
+      console.log('🔍 Force Refresh - Full API Response:', response);
+      
+      // Handle different response structures
+      // apiService.get() returns { data: T }, so extract the data
+      // Backend sends: { success: true, data: { status: {...}, ... } }
+      const responseData = (response as any)?.data || response;
+      let data = responseData;
+      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+        data = responseData.data;
+      }
+      
+      console.log('🔍 Force Refresh - Extracted Data:', data);
+      console.log('🔍 Force Refresh - Status Object:', data?.status);
+      console.log('🔍 Force Refresh - Status Status:', data?.status?.status);
+      
+      const actualStatus = data?.status?.status || data?.kycStatus || 'not_submitted';
+      
+      console.log('🔍 Force Refresh - Final Status:', actualStatus);
       
       const status: KYCStatus = {
-        isCompleted: data.status?.status === 'approved',
-        status: data.status?.status || 'not_submitted',
-        submittedAt: data.status?.submittedAt,
-        verifiedAt: data.status?.verifiedAt,
-        rejectedAt: data.status?.rejectedAt,
-        notes: data.status?.notes,
-        rejectionReason: data.status?.rejectionReason,
-        canResubmit: data.status?.canResubmit || false,
-        message: data.status?.message
+        isCompleted: actualStatus === 'approved',
+        status: actualStatus,
+        submittedAt: data?.status?.submittedAt || data?.kyc?.submittedAt,
+        verifiedAt: data?.status?.verifiedAt || data?.kyc?.approvedAt,
+        rejectedAt: data?.status?.rejectedAt || data?.kyc?.rejectedAt,
+        notes: data?.status?.notes,
+        rejectionReason: data?.status?.rejectionReason || data?.kyc?.rejectionReason,
+        canResubmit: data?.status?.canResubmit || false,
+        message: data?.status?.message || data?.message
       };
+
+      console.log('🔍 Force Refresh - Parsed Status:', status);
 
       // Update cache with fresh data
       this.cache.set('current_user', { data: status, timestamp: Date.now() });
@@ -139,7 +160,9 @@ class KYCStatusService {
       return status;
     } catch (error: any) {
       console.error('Error force refreshing KYC status:', error);
-      throw error;
+      // If refresh fails, try regular check
+      this.clearCache();
+      return await this.checkKYCStatus();
     }
   }
 
@@ -163,7 +186,9 @@ class KYCStatusService {
   async getKYCProfile() {
     try {
       const response = await apiService.get('/kyc/profile');
-      return response.data.kyc;
+      // Handle response structure
+      const data = response?.data || response;
+      return data?.kyc || data;
     } catch (error: any) {
       if (error.status === 404) {
         return null; // No KYC profile found

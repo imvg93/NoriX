@@ -40,7 +40,7 @@ export function computeKycStatus(user: IUser, kycRecord?: IKYCDocument | null): 
     status,
     isVerified,
     submittedAt: kycRecord.submittedAt,
-    verifiedAt: kycRecord.verifiedAt,
+    verifiedAt: kycRecord.approvedAt || kycRecord.verifiedAt, // Use approvedAt for approved status
     rejectedAt: kycRecord.rejectedAt,
     rejectionReason: kycRecord.rejectionReason,
     suspendedAt: kycRecord.suspendedAt,

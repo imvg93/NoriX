@@ -5,6 +5,7 @@ import { AuthProvider } from "../contexts/AuthContext";
 import { NotificationProvider } from "../contexts/NotificationContext";
 import ErrorBoundary from "../components/ErrorBoundary";
 import Layout from "../components/Layout";
+import ChunkErrorHandlerSetup from "../components/ChunkErrorHandler";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -51,6 +52,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <ChunkErrorHandlerSetup />
         <ErrorBoundary>
           <AuthProvider>
             <NotificationProvider>

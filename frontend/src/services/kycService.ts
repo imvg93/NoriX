@@ -83,7 +83,8 @@ class KYCService {
   async getProfile(): Promise<KYCResponse> {
     try {
       const response = await apiService.get(`${this.baseUrl}/profile`);
-      return response.data;
+      // Handle response structure
+      return response?.data || response;
     } catch (error: any) {
       console.error("KYC fetch error details:", error);
       throw new Error(error.response?.data?.message || error.message || 'Failed to fetch KYC profile');
