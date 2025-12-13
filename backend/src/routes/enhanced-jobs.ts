@@ -5,6 +5,8 @@ import { User } from '../models/User';
 import { Application } from '../models/Application';
 import { KYC } from '../models/KYC';
 import EmployerKYC from '../models/EmployerKYC';
+import IndividualKYC from '../models/IndividualKYC';
+import LocalBusinessKYC from '../models/LocalBusinessKYC';
 import { authenticateToken, requireRole, AuthRequest, requireEmployer, requireStudent } from '../middleware/auth';
 import { asyncHandler, sendSuccessResponse, sendErrorResponse, ValidationError } from '../middleware/errorHandler';
 
@@ -25,10 +27,27 @@ const normalizeEmployerKycStatus = (status?: string | null): 'not-submitted' | '
 };
 
 const getEmployerKycState = async (employerId: mongoose.Types.ObjectId) => {
-  const user = await User.findById(employerId).select('kycStatus isVerified');
-  const employerKyc = await EmployerKYC.findOne({ employerId }).select('status rejectionReason reviewedAt submittedAt');
+  const user = await User.findById(employerId).select('kycStatus isVerified employerCategory');
+  
+  let kycRecord: any = null;
+  let status = 'not-submitted';
 
-  const status = normalizeEmployerKycStatus((user?.kycStatus as any) || employerKyc?.status);
+  // Check KYC based on employer category
+  if (user?.employerCategory === 'corporate') {
+    kycRecord = await EmployerKYC.findOne({ employerId }).select('status rejectionReason reviewedAt submittedAt');
+    status = normalizeEmployerKycStatus((user?.kycStatus as any) || kycRecord?.status);
+  } else if (user?.employerCategory === 'local_business') {
+    kycRecord = await LocalBusinessKYC.findOne({ employerId }).select('status rejectionReason reviewedAt submittedAt');
+    status = normalizeEmployerKycStatus((user?.kycStatus as any) || kycRecord?.status);
+  } else if (user?.employerCategory === 'individual') {
+    kycRecord = await IndividualKYC.findOne({ employerId }).select('status rejectionReason reviewedAt submittedAt');
+    status = normalizeEmployerKycStatus((user?.kycStatus as any) || kycRecord?.status);
+  } else {
+    // Fallback for existing employers without category
+    kycRecord = await EmployerKYC.findOne({ employerId }).select('status rejectionReason reviewedAt submittedAt');
+    status = normalizeEmployerKycStatus((user?.kycStatus as any) || kycRecord?.status);
+  }
+
   const isApproved = status === 'approved' || !!user?.isVerified;
   const isSuspended = status === 'suspended';
   const isPending = status === 'pending';
@@ -38,7 +57,7 @@ const getEmployerKycState = async (employerId: mongoose.Types.ObjectId) => {
     isApproved,
     isSuspended,
     isPending,
-    record: employerKyc,
+    record: kycRecord,
   };
 };
 
@@ -97,15 +116,12 @@ router.post('/', authenticateToken, requireEmployer, asyncHandler(async (req: Au
     salaryRange,
     workType,
     skillsRequired,
-    applicationDeadline
+    applicationDeadline,
+    // Task-specific fields (for Category C)
+    taskTime,
+    taskBudget,
+    autoExpireDays
   } = req.body;
-
-  // Validate required fields
-  if (!jobTitle || !description || !location || !salaryRange || !workType || !applicationDeadline) {
-    console.log('❌ Missing required fields:', { jobTitle, description, location, salaryRange, workType, applicationDeadline });
-    console.log('📦 Full request body:', req.body);
-    throw new ValidationError('Missing required fields: jobTitle, description, location, salaryRange, workType, applicationDeadline');
-  }
 
   // Get employer data for auto-fill (already available in req.user from auth middleware)
   const employer = req.user;
@@ -113,6 +129,7 @@ router.post('/', authenticateToken, requireEmployer, asyncHandler(async (req: Au
     id: employer?._id,
     email: employer?.email,
     userType: employer?.userType,
+    employerCategory: employer?.employerCategory,
     companyName: employer?.companyName,
     name: employer?.name
   });
@@ -125,6 +142,24 @@ router.post('/', authenticateToken, requireEmployer, asyncHandler(async (req: Au
   if (employer.userType !== 'employer') {
     console.error('❌ User is not an employer:', employer.userType);
     throw new ValidationError('Only employers can post jobs');
+  }
+
+  // Determine job type based on employer category
+  const jobType = employer.employerCategory === 'individual' ? 'task' : 'job';
+
+  // Validate required fields based on job type
+  if (jobType === 'task') {
+    // Tasks require: title, time, budget, location
+    if (!jobTitle || !taskTime || !taskBudget || !location) {
+      throw new ValidationError('Missing required fields for task: jobTitle, taskTime, taskBudget, location');
+    }
+  } else {
+    // Jobs require: title, description, location, salaryRange, workType, applicationDeadline
+    if (!jobTitle || !description || !location || !salaryRange || !workType || !applicationDeadline) {
+      console.log('❌ Missing required fields:', { jobTitle, description, location, salaryRange, workType, applicationDeadline });
+      console.log('📦 Full request body:', req.body);
+      throw new ValidationError('Missing required fields: jobTitle, description, location, salaryRange, workType, applicationDeadline');
+    }
   }
 
   // Enforce employer KYC gating
@@ -149,33 +184,61 @@ router.post('/', authenticateToken, requireEmployer, asyncHandler(async (req: Au
     return sendErrorResponse(res, 500, 'Failed to validate KYC status');
   }
 
-  // Create job with only essential fields
-  const job = await Job.create({
+  // Prepare job data
+  const jobData: any = {
     jobId: new mongoose.Types.ObjectId(),
     employerId: req.user!._id,
+    jobType,
     jobTitle,
-    description,
     location,
-    salaryRange,
-    workType,
-    skillsRequired: skillsRequired || [],
-    applicationDeadline: new Date(applicationDeadline),
-    
-    // Auto-filled employer info
-    companyName: employer.companyName || employer.name || 'Company Name',
-    email: employer.email || '',
-    phone: employer.phone || '',
-    companyLogo: employer.companyLogo || '',
-    businessType: employer.businessType || '',
-    employerName: employer.name || '',
-    
-    // System fields
     status: 'active',
-
-    highlighted: true, // Jobs stay highlighted until assigned
-
+    highlighted: true,
     createdAt: new Date()
-  });
+  };
+
+  // Add fields based on job type
+  if (jobType === 'task') {
+    // Task-specific fields
+    jobData.description = description || jobTitle; // Use title as description if not provided
+    jobData.salaryRange = taskBudget;
+    jobData.workType = 'Part-time'; // Default for tasks
+    jobData.skillsRequired = [];
+    jobData.taskTime = taskTime;
+    jobData.taskBudget = taskBudget;
+    jobData.autoExpireDays = autoExpireDays || 7; // Default 7 days for tasks
+    // Set application deadline based on autoExpireDays
+    const expireDate = new Date();
+    expireDate.setDate(expireDate.getDate() + (autoExpireDays || 7));
+    jobData.applicationDeadline = expireDate;
+    // For tasks, auto-approve
+    jobData.approvalStatus = 'approved';
+  } else {
+    // Job-specific fields
+    jobData.description = description;
+    jobData.salaryRange = salaryRange;
+    jobData.workType = workType;
+    jobData.skillsRequired = skillsRequired || [];
+    jobData.applicationDeadline = new Date(applicationDeadline);
+    // Jobs require admin approval (for corporate) or auto-approve (for local business)
+    jobData.approvalStatus = employer.employerCategory === 'corporate' ? 'pending' : 'approved';
+  }
+
+  // Auto-filled employer info
+  if (employer.employerCategory === 'individual') {
+    jobData.companyName = employer.name || 'Individual';
+    jobData.employerName = employer.name || '';
+  } else {
+    jobData.companyName = employer.companyName || employer.name || 'Company Name';
+    jobData.employerName = employer.name || '';
+  }
+  
+  jobData.email = employer.email || '';
+  jobData.phone = employer.phone || '';
+  jobData.companyLogo = employer.companyLogo || '';
+  jobData.businessType = employer.businessType || '';
+
+  // Create job
+  const job = await Job.create(jobData);
 
   // Populate employer info
   await job.populate('employerId', 'name email companyName');

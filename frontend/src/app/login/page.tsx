@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import Image from 'next/image';
 import { ArrowLeft, Home } from 'lucide-react';
 import Link from 'next/link';
@@ -8,6 +9,13 @@ import LoginForm from '@/components/LoginForm';
 
 export default function Login() {
   const router = useRouter();
+
+  // Clear logout flag when login page loads
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('isLoggingOut');
+    }
+  }, []);
 
   return (
     <div className="relative h-screen bg-gradient-to-br from-indigo-50 via-white to-cyan-50 overflow-hidden">

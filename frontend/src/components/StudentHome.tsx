@@ -167,6 +167,8 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
   const [filteredJobs, setFilteredJobs] = useState<Job[]>([]);
   const [kycStatus, setKycStatus] = useState<{isCompleted: boolean, status: string}>({isCompleted: true, status: 'approved'});
   const [showKycPendingModal, setShowKycPendingModal] = useState(false);
+  const [showKycApplyModal, setShowKycApplyModal] = useState(false);
+  const [kycApplyMessage, setKycApplyMessage] = useState<string>('');
 
   const handleKycClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -493,6 +495,14 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
         status: error.status,
         details: error.details
       });
+      
+      // Check if error is KYC related
+      if (error?.message?.toLowerCase().includes('kyc') || 
+          (error.status === 403 && error?.message?.toLowerCase().includes('complete'))) {
+        setKycApplyMessage(error.message || 'Please complete your KYC verification to apply for jobs.');
+        setShowKycApplyModal(true);
+        return;
+      }
       
       let friendlyMessage = 'Failed to submit application. Please try again.';
       
@@ -1578,6 +1588,61 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* KYC Apply Modal */}
+      {showKycApplyModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6"
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                  <AlertCircle className="h-6 w-6 text-orange-600" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">KYC Verification Required</h3>
+                  <p className="text-sm text-gray-600 mt-1">Complete your verification to apply for jobs</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowKycApplyModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-gray-700 leading-relaxed">
+                {kycApplyMessage || 'Please complete your KYC (Know Your Customer) verification to apply for jobs. This helps us ensure the security and authenticity of all users.'}
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => {
+                  setShowKycApplyModal(false);
+                  router.push('/kyc-profile');
+                }}
+                className="flex-1 bg-orange-600 text-white py-3 px-6 rounded-lg hover:bg-orange-700 transition-colors font-medium flex items-center justify-center gap-2"
+              >
+                <CheckCircle className="w-5 h-5" />
+                Complete KYC
+              </button>
+              <button
+                onClick={() => setShowKycApplyModal(false)}
+                className="flex-1 bg-gray-100 text-gray-700 py-3 px-6 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </motion.div>
         </div>
       )}
     </div>

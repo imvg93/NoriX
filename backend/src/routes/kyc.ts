@@ -11,6 +11,8 @@ import { asyncHandler, sendSuccessResponse, ValidationError } from '../middlewar
 import { uploadImage, deleteImage } from '../config/cloudinary';
 import { computeKycStatus, getKycStatusMessage } from '../utils/kycStatusHelper';
 import EmployerKYC from '../models/EmployerKYC';
+import IndividualKYC from '../models/IndividualKYC';
+import LocalBusinessKYC from '../models/LocalBusinessKYC';
 
 const router = express.Router();
 
@@ -60,6 +62,19 @@ router.get('/profile', authenticateToken, asyncHandler(async (req: AuthRequest, 
 // Test route to debug
 router.get('/employer/test', (req, res) => {
   res.json({ message: 'Employer KYC test route is working!' });
+});
+
+// Test routes for new endpoints
+router.get('/employer/corporate/test', (req, res) => {
+  res.json({ message: 'Corporate KYC route is registered!' });
+});
+
+router.get('/employer/local-business/test', (req, res) => {
+  res.json({ message: 'Local Business KYC route is registered!' });
+});
+
+router.get('/employer/individual/test', (req, res) => {
+  res.json({ message: 'Individual KYC route is registered!' });
 });
 
 // ===== Employer KYC endpoints =====
@@ -212,17 +227,451 @@ router.post(
   }, 'Employer KYC submitted successfully');
 }));
 
-// GET /api/kyc/employer/:id/status → fetch employer KYC status
+// POST /api/kyc/employer/corporate → Submit Corporate KYC
+router.post(
+  '/employer/corporate',
+  authenticateToken,
+  requireEmployer,
+  upload.fields([
+    { name: 'idProof', maxCount: 1 },
+    { name: 'companyProof', maxCount: 1 },
+    { name: 'gstDoc', maxCount: 1 },
+  ]),
+  asyncHandler(async (req: AuthRequest, res: express.Response) => {
+    const employerId = req.user!._id;
+    const user = await User.findById(employerId);
+    
+    if (!user || user.employerCategory !== 'corporate') {
+      throw new ValidationError('This endpoint is only for corporate employers');
+    }
+
+    const { 
+      companyName,
+      businessRegistrationType,
+      gstNumber,
+      GSTNumber,
+      businessRegNo,
+      companyEmail,
+      companyPhone,
+      address,
+      city,
+      pinCode,
+      website,
+      adminName,
+      authorizedName,
+      adminEmail,
+      adminPhone,
+      fullName,
+      designation,
+    } = req.body || {};
+
+    if (!companyName || !companyName.trim()) {
+      throw new ValidationError('Company name is required');
+    }
+    if (!businessRegistrationType) {
+      throw new ValidationError('Business registration type is required');
+    }
+    if (!companyEmail || !companyEmail.trim()) {
+      throw new ValidationError('Company email is required');
+    }
+    // Basic email domain check (no Gmail/Yahoo)
+    const domain = companyEmail.split('@')[1]?.toLowerCase();
+    if (['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com'].includes(domain || '')) {
+      throw new ValidationError('Please use your company email address, not a personal email');
+    }
+    if (!address || !address.trim()) {
+      throw new ValidationError('Office address is required');
+    }
+    if (!city || !city.trim()) {
+      throw new ValidationError('City is required');
+    }
+    if (!pinCode || !pinCode.trim()) {
+      throw new ValidationError('PIN code is required');
+    }
+    if (!adminName || !adminName.trim()) {
+      throw new ValidationError('Admin contact name is required');
+    }
+    if (!adminEmail || !adminEmail.trim()) {
+      throw new ValidationError('Admin contact email is required');
+    }
+
+    const existing = await EmployerKYC.findOne({ employerId });
+    if (existing && existing.status === 'approved') {
+      throw new ValidationError('KYC already approved. Cannot modify approved KYC.');
+    }
+
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    const processedDocuments: any = existing?.documents ? JSON.parse(JSON.stringify(existing.documents)) : {};
+
+    const handleFileUpload = async (file?: Express.Multer.File) => {
+      if (!file) return undefined;
+      const uploadResult = await uploadImage(file, `kyc/employer/${employerId.toString()}`);
+      try {
+        if (file.path && fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      } catch (cleanupErr) {
+        console.warn('⚠️ Failed to cleanup temporary file:', cleanupErr);
+      }
+      return {
+        url: uploadResult.secure_url,
+        publicId: uploadResult.public_id,
+      };
+    };
+
+    if (files?.companyProof && files.companyProof[0]) {
+      processedDocuments.companyProof = await handleFileUpload(files.companyProof[0]);
+    }
+    if (files?.idProof && files.idProof[0]) {
+      processedDocuments.idProof = await handleFileUpload(files.idProof[0]);
+    }
+    if (files?.gstDoc && files.gstDoc[0]) {
+      processedDocuments.gstCertificateUrl = (await handleFileUpload(files.gstDoc[0]))?.url;
+    }
+
+    if (!processedDocuments.companyProof) {
+      throw new ValidationError('Registration certificate is required');
+    }
+    if (!processedDocuments.idProof) {
+      throw new ValidationError('Director/Owner ID proof is required');
+    }
+
+    const kycData: any = {
+      employerId,
+      companyName: companyName.trim(),
+      businessRegistrationType,
+      GSTNumber: (gstNumber || GSTNumber)?.trim()?.toUpperCase() || undefined,
+      businessRegNo: businessRegNo?.trim() || undefined,
+      companyEmail: companyEmail.trim().toLowerCase(),
+      companyPhone: companyPhone?.trim() || undefined,
+      address: address.trim(),
+      city: city.trim(),
+      pinCode: pinCode.trim(),
+      website: website?.trim() || undefined,
+      authorizedName: (adminName || authorizedName)?.trim() || undefined,
+      fullName: (fullName || adminName)?.trim() || undefined,
+      adminEmail: adminEmail.trim().toLowerCase(),
+      adminPhone: adminPhone?.trim() || undefined,
+      designation: designation?.trim() || undefined,
+      documents: processedDocuments,
+      status: 'pending',
+      submittedAt: new Date()
+    };
+
+    if (existing?.status === 'rejected') {
+      delete kycData.rejectionReason;
+    }
+
+    const record = await EmployerKYC.findOneAndUpdate(
+      { employerId },
+      { $set: kycData },
+      { new: true, upsert: true }
+    );
+
+    await User.findByIdAndUpdate(employerId, {
+      kycStatus: 'pending',
+      isVerified: false,
+      kycPendingAt: new Date(),
+      $unset: { kycVerifiedAt: 1, kycRejectedAt: 1 }
+    });
+
+    return sendSuccessResponse(res, { 
+      kyc: record,
+      status: 'pending'
+    }, 'Corporate KYC submitted successfully');
+  })
+);
+
+// POST /api/kyc/employer/local-business → Submit Local Business KYC
+router.post(
+  '/employer/local-business',
+  authenticateToken,
+  requireEmployer,
+  upload.fields([
+    { name: 'shopPhoto', maxCount: 1 },
+    { name: 'businessLicense', maxCount: 1 },
+    { name: 'ownerIdProof', maxCount: 1 },
+  ]),
+  asyncHandler(async (req: AuthRequest, res: express.Response) => {
+    const employerId = req.user!._id;
+    const user = await User.findById(employerId);
+    
+    if (!user || user.employerCategory !== 'local_business') {
+      throw new ValidationError('This endpoint is only for local business employers');
+    }
+
+    const { 
+      businessName,
+      businessType,
+      ownerName,
+      ownerEmail,
+      ownerPhone,
+      address,
+      city,
+      pinCode,
+      locationPin,
+    } = req.body || {};
+
+    if (!businessName || !businessName.trim() || businessName.trim().length < 3) {
+      throw new ValidationError('Business name is required (minimum 3 characters)');
+    }
+    if (!businessType) {
+      throw new ValidationError('Business type is required');
+    }
+    if (!ownerName || !ownerName.trim() || ownerName.trim().length < 3) {
+      throw new ValidationError('Owner name is required (minimum 3 characters)');
+    }
+    if (!ownerEmail || !ownerEmail.trim()) {
+      throw new ValidationError('Owner email is required');
+    }
+    if (!address || !address.trim()) {
+      throw new ValidationError('Address is required');
+    }
+    if (!city || !city.trim()) {
+      throw new ValidationError('City is required');
+    }
+    if (!pinCode || !pinCode.trim()) {
+      throw new ValidationError('PIN code is required');
+    }
+
+    const existing = await LocalBusinessKYC.findOne({ employerId });
+    if (existing && existing.status === 'approved') {
+      throw new ValidationError('KYC already approved. Cannot modify approved KYC.');
+    }
+
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    const processedDocuments: any = existing?.documents ? JSON.parse(JSON.stringify(existing.documents)) : {};
+
+    const handleFileUpload = async (file?: Express.Multer.File) => {
+      if (!file) return undefined;
+      const uploadResult = await uploadImage(file, `kyc/local-business/${employerId.toString()}`);
+      try {
+        if (file.path && fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      } catch (cleanupErr) {
+        console.warn('⚠️ Failed to cleanup temporary file:', cleanupErr);
+      }
+      return {
+        url: uploadResult.secure_url,
+        publicId: uploadResult.public_id,
+      };
+    };
+
+    if (files?.shopPhoto && files.shopPhoto[0]) {
+      const result = await handleFileUpload(files.shopPhoto[0]);
+      if (result) {
+        processedDocuments.shopPhotoUrl = result.url;
+        processedDocuments.shopPhotoPublicId = result.publicId;
+      }
+    }
+    if (files?.businessLicense && files.businessLicense[0]) {
+      const result = await handleFileUpload(files.businessLicense[0]);
+      if (result) {
+        processedDocuments.businessLicenseUrl = result.url;
+        processedDocuments.businessLicensePublicId = result.publicId;
+      }
+    }
+    if (files?.ownerIdProof && files.ownerIdProof[0]) {
+      const result = await handleFileUpload(files.ownerIdProof[0]);
+      if (result) {
+        processedDocuments.ownerIdProofUrl = result.url;
+        processedDocuments.ownerIdProofPublicId = result.publicId;
+      }
+    }
+
+    // At least ONE proof document required
+    if (!processedDocuments.shopPhotoUrl && !processedDocuments.businessLicenseUrl && !processedDocuments.ownerIdProofUrl) {
+      throw new ValidationError('Please upload at least one proof document (Shop Photo, Business License, or Owner ID)');
+    }
+
+    const kycData: any = {
+      employerId,
+      businessName: businessName.trim(),
+      businessType,
+      ownerName: ownerName.trim(),
+      ownerEmail: ownerEmail.trim().toLowerCase(),
+      ownerPhone: ownerPhone?.trim() || '',
+      address: address.trim(),
+      city: city.trim(),
+      pinCode: pinCode.trim(),
+      locationPin: locationPin?.trim() || undefined,
+      documents: processedDocuments,
+      status: 'pending',
+      submittedAt: new Date()
+    };
+
+    if (existing?.status === 'rejected') {
+      delete kycData.rejectionReason;
+    }
+
+    const record = await LocalBusinessKYC.findOneAndUpdate(
+      { employerId },
+      { $set: kycData },
+      { new: true, upsert: true }
+    );
+
+    await User.findByIdAndUpdate(employerId, {
+      kycStatus: 'pending',
+      isVerified: false,
+      kycPendingAt: new Date(),
+      $unset: { kycVerifiedAt: 1, kycRejectedAt: 1 }
+    });
+
+    return sendSuccessResponse(res, { 
+      kyc: record,
+      status: 'pending'
+    }, 'Local Business KYC submitted successfully');
+  })
+);
+
+// POST /api/kyc/employer/individual → Submit Individual KYC
+router.post(
+  '/employer/individual',
+  authenticateToken,
+  requireEmployer,
+  upload.fields([
+    { name: 'aadhaarFront', maxCount: 1 },
+    { name: 'aadhaarBack', maxCount: 1 },
+    { name: 'selfie', maxCount: 1 },
+  ]),
+  asyncHandler(async (req: AuthRequest, res: express.Response) => {
+    const employerId = req.user!._id;
+    const user = await User.findById(employerId);
+    
+    if (!user || user.employerCategory !== 'individual') {
+      throw new ValidationError('This endpoint is only for individual employers');
+    }
+
+    const { 
+      fullName,
+      address,
+      city,
+      locationPin,
+      pinCode,
+      aadhaarNumber,
+    } = req.body || {};
+
+    if (!fullName || !fullName.trim() || fullName.trim().length < 3) {
+      throw new ValidationError('Full name is required (minimum 3 characters)');
+    }
+    if (!address || !address.trim()) {
+      throw new ValidationError('Address is required');
+    }
+    if (!city || !city.trim()) {
+      throw new ValidationError('City is required');
+    }
+    if (!aadhaarNumber || !aadhaarNumber.trim() || !/^[0-9]{12}$/.test(aadhaarNumber.trim())) {
+      throw new ValidationError('Aadhaar number must be exactly 12 digits');
+    }
+
+    const existing = await IndividualKYC.findOne({ employerId });
+    if (existing && existing.status === 'approved') {
+      throw new ValidationError('KYC already approved. Cannot modify approved KYC.');
+    }
+
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+
+    const handleFileUpload = async (file?: Express.Multer.File) => {
+      if (!file) return undefined;
+      const uploadResult = await uploadImage(file, `kyc/individual/${employerId.toString()}`);
+      try {
+        if (file.path && fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      } catch (cleanupErr) {
+        console.warn('⚠️ Failed to cleanup temporary file:', cleanupErr);
+      }
+      return {
+        url: uploadResult.secure_url,
+        publicId: uploadResult.public_id,
+      };
+    };
+
+    if (!files?.aadhaarFront || !files.aadhaarFront[0]) {
+      throw new ValidationError('Aadhaar front side is required');
+    }
+    if (!files?.aadhaarBack || !files.aadhaarBack[0]) {
+      throw new ValidationError('Aadhaar back side is required');
+    }
+    if (!files?.selfie || !files.selfie[0]) {
+      throw new ValidationError('Selfie is required for verification');
+    }
+
+    const aadhaarFrontResult = await handleFileUpload(files.aadhaarFront[0]);
+    const aadhaarBackResult = await handleFileUpload(files.aadhaarBack[0]);
+    const selfieResult = await handleFileUpload(files.selfie[0]);
+
+    if (!aadhaarFrontResult || !aadhaarBackResult || !selfieResult) {
+      throw new ValidationError('Failed to upload documents. Please try again.');
+    }
+
+    const kycData: any = {
+      employerId,
+      fullName: fullName.trim(),
+      aadhaarNumber: aadhaarNumber.trim(),
+      address: address.trim(),
+      city: city.trim(),
+      locationPin: locationPin?.trim() || undefined,
+      pinCode: pinCode?.trim() || undefined,
+      aadhaarFrontUrl: aadhaarFrontResult.url,
+      aadhaarFrontPublicId: aadhaarFrontResult.publicId,
+      aadhaarBackUrl: aadhaarBackResult.url,
+      aadhaarBackPublicId: aadhaarBackResult.publicId,
+      selfieUrl: selfieResult.url,
+      selfiePublicId: selfieResult.publicId,
+      aadhaarVerified: false, // For future OCR integration
+      selfieVerified: false, // For future face matching
+      status: 'pending',
+      submittedAt: new Date()
+    };
+
+    if (existing?.status === 'rejected') {
+      delete kycData.rejectionReason;
+    }
+
+    const record = await IndividualKYC.findOneAndUpdate(
+      { employerId },
+      { $set: kycData },
+      { new: true, upsert: true }
+    );
+
+    await User.findByIdAndUpdate(employerId, {
+      kycStatus: 'pending',
+      isVerified: false,
+      kycPendingAt: new Date(),
+      $unset: { kycVerifiedAt: 1, kycRejectedAt: 1 }
+    });
+
+    return sendSuccessResponse(res, { 
+      kyc: record,
+      status: 'pending'
+    }, 'Individual KYC submitted successfully');
+  })
+);
+
+// GET /api/kyc/employer/:id/status → fetch employer KYC status (checks correct model based on category)
 router.get('/employer/:id/status', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { id } = req.params;
   
   console.log('🔍 Fetching KYC status for employer:', id);
   
   // Get user KYC status
-  const user = await User.findById(id).select('kycStatus isVerified kycVerifiedAt kycRejectedAt kycPendingAt');
+  const user = await User.findById(id).select('kycStatus isVerified kycVerifiedAt kycRejectedAt kycPendingAt employerCategory');
   
-  // Get detailed KYC record
-  const kycRecord = await EmployerKYC.findOne({ employerId: id });
+  if (!user) {
+    throw new ValidationError('User not found');
+  }
+  
+  // Get detailed KYC record based on employer category
+  let kycRecord: any = null;
+  if (user.employerCategory === 'corporate') {
+    kycRecord = await EmployerKYC.findOne({ employerId: id, isArchived: { $ne: true } });
+  } else if (user.employerCategory === 'local_business') {
+    kycRecord = await LocalBusinessKYC.findOne({ employerId: id, isArchived: { $ne: true } });
+  } else if (user.employerCategory === 'individual') {
+    kycRecord = await IndividualKYC.findOne({ employerId: id, isArchived: { $ne: true } });
+  }
   
   // Determine the most accurate status
   let status = 'not-submitted';
@@ -234,6 +683,7 @@ router.get('/employer/:id/status', authenticateToken, asyncHandler(async (req: A
   
   console.log('📊 KYC Status Debug:', {
     employerId: id,
+    employerCategory: user.employerCategory,
     userKycStatus: user?.kycStatus,
     kycRecordStatus: kycRecord?.status,
     finalStatus: status,
@@ -249,13 +699,350 @@ router.get('/employer/:id/status', authenticateToken, asyncHandler(async (req: A
       isVerified: user?.isVerified,
       kycVerifiedAt: user?.kycVerifiedAt,
       kycRejectedAt: user?.kycRejectedAt,
-      kycPendingAt: user?.kycPendingAt
+      kycPendingAt: user?.kycPendingAt,
+      employerCategory: user.employerCategory
     },
     completionPercentage: (kycRecord as any)?.completionPercentage || 0,
     fullAddress: (kycRecord as any)?.fullAddress || null,
     submittedAt: kycRecord?.submittedAt || null,
     reviewedAt: kycRecord?.reviewedAt || null
   }, 'Employer KYC status retrieved');
+}));
+
+// ===== Individual KYC endpoints (Category C) =====
+// POST /api/kyc/individual → submit individual KYC (Aadhaar + selfie)
+router.post(
+  '/individual',
+  authenticateToken,
+  requireEmployer,
+  upload.fields([
+    { name: 'aadhaarFront', maxCount: 1 },
+    { name: 'aadhaarBack', maxCount: 1 },
+    { name: 'selfie', maxCount: 1 },
+  ]),
+  asyncHandler(async (req: AuthRequest, res: express.Response) => {
+    const employerId = req.user!._id;
+    
+    // Verify employer category
+    const user = await User.findById(employerId);
+    if (user?.employerCategory !== 'individual') {
+      throw new ValidationError('This KYC route is only for individual employers');
+    }
+
+    const { 
+      fullName,
+      aadhaarNumber
+    } = req.body || {};
+
+    // Validate required fields
+    if (!fullName || !fullName.trim()) {
+      throw new ValidationError('Full name is required');
+    }
+    if (!aadhaarNumber || !/^[0-9]{12}$/.test(aadhaarNumber)) {
+      throw new ValidationError('Valid 12-digit Aadhaar number is required');
+    }
+
+    // Check if KYC is already approved
+    const existing = await IndividualKYC.findOne({ employerId });
+    if (existing && existing.status === 'approved') {
+      throw new ValidationError('KYC already approved. Cannot modify approved KYC.');
+    }
+
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+
+    const handleFileUpload = async (file?: Express.Multer.File) => {
+      if (!file) return undefined;
+      const uploadResult = await uploadImage(file, `kyc/individual/${employerId.toString()}`);
+      try {
+        if (file.path && fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      } catch (cleanupErr) {
+        console.warn('⚠️ Failed to cleanup temporary file:', cleanupErr);
+      }
+      return {
+        url: uploadResult.secure_url,
+        publicId: uploadResult.public_id,
+      };
+    };
+
+    // Prepare KYC data
+    const kycData: any = {
+      employerId,
+      fullName: fullName.trim(),
+      aadhaarNumber: aadhaarNumber.trim(),
+      status: 'pending',
+      submittedAt: new Date()
+    };
+
+    // Handle file uploads
+    if (files?.aadhaarFront && files.aadhaarFront[0]) {
+      const result = await handleFileUpload(files.aadhaarFront[0]);
+      if (result) {
+        kycData.aadhaarFrontUrl = result.url;
+        kycData.aadhaarFrontPublicId = result.publicId;
+      }
+    }
+
+    if (files?.aadhaarBack && files.aadhaarBack[0]) {
+      const result = await handleFileUpload(files.aadhaarBack[0]);
+      if (result) {
+        kycData.aadhaarBackUrl = result.url;
+        kycData.aadhaarBackPublicId = result.publicId;
+      }
+    }
+
+    if (files?.selfie && files.selfie[0]) {
+      const result = await handleFileUpload(files.selfie[0]);
+      if (result) {
+        kycData.selfieUrl = result.url;
+        kycData.selfiePublicId = result.publicId;
+      }
+    }
+
+    // If resubmitting after rejection, clear rejection reason
+    if (existing?.status === 'rejected') {
+      delete kycData.rejectionReason;
+    }
+
+    // Save or update KYC record
+    const record = await IndividualKYC.findOneAndUpdate(
+      { employerId },
+      { $set: kycData },
+      { new: true, upsert: true }
+    );
+
+    // Update user KYC status
+    await User.findByIdAndUpdate(
+      employerId,
+      {
+        $set: {
+          kycStatus: 'pending',
+          kycPendingAt: new Date(),
+          isVerified: false
+        },
+        $unset: { kycVerifiedAt: 1, kycRejectedAt: 1 }
+      }
+    );
+
+    return sendSuccessResponse(res, { 
+      kyc: record
+    }, 'Individual KYC submitted successfully');
+  })
+);
+
+// GET /api/kyc/individual/status → fetch individual KYC status
+router.get('/individual/status', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const employerId = req.user!._id;
+  
+  const user = await User.findById(employerId);
+  if (user?.employerCategory !== 'individual') {
+    throw new ValidationError('This route is only for individual employers');
+  }
+
+  const kycRecord = await IndividualKYC.findOne({ employerId });
+  
+  let status = 'not-submitted';
+  if (kycRecord) {
+    status = kycRecord.status;
+  } else if (user?.kycStatus) {
+    status = user.kycStatus;
+  }
+
+  return sendSuccessResponse(res, { 
+    status, 
+    kyc: kycRecord,
+    user: {
+      kycStatus: user?.kycStatus,
+      isVerified: user?.isVerified
+    }
+  }, 'Individual KYC status retrieved');
+}));
+
+// ===== Local Business KYC endpoints (Category B) =====
+// POST /api/kyc/local-business → submit local business KYC (simplified)
+router.post(
+  '/local-business',
+  authenticateToken,
+  requireEmployer,
+  upload.fields([
+    { name: 'tradeLicense', maxCount: 1 },
+    { name: 'shopLicense', maxCount: 1 },
+    { name: 'addressProof', maxCount: 1 },
+    { name: 'ownerIdProof', maxCount: 1 },
+  ]),
+  asyncHandler(async (req: AuthRequest, res: express.Response) => {
+    const employerId = req.user!._id;
+    
+    // Verify employer category
+    const user = await User.findById(employerId);
+    if (user?.employerCategory !== 'local_business') {
+      throw new ValidationError('This KYC route is only for local business employers');
+    }
+
+    const { 
+      businessName,
+      businessType,
+      ownerName,
+      ownerPhone,
+      address,
+      city,
+      latitude,
+      longitude
+    } = req.body || {};
+
+    // Validate required fields
+    if (!businessName || !businessName.trim()) {
+      throw new ValidationError('Business name is required');
+    }
+    if (!ownerName || !ownerName.trim()) {
+      throw new ValidationError('Owner name is required');
+    }
+    if (!ownerPhone || !/^[\+]?[0-9\s\-\(\)]{10,}$/.test(ownerPhone)) {
+      throw new ValidationError('Valid owner phone number is required');
+    }
+    if (!address || !address.trim()) {
+      throw new ValidationError('Business address is required');
+    }
+
+    // Check if KYC is already approved
+    const existing = await LocalBusinessKYC.findOne({ employerId });
+    if (existing && existing.status === 'approved') {
+      throw new ValidationError('KYC already approved. Cannot modify approved KYC.');
+    }
+
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+
+    const handleFileUpload = async (file?: Express.Multer.File) => {
+      if (!file) return undefined;
+      const uploadResult = await uploadImage(file, `kyc/local-business/${employerId.toString()}`);
+      try {
+        if (file.path && fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      } catch (cleanupErr) {
+        console.warn('⚠️ Failed to cleanup temporary file:', cleanupErr);
+      }
+      return {
+        url: uploadResult.secure_url,
+        publicId: uploadResult.public_id,
+      };
+    };
+
+    // Prepare documents object
+    const documents: any = {};
+
+    if (files?.tradeLicense && files.tradeLicense[0]) {
+      const result = await handleFileUpload(files.tradeLicense[0]);
+      if (result) {
+        documents.tradeLicenseUrl = result.url;
+        documents.tradeLicensePublicId = result.publicId;
+      }
+    }
+
+    if (files?.shopLicense && files.shopLicense[0]) {
+      const result = await handleFileUpload(files.shopLicense[0]);
+      if (result) {
+        documents.shopLicenseUrl = result.url;
+        documents.shopLicensePublicId = result.publicId;
+      }
+    }
+
+    if (files?.addressProof && files.addressProof[0]) {
+      const result = await handleFileUpload(files.addressProof[0]);
+      if (result) {
+        documents.addressProofUrl = result.url;
+        documents.addressProofPublicId = result.publicId;
+      }
+    }
+
+    if (files?.ownerIdProof && files.ownerIdProof[0]) {
+      const result = await handleFileUpload(files.ownerIdProof[0]);
+      if (result) {
+        documents.ownerIdProofUrl = result.url;
+        documents.ownerIdProofPublicId = result.publicId;
+      }
+    }
+
+    // Prepare KYC data
+    const kycData: any = {
+      employerId,
+      businessName: businessName.trim(),
+      businessType: businessType?.trim() || undefined,
+      ownerName: ownerName.trim(),
+      ownerPhone: ownerPhone.trim(),
+      address: address.trim(),
+      city: city?.trim() || undefined,
+      latitude: latitude?.trim() || undefined,
+      longitude: longitude?.trim() || undefined,
+      status: 'pending',
+      submittedAt: new Date()
+    };
+
+    if (Object.keys(documents).length > 0) {
+      kycData.documents = documents;
+    }
+
+    // If resubmitting after rejection, clear rejection reason
+    if (existing?.status === 'rejected') {
+      delete kycData.rejectionReason;
+    }
+
+    // Save or update KYC record
+    const record = await LocalBusinessKYC.findOneAndUpdate(
+      { employerId },
+      { $set: kycData },
+      { new: true, upsert: true }
+    );
+
+    // Update user KYC status
+    await User.findByIdAndUpdate(
+      employerId,
+      {
+        $set: {
+          kycStatus: 'pending',
+          kycPendingAt: new Date(),
+          isVerified: false,
+          companyName: businessName.trim()
+        },
+        $unset: { kycVerifiedAt: 1, kycRejectedAt: 1 }
+      }
+    );
+
+    return sendSuccessResponse(res, { 
+      kyc: record,
+      fullAddress: (record as any).fullAddress
+    }, 'Local business KYC submitted successfully');
+  })
+);
+
+// GET /api/kyc/local-business/status → fetch local business KYC status
+router.get('/local-business/status', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const employerId = req.user!._id;
+  
+  const user = await User.findById(employerId);
+  if (user?.employerCategory !== 'local_business') {
+    throw new ValidationError('This route is only for local business employers');
+  }
+
+  const kycRecord = await LocalBusinessKYC.findOne({ employerId });
+  
+  let status = 'not-submitted';
+  if (kycRecord) {
+    status = kycRecord.status;
+  } else if (user?.kycStatus) {
+    status = user.kycStatus;
+  }
+
+  return sendSuccessResponse(res, { 
+    status, 
+    kyc: kycRecord,
+    user: {
+      kycStatus: user?.kycStatus,
+      isVerified: user?.isVerified
+    },
+    fullAddress: (kycRecord as any)?.fullAddress || null
+  }, 'Local business KYC status retrieved');
 }));
 
 // ===== Admin KYC Management Endpoints =====

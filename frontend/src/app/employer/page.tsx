@@ -21,6 +21,9 @@ export default function EmployerDashboard() {
   const [showKycPrompt, setShowKycPrompt] = useState(false);
   const [kycPromptMessage, setKycPromptMessage] = useState('');
   const [kycRejectionReason, setKycRejectionReason] = useState<string | null>(null);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<'corporate' | 'local_business' | 'individual' | null>(null);
+  const [savingCategory, setSavingCategory] = useState(false);
   
   // Real data states
   const [loading, setLoading] = useState(true);
@@ -46,9 +49,50 @@ const normalizeStatus = (status?: string | null): 'not-submitted' | 'pending' | 
     setShowKycPrompt(false);
   };
 
+  const handleCategorySelect = async () => {
+    if (!selectedCategory) {
+      alert('Please select an employer type');
+      return;
+    }
+
+    try {
+      setSavingCategory(true);
+      await apiService.updateEmployerCategory(selectedCategory);
+      updateUser({ employerCategory: selectedCategory });
+      setShowCategoryModal(false);
+      // Redirect to KYC form after category selection
+      router.push('/employer/kyc');
+    } catch (error: any) {
+      console.error('Error updating employer category:', error);
+      alert(error?.message || 'Failed to update employer category. Please try again.');
+    } finally {
+      setSavingCategory(false);
+    }
+  };
+
   useEffect(() => {
     const init = async () => {
       if (!user || user.userType !== 'employer' || !user._id) return;
+
+      // Check if employer category is set
+      if (!user.employerCategory) {
+        // Redirect to role selection page
+        router.push('/employer/select-role');
+        return;
+      }
+
+      // Redirect to type-specific home page
+      const category = user.employerCategory;
+      if (category === 'corporate') {
+        router.push('/employer/corporate');
+        return;
+      } else if (category === 'local_business') {
+        router.push('/employer/local');
+        return;
+      } else if (category === 'individual') {
+        router.push('/employer/individual');
+        return;
+      }
 
       try {
         setLoading(true);
@@ -94,22 +138,30 @@ const normalizeStatus = (status?: string | null): 'not-submitted' | 'pending' | 
           setShowKycPrompt(true);
         }
 
-        // 2) Fetch employer jobs with correct API call
+        // 2) Fetch employer jobs list (NOT by ID)
         let normalizedJobs: any[] = [];
         try {
-          console.log('🔍 Fetching jobs for employerId:', employerId);
-          const jobsResponse = await apiService.getEmployerDashboardJobs(employerId, 1, 1000);
-        const jobsRaw = jobsResponse?.jobs || [];
-        normalizedJobs = jobsRaw
-          .map((job: any) => normalizeEmployerJob(job))
-          .filter((job: any) => !!job);
-          setJobs(normalizedJobs);
-          console.log('📊 Fetched jobs:', normalizedJobs.length, 'jobs');
-          console.log('📊 Jobs data:', normalizedJobs);
+          console.log('🔍 Fetching jobs list for employer');
+          // Fetch job LIST first - does NOT call /jobs/:jobId
+          const jobsResponse = await apiService.getEmployerJobsList(1, 1000);
+          const jobsRaw = jobsResponse?.jobs || [];
+          
+          if (jobsRaw.length === 0) {
+            // No jobs posted yet - show empty state, do NOT call getJobDetails
+            console.log('📊 No jobs posted yet');
+            setJobs([]);
+          } else {
+            // Only normalize jobs that exist - do NOT fetch individual job details
+            normalizedJobs = jobsRaw
+              .map((job: any) => normalizeEmployerJob(job))
+              .filter((job: any) => !!job && !!job._id); // Ensure job has valid ID
+            setJobs(normalizedJobs);
+            console.log('📊 Loaded', normalizedJobs.length, 'jobs from list');
+          }
         } catch (e) {
           console.error('❌ Error loading jobs:', e);
           console.error('❌ Error details:', e);
-          // Don't crash the app, continue with empty jobs array
+          setJobs([]); // Set empty array on error
         }
 
         // 3) Fetch employer applications (keep existing logic)
@@ -185,10 +237,11 @@ const normalizeStatus = (status?: string | null): 'not-submitted' | 'pending' | 
       if (!user?._id) {
         throw new Error('Unable to refresh jobs without a valid employer id');
       }
-      const jobsResponse = await apiService.getEmployerDashboardJobs(user._id);
+      // Fetch job LIST - does NOT call /jobs/:jobId
+      const jobsResponse = await apiService.getEmployerJobsList(1, 1000);
       const updatedJobs = (jobsResponse.jobs || [])
         .map((job: any) => normalizeEmployerJob(job))
-        .filter((job: any) => !!job);
+        .filter((job: any) => !!job && !!job._id); // Ensure job has valid ID
       setJobs(updatedJobs);
 
       // Recalculate stats with updated jobs

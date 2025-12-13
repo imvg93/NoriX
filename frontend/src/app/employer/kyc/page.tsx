@@ -35,7 +35,12 @@ export default function EmployerKYCPage() {
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<'not-submitted' | 'pending' | 'approved' | 'rejected'>('not-submitted');
   const [kycRecord, setKycRecord] = useState<any | null>(null);
-  const [formData, setFormData] = useState({
+  
+  // Check employer category
+  const employerCategory = user?.employerCategory as 'corporate' | 'local_business' | 'individual' | undefined;
+  
+  // Corporate KYC form data
+  const [corporateFormData, setCorporateFormData] = useState({
     fullName: '',
     companyName: '',
     businessRegNo: '',
@@ -46,9 +51,48 @@ export default function EmployerKYCPage() {
     gstNo: '',
     pan: ''
   });
-  const [files, setFiles] = useState<{ idProof: File | null; companyProof: File | null }>({
+  
+  // Local Business KYC form data
+  const [localBusinessFormData, setLocalBusinessFormData] = useState({
+    businessName: '',
+    businessType: '',
+    ownerName: '',
+    ownerPhone: '',
+    address: '',
+    city: ''
+  });
+  
+  // Individual KYC form data
+  const [individualFormData, setIndividualFormData] = useState({
+    fullName: '',
+    aadhaarNumber: ''
+  });
+  
+  const [corporateFiles, setCorporateFiles] = useState<{ idProof: File | null; companyProof: File | null }>({
     idProof: null,
     companyProof: null,
+  });
+  
+  const [localBusinessFiles, setLocalBusinessFiles] = useState<{
+    tradeLicense: File | null;
+    shopLicense: File | null;
+    addressProof: File | null;
+    ownerIdProof: File | null;
+  }>({
+    tradeLicense: null,
+    shopLicense: null,
+    addressProof: null,
+    ownerIdProof: null,
+  });
+  
+  const [individualFiles, setIndividualFiles] = useState<{
+    aadhaarFront: File | null;
+    aadhaarBack: File | null;
+    selfie: File | null;
+  }>({
+    aadhaarFront: null,
+    aadhaarBack: null,
+    selfie: null,
   });
 
   const normalizeStatus = (rawStatus?: string | null): 'not-submitted' | 'pending' | 'approved' | 'rejected' => {
@@ -59,6 +103,13 @@ export default function EmployerKYCPage() {
     }
     return 'not-submitted';
   };
+
+  // Redirect if no employer category is set
+  useEffect(() => {
+    if (user?.userType === 'employer' && !user?.employerCategory) {
+      router.push('/employer');
+    }
+  }, [user, router]);
 
   useEffect(() => {
     let isMounted = true;
@@ -78,12 +129,33 @@ export default function EmployerKYCPage() {
         return;
       }
 
+      // Check if category is set
+      if (!user.employerCategory) {
+        if (isMounted) {
+          setLoadingStatus(false);
+        }
+        router.push('/employer');
+        return;
+      }
+
       try {
         if (isMounted) {
           setLoadingStatus(true);
         }
         
-        const res = await apiService.getEmployerKYCStatus(user._id);
+        // Fetch KYC status based on category
+        let res: any;
+        if (user.employerCategory === 'corporate') {
+          res = await apiService.getEmployerKYCStatus(user._id);
+        } else if (user.employerCategory === 'local_business') {
+          const response = await apiService.get(`/kyc/local-business/status`);
+          res = response.data;
+        } else if (user.employerCategory === 'individual') {
+          const response = await apiService.get(`/kyc/individual/status`);
+          res = response.data;
+        } else {
+          throw new Error('Invalid employer category');
+        }
         
         if (!isMounted) return;
         
@@ -96,25 +168,47 @@ export default function EmployerKYCPage() {
           updateUser({ kycStatus: normalized as any });
         }
 
+        // Populate form data based on category
         if (res?.kyc) {
-          setFormData(prev => ({
-            ...prev,
-            fullName: res.kyc.fullName || res.kyc.authorizedName || prev.fullName,
-            companyName: res.kyc.companyName || prev.companyName,
-            businessRegNo: res.kyc.businessRegNo || prev.businessRegNo,
-            companyEmail: res.kyc.companyEmail || prev.companyEmail,
-            companyPhone: res.kyc.companyPhone || prev.companyPhone,
-            address: res.kyc.address || prev.address,
-            city: res.kyc.city || prev.city,
-            gstNo: res.kyc.GSTNumber || res.kyc.gstNo || prev.gstNo,
-            pan: res.kyc.PAN || prev.pan,
-          }));
+          if (user.employerCategory === 'corporate') {
+            setCorporateFormData(prev => ({
+              ...prev,
+              fullName: res.kyc.fullName || res.kyc.authorizedName || prev.fullName,
+              companyName: res.kyc.companyName || prev.companyName,
+              businessRegNo: res.kyc.businessRegNo || prev.businessRegNo,
+              companyEmail: res.kyc.companyEmail || prev.companyEmail,
+              companyPhone: res.kyc.companyPhone || prev.companyPhone,
+              address: res.kyc.address || prev.address,
+              city: res.kyc.city || prev.city,
+              gstNo: res.kyc.GSTNumber || res.kyc.gstNo || prev.gstNo,
+              pan: res.kyc.PAN || prev.pan,
+            }));
+          } else if (user.employerCategory === 'local_business') {
+            setLocalBusinessFormData(prev => ({
+              ...prev,
+              businessName: res.kyc.businessName || prev.businessName,
+              businessType: res.kyc.businessType || prev.businessType,
+              ownerName: res.kyc.ownerName || prev.ownerName,
+              ownerPhone: res.kyc.ownerPhone || prev.ownerPhone,
+              address: res.kyc.address || prev.address,
+              city: res.kyc.city || prev.city,
+            }));
+          } else if (user.employerCategory === 'individual') {
+            setIndividualFormData(prev => ({
+              ...prev,
+              fullName: res.kyc.fullName || prev.fullName,
+              aadhaarNumber: res.kyc.aadhaarNumber || prev.aadhaarNumber,
+            }));
+          }
         }
       } catch (error: any) {
         console.error('❌ Failed to load employer KYC status:', error);
         if (isMounted) {
           setLoadingStatus(false);
-          alert(`Failed to load KYC status: ${error?.message || 'Unknown error'}`);
+          // Don't show alert if category is not set (will redirect)
+          if (!error?.message?.includes('category')) {
+            alert(`Failed to load KYC status: ${error?.message || 'Unknown error'}`);
+          }
         }
         return;
       } finally {
@@ -130,7 +224,7 @@ export default function EmployerKYCPage() {
       isMounted = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?._id, user?.userType]);
+  }, [user?._id, user?.userType, user?.employerCategory]);
 
   const isApproved = status === 'approved';
   const isPending = status === 'pending';
@@ -139,34 +233,66 @@ export default function EmployerKYCPage() {
   const idProofUrl = kycRecord?.documents?.idProof?.url;
   const companyProofUrl = kycRecord?.documents?.companyProof?.url;
 
+  // Conditional form data references based on employer category
+  const formData = employerCategory === 'corporate' ? corporateFormData :
+                   employerCategory === 'local_business' ? localBusinessFormData :
+                   individualFormData;
+  
+  const setFormData = employerCategory === 'corporate' ? setCorporateFormData :
+                      employerCategory === 'local_business' ? setLocalBusinessFormData :
+                      setIndividualFormData;
+
+  // Conditional files references based on employer category
+  const files = employerCategory === 'corporate' ? corporateFiles :
+                employerCategory === 'local_business' ? localBusinessFiles :
+                individualFiles;
+  
+  const setFiles = employerCategory === 'corporate' ? setCorporateFiles :
+                   employerCategory === 'local_business' ? setLocalBusinessFiles :
+                   setIndividualFiles;
+
   // Fill test data function
   const fillTestData = () => {
     if (!canSubmit) return;
-    setFormData({
-      fullName: 'Rajesh Kumar',
-      companyName: 'Tech Solutions Pvt Ltd',
-      businessRegNo: 'REG-TS-2024-09',
-      companyEmail: 'hr@techsolutions.com',
-      companyPhone: '+91 98765 43210',
-      address: '123 Business Park, Sector 5',
-      city: 'Hyderabad',
-      gstNo: '22AAAAA0000A1Z5',
-      pan: 'ABCDE1234F'
-    });
+    if (employerCategory === 'corporate') {
+      setCorporateFormData({
+        fullName: 'Rajesh Kumar',
+        companyName: 'Tech Solutions Pvt Ltd',
+        businessRegNo: 'REG-TS-2024-09',
+        companyEmail: 'hr@techsolutions.com',
+        companyPhone: '+91 98765 43210',
+        address: '123 Business Park, Sector 5',
+        city: 'Hyderabad',
+        gstNo: '22AAAAA0000A1Z5',
+        pan: 'ABCDE1234F'
+      });
+    }
   };
 
   // Handle input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === 'pan' ? value.toUpperCase() : value
-    }));
+    if (employerCategory === 'corporate') {
+      setCorporateFormData(prev => ({
+        ...prev,
+        [name]: name === 'pan' ? value.toUpperCase() : value
+      }));
+    } else if (employerCategory === 'local_business') {
+      setLocalBusinessFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    } else {
+      setIndividualFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const handleFileChange = (name: 'idProof' | 'companyProof', fileList: FileList | null) => {
     const file = fileList && fileList.length > 0 ? fileList[0] : null;
-    setFiles(prev => ({
+    setFiles((prev: any) => ({
       ...prev,
       [name]: file,
     }));
@@ -185,7 +311,8 @@ export default function EmployerKYCPage() {
       return;
     }
 
-    if (!formData.companyName.trim()) {
+    // Add null checks for formData fields
+    if (employerCategory === 'corporate' && !(formData as typeof corporateFormData).companyName?.trim()) {
       alert('Company Name is required');
       return;
     }
@@ -194,22 +321,27 @@ export default function EmployerKYCPage() {
       setSubmitting(true);
 
       const payload = new FormData();
-      payload.append('companyName', formData.companyName.trim());
-      if (formData.fullName.trim()) payload.append('fullName', formData.fullName.trim());
-      if (formData.businessRegNo.trim()) payload.append('businessRegNo', formData.businessRegNo.trim());
-      if (formData.companyEmail.trim()) payload.append('companyEmail', formData.companyEmail.trim());
-      if (formData.companyPhone.trim()) payload.append('companyPhone', formData.companyPhone.trim());
-      if (formData.address.trim()) payload.append('address', formData.address.trim());
-      if (formData.city.trim()) payload.append('city', formData.city.trim());
-      if (formData.gstNo.trim()) payload.append('gstNo', formData.gstNo.trim());
-      if (formData.pan.trim()) payload.append('PAN', formData.pan.trim());
+      
+      // Handle corporate form data
+      if (employerCategory === 'corporate') {
+        const corpData = formData as typeof corporateFormData;
+        payload.append('companyName', corpData.companyName?.trim() || '');
+        if (corpData.fullName?.trim()) payload.append('fullName', corpData.fullName.trim());
+        if (corpData.businessRegNo?.trim()) payload.append('businessRegNo', corpData.businessRegNo.trim());
+        if (corpData.companyEmail?.trim()) payload.append('companyEmail', corpData.companyEmail.trim());
+        if (corpData.companyPhone?.trim()) payload.append('companyPhone', corpData.companyPhone.trim());
+        if (corpData.address?.trim()) payload.append('address', corpData.address.trim());
+        if (corpData.city?.trim()) payload.append('city', corpData.city.trim());
+        if (corpData.gstNo?.trim()) payload.append('gstNo', corpData.gstNo.trim());
+        if (corpData.pan?.trim()) payload.append('PAN', corpData.pan.trim());
 
-      if (files.idProof) {
-        payload.append('idProof', files.idProof, files.idProof.name);
-      }
-
-      if (files.companyProof) {
-        payload.append('companyProof', files.companyProof, files.companyProof.name);
+        const corpFiles = files as typeof corporateFiles;
+        if (corpFiles.idProof) {
+          payload.append('idProof', corpFiles.idProof, corpFiles.idProof.name);
+        }
+        if (corpFiles.companyProof) {
+          payload.append('companyProof', corpFiles.companyProof, corpFiles.companyProof.name);
+        }
       }
 
       await apiService.submitEmployerKYC(payload);
@@ -217,7 +349,9 @@ export default function EmployerKYCPage() {
       alert('✅ KYC submitted successfully! Your status is now "Pending". You will be able to post jobs once approved.');
       setStatus('pending');
       updateUser({ kycStatus: 'pending' as any });
-      setFiles({ idProof: null, companyProof: null });
+      if (employerCategory === 'corporate') {
+        setCorporateFiles({ idProof: null, companyProof: null });
+      }
       // Refresh KYC status
       const res = await apiService.getEmployerKYCStatus(user._id);
       const normalized = normalizeStatus(res?.status || res?.user?.kycStatus);
@@ -270,27 +404,27 @@ export default function EmployerKYCPage() {
   }
 
   const getStatusBadge = () => {
+    if (isPending && kycRecord) {
+      return (
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200">
+          <Upload className="w-4 h-4 text-blue-600" />
+          <span className="text-sm font-medium text-blue-700">Uploaded</span>
+        </div>
+      );
+    }
+    if (status === 'rejected' && kycRecord) {
+      return (
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200">
+          <Upload className="w-4 h-4 text-blue-600" />
+          <span className="text-sm font-medium text-blue-700">Updated</span>
+        </div>
+      );
+    }
     if (isApproved) {
       return (
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-50 border border-green-200">
           <CheckCircle className="w-4 h-4 text-green-600" />
           <span className="text-sm font-medium text-green-700">Verified</span>
-        </div>
-      );
-    }
-    if (isPending) {
-      return (
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200">
-          <Clock className="w-4 h-4 text-blue-600" />
-          <span className="text-sm font-medium text-blue-700">Pending Review</span>
-        </div>
-      );
-    }
-    if (status === 'rejected') {
-      return (
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-50 border border-red-200">
-          <X className="w-4 h-4 text-red-600" />
-          <span className="text-sm font-medium text-red-700">Rejected</span>
         </div>
       );
     }
@@ -354,41 +488,25 @@ export default function EmployerKYCPage() {
           </div>
         </div>
 
-        {/* Status Alerts */}
-        {isApproved && (
-          <div className="mb-6 rounded-xl border border-green-200 bg-green-50/50 p-5">
-            <div className="flex items-start gap-3">
-              <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-              <div className="flex-1">
-                <h3 className="text-base font-medium text-green-800 mb-1">Verification Approved</h3>
-                <p className="text-sm text-green-700">Your business has been verified. You can now post jobs and access all features.</p>
-              </div>
-            </div>
-          </div>
-        )}
-        {isPending && (
+        {/* Status Alerts - Only show uploaded/updated messages */}
+        {isPending && kycRecord && (
           <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50/50 p-5">
             <div className="flex items-start gap-3">
-              <Clock className="w-5 h-5 text-blue-600 mt-0.5" />
+              <Upload className="w-5 h-5 text-blue-600 mt-0.5" />
               <div className="flex-1">
-                <h3 className="text-base font-medium text-blue-800 mb-1">Under Review</h3>
-                <p className="text-sm text-blue-700">Your verification is being reviewed. We'll notify you via email once complete.</p>
+                <h3 className="text-base font-medium text-blue-800 mb-1">KYC Uploaded</h3>
+                <p className="text-sm text-blue-700">Your KYC documents have been successfully uploaded and submitted for review.</p>
               </div>
             </div>
           </div>
         )}
-        {status === 'rejected' && (
-          <div className="mb-6 rounded-xl border border-red-200 bg-red-50/50 p-5">
+        {status === 'rejected' && kycRecord && (
+          <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50/50 p-5">
             <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+              <Upload className="w-5 h-5 text-blue-600 mt-0.5" />
               <div className="flex-1">
-                <h3 className="text-base font-medium text-red-800 mb-1">Verification Rejected</h3>
-                <p className="text-sm text-red-700 mb-2">
-                  {kycRecord?.rejectionReason 
-                    ? `Reason: ${kycRecord.rejectionReason}` 
-                    : 'Please review your submitted information and documents, then resubmit.'}
-                </p>
-                <p className="text-xs text-red-600">Update your details and upload the correct documents to resubmit.</p>
+                <h3 className="text-base font-medium text-blue-800 mb-1">KYC Updated</h3>
+                <p className="text-sm text-blue-700">Your KYC has been updated. Please update your details and upload the correct documents to resubmit.</p>
               </div>
             </div>
           </div>
@@ -416,7 +534,7 @@ export default function EmployerKYCPage() {
                 <input
                   type="text"
                   name="companyName"
-                  value={formData.companyName}
+                  value={corporateFormData.companyName}
                   onChange={handleInputChange}
                   required
                   disabled={disableInputs}
@@ -436,7 +554,7 @@ export default function EmployerKYCPage() {
                 <input
                   type="text"
                   name="businessRegNo"
-                  value={formData.businessRegNo}
+                  value={(formData as typeof corporateFormData).businessRegNo || ''}
                   onChange={handleInputChange}
                   disabled={disableInputs}
                   placeholder="MSME / UDYAM / Shop & Establishment ID"
@@ -455,7 +573,7 @@ export default function EmployerKYCPage() {
                 <input
                   type="email"
                   name="companyEmail"
-                  value={formData.companyEmail}
+                  value={(formData as typeof corporateFormData).companyEmail || ''}
                   onChange={handleInputChange}
                   disabled={disableInputs}
                   placeholder="official@company.com"
@@ -474,7 +592,7 @@ export default function EmployerKYCPage() {
                 <input
                   type="tel"
                   name="companyPhone"
-                  value={formData.companyPhone}
+                  value={(formData as typeof corporateFormData).companyPhone || ''}
                   onChange={handleInputChange}
                   disabled={disableInputs}
                   placeholder="+91 XXXXX XXXXX"
@@ -508,7 +626,7 @@ export default function EmployerKYCPage() {
                 <input
                   type="text"
                   name="fullName"
-                  value={formData.fullName}
+                  value={(formData as typeof corporateFormData).fullName || ''}
                   onChange={handleInputChange}
                   disabled={disableInputs}
                   placeholder="Owner / HR / Representative"
@@ -542,7 +660,7 @@ export default function EmployerKYCPage() {
                 <input
                   type="text"
                   name="address"
-                  value={formData.address}
+                  value={(formData as typeof corporateFormData).address || ''}
                   onChange={handleInputChange}
                   disabled={disableInputs}
                   placeholder="Building, Street, Area"
@@ -561,7 +679,7 @@ export default function EmployerKYCPage() {
                 <input
                   type="text"
                   name="city"
-                  value={formData.city}
+                  value={(formData as typeof corporateFormData).city || ''}
                   onChange={handleInputChange}
                   disabled={disableInputs}
                   placeholder="City"
@@ -595,7 +713,7 @@ export default function EmployerKYCPage() {
                 <input
                   type="text"
                   name="gstNo"
-                  value={formData.gstNo}
+                  value={(formData as typeof corporateFormData).gstNo || ''}
                   onChange={handleInputChange}
                   disabled={disableInputs}
                   placeholder="22AAAAA0000A1Z5"
@@ -614,7 +732,7 @@ export default function EmployerKYCPage() {
                 <input
                   type="text"
                   name="pan"
-                  value={formData.pan}
+                  value={(formData as typeof corporateFormData).pan || ''}
                   onChange={handleInputChange}
                   disabled={disableInputs}
                   placeholder="ABCDE1234F"
@@ -660,16 +778,16 @@ export default function EmployerKYCPage() {
                     className={`flex flex-col items-center justify-center w-full px-5 py-6 border border-dashed rounded-lg cursor-pointer transition-all ${
                       disableInputs
                         ? 'border-gray-200 bg-gray-50 cursor-not-allowed'
-                        : files.idProof || idProofUrl
+                        : (employerCategory === 'corporate' && (corporateFiles.idProof || idProofUrl))
                         ? 'border-blue-300 bg-blue-50'
                         : 'border-gray-300 bg-gray-50 hover:border-blue-400 hover:bg-blue-50/50'
                     }`}
                   >
-                    {files.idProof || idProofUrl ? (
+                    {(employerCategory === 'corporate' && (corporateFiles.idProof || idProofUrl)) ? (
                       <>
                         <CheckCircle className="w-8 h-8 text-blue-500 mb-2" />
                         <p className="text-xs font-medium text-gray-700 mb-1">
-                          {files.idProof?.name || 'Document uploaded'}
+                          {corporateFiles.idProof?.name || 'Document uploaded'}
                         </p>
                         {idProofUrl && (
                           <a href={idProofUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-1">
@@ -706,16 +824,16 @@ export default function EmployerKYCPage() {
                     className={`flex flex-col items-center justify-center w-full px-5 py-6 border border-dashed rounded-lg cursor-pointer transition-all ${
                       disableInputs
                         ? 'border-gray-200 bg-gray-50 cursor-not-allowed'
-                        : files.companyProof || companyProofUrl
+                        : (employerCategory === 'corporate' && (corporateFiles.companyProof || companyProofUrl))
                         ? 'border-blue-300 bg-blue-50'
                         : 'border-gray-300 bg-gray-50 hover:border-blue-400 hover:bg-blue-50/50'
                     }`}
                   >
-                    {files.companyProof || companyProofUrl ? (
+                    {(employerCategory === 'corporate' && (corporateFiles.companyProof || companyProofUrl)) ? (
                       <>
                         <CheckCircle className="w-8 h-8 text-blue-500 mb-2" />
                         <p className="text-xs font-medium text-gray-700 mb-1">
-                          {files.companyProof?.name || 'Document uploaded'}
+                          {corporateFiles.companyProof?.name || 'Document uploaded'}
                         </p>
                         {companyProofUrl && (
                           <a href={companyProofUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-1">
@@ -762,7 +880,7 @@ export default function EmployerKYCPage() {
                 </Link>
                 <button
                   type="submit"
-                  disabled={submitting || !formData.companyName.trim() || !canSubmit}
+                  disabled={submitting || (employerCategory === 'corporate' && !(formData as typeof corporateFormData).companyName?.trim()) || !canSubmit}
                   className="flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                   {submitting ? (
@@ -770,10 +888,15 @@ export default function EmployerKYCPage() {
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Submitting...
                     </>
-                  ) : isPending ? (
+                  ) : isPending && kycRecord ? (
                     <>
-                      <Clock className="w-4 h-4" />
-                      Pending Review
+                      <Upload className="w-4 h-4" />
+                      Uploaded
+                    </>
+                  ) : status === 'rejected' && kycRecord ? (
+                    <>
+                      <Upload className="w-4 h-4" />
+                      Updated
                     </>
                   ) : isApproved ? (
                     <>

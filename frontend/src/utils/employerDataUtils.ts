@@ -3,6 +3,7 @@ export interface EmployerDashboardStats {
   activeJobs: number;
   totalApplications: number;
   pendingApplications: number;
+  approvedApplications: number;
   approvedJobs: number;
 }
 
@@ -147,11 +148,17 @@ export const calculateEmployerDashboardStats = (
     return status === 'applied' || status === 'pending';
   }).length;
 
+  const approvedApplications = safeApplications.filter((app) => {
+    const status = (app?.status || '').toLowerCase();
+    return status === 'approved' || status === 'accepted';
+  }).length;
+
   return {
     totalJobs,
     activeJobs,
     totalApplications,
     pendingApplications,
+    approvedApplications,
     approvedJobs,
   };
 };

@@ -10,13 +10,21 @@ interface User {
   _id: string;
   name: string;
   email: string;
+  phone?: string;
   userType: 'student' | 'employer' | 'admin';
   role: 'user' | 'admin';
   companyName?: string;
   company?: string;
+  employerCategory?: 'corporate' | 'local_business' | 'individual';
   isActive?: boolean;
   emailVerified?: boolean;
   kycStatus?: 'not-submitted' | 'pending' | 'approved' | 'rejected' | null;
+  college?: string;
+  skills?: string[];
+  availability?: string;
+  businessType?: string;
+  address?: string;
+  onboardingCompleted?: boolean;
 }
 
 interface AuthContextType {
@@ -186,8 +194,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await requestNotificationPermission();
   };
 
-  const logout = () => {
+  const logout = (redirectToLogin: boolean = true) => {
     console.log('👋 User logged out');
+    
+    // Set logout flag to prevent access denied modal from showing
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('isLoggingOut', 'true');
+    }
+    
     setUser(null);
     setToken(null);
     
@@ -205,6 +219,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Disconnect socket
     socketService.disconnect();
+
+    // Redirect immediately to prevent access denied modal flash
+    if (redirectToLogin && typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
   };
 
   const refreshToken = async (): Promise<boolean> => {
@@ -225,12 +244,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return true;
       } else {
         console.log('❌ Token refresh failed, logging out');
-        logout();
+        logout(false); // Don't redirect, let the component handle it
         return false;
       }
     } catch (error) {
       console.error('❌ Token refresh error:', error);
-      logout();
+      logout(false); // Don't redirect, let the component handle it
       return false;
     }
   };

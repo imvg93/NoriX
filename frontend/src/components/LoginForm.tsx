@@ -20,8 +20,10 @@ const LoginForm: React.FC<LoginFormProps> = ({ compact = false }) => {
   const { login } = useAuth();
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    e.stopPropagation();
+    
     setLoading(true);
     setError('');
 
@@ -36,12 +38,8 @@ const LoginForm: React.FC<LoginFormProps> = ({ compact = false }) => {
         // Store user data and token
         login(response.user, response.token);
         
-        // Redirect based on user type
-        if (response.user.role === 'admin' || response.user.userType === 'admin') {
-          router.push('/admin/dashboard');
-        } else {
-          router.push('/');
-        }
+        // Always redirect to home page after login
+        router.replace('/');
       } else {
         setError('Login failed. Please check your credentials.');
       }
@@ -75,7 +73,13 @@ const LoginForm: React.FC<LoginFormProps> = ({ compact = false }) => {
           </div>
         )}
         
-        <form className={compact ? 'space-y-4' : 'mt-8 space-y-6'} onSubmit={handleSubmit}>
+        <form 
+          className={compact ? 'space-y-4' : 'mt-8 space-y-6'} 
+          onSubmit={handleSubmit}
+          method="POST"
+          action="#"
+          noValidate
+        >
           <div className="space-y-4">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
