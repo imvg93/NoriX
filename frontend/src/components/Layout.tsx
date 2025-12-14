@@ -67,8 +67,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Only show header on main page for authenticated users
   if (isAuthenticated) {
     const handleLogout = () => {
-      logout();
-      router.push('/login');
+      logout(); // logout() now handles redirect internally
     };
 
   return (

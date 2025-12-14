@@ -24,6 +24,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   useEffect(() => {
     if (!loading) {
+      // Check if user is logging out - don't show access denied modal
+      if (typeof window !== 'undefined' && sessionStorage.getItem('isLoggingOut') === 'true') {
+        setShowAccessDenied(false);
+        return;
+      }
+
       if (!isAuthenticated) {
         console.log('🔒 User not authenticated');
         setAccessDeniedMessage('You need to be logged in to access this page.');

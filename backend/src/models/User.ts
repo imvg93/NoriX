@@ -7,7 +7,6 @@ export interface IUser extends Document {
   phone: string;
   password: string;
   userType: 'student' | 'employer' | 'admin';
-  role: 'user' | 'admin';
   
   // Student specific fields
   college?: string;
@@ -18,6 +17,7 @@ export interface IUser extends Document {
   totalEarnings?: number;
   
   // Employer specific fields
+  employerCategory?: 'corporate' | 'local_business' | 'individual';
   companyName?: string;
   businessType?: string;
   address?: string;
@@ -43,6 +43,9 @@ export interface IUser extends Document {
   
   // Signup tracking
   submittedAt: Date;
+  
+  // Onboarding tracking
+  onboardingCompleted?: boolean;
   
   createdAt: Date;
   updatedAt: Date;
@@ -84,17 +87,11 @@ const userSchema = new Schema<IUser>({
   },
   userType: {
     type: String,
-    required: [true, 'User type is required'],
     enum: ['student', 'employer', 'admin'],
     default: 'student'
   },
-  role: {
-    type: String,
-    enum: ['user', 'admin'],
-    default: 'user'
-  },
   
-  // Student specific fields
+  // Student specific fields - college is required for students
   college: {
     type: String,
     required: function(this: IUser) {
@@ -131,6 +128,11 @@ const userSchema = new Schema<IUser>({
   },
   
   // Employer specific fields (optional - collected during KYC)
+  employerCategory: {
+    type: String,
+    enum: ['corporate', 'local_business', 'individual'],
+    // Optional - will be set when employer first accesses their dashboard
+  },
   companyName: {
     type: String,
     trim: true,
@@ -212,6 +214,12 @@ const userSchema = new Schema<IUser>({
   submittedAt: {
     type: Date,
     default: Date.now
+  },
+  
+  // Onboarding tracking
+  onboardingCompleted: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true,
@@ -230,8 +238,19 @@ const userSchema = new Schema<IUser>({
 userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ phone: 1 }, { unique: true });
 userSchema.index({ userType: 1 });
+userSchema.index({ employerCategory: 1 });
 userSchema.index({ skills: 1 });
 userSchema.index({ availability: 1 });
+
+// Pre-save hook to ensure optional fields are not validated as required
+userSchema.pre('validate', function(next) {
+  // If college is not provided and userType is student, explicitly set it to undefined
+  // This prevents Mongoose from trying to validate it as required
+  if (this.userType === 'student' && this.college === undefined) {
+    this.college = undefined;
+  }
+  next();
+});
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {

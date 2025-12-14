@@ -108,6 +108,7 @@ interface User {
   companyName?: string;
   businessType?: string;
   address?: string;
+  employerCategory?: 'corporate' | 'local_business' | 'individual';
   isVerified?: boolean;
   emailVerified?: boolean;
   kycStatus?: 'not-submitted' | 'pending' | 'approved' | 'rejected' | null;
@@ -412,6 +413,27 @@ class ApiService {
   async verifyStudent(studentId: string) {
     return this.request(`/students/verify/${studentId}`, { method: 'PUT' });
   }
+
+  async updateEmployerCategory(employerCategory: 'corporate' | 'local_business' | 'individual') {
+    return this.request('/users/employer-category', {
+      method: 'PUT',
+      body: JSON.stringify({ employerCategory })
+    });
+  }
+
+  async chooseRole(intent: string, employerType: 'corporate' | 'local' | 'individual') {
+    return this.request<{ success: boolean; redirectTo: string }>('/users/choose-role', {
+      method: 'POST',
+      body: JSON.stringify({ intent, employerType })
+    });
+  }
+
+  async changeEmployerType(employerType: 'corporate' | 'local' | 'individual') {
+    return this.request<{ success: boolean; redirectTo: string; newType: string; oldType: string }>('/users/change-employer-type', {
+      method: 'PUT',
+      body: JSON.stringify({ employerType })
+    });
+  }
   // Helper to unwrap { data } when present
   private unwrap<T = any>(resp: any): T {
     return (resp && typeof resp === 'object' && 'data' in resp) ? resp.data as T : resp as T;
@@ -653,6 +675,57 @@ class ApiService {
     }
   }
 
+  // Submit Corporate KYC
+  async submitCorporateKYC(payload: FormData) {
+    try {
+      console.log('📝 Submitting Corporate KYC');
+      const res = await this.request<any>(`/kyc/employer/corporate`, {
+        method: 'POST',
+        body: payload,
+      });
+      const data = res?.data || res;
+      console.log('✅ Corporate KYC Submission Response:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error submitting Corporate KYC:', error);
+      throw error;
+    }
+  }
+
+  // Submit Local Business KYC
+  async submitLocalBusinessKYC(payload: FormData) {
+    try {
+      console.log('📝 Submitting Local Business KYC');
+      const res = await this.request<any>(`/kyc/employer/local-business`, {
+        method: 'POST',
+        body: payload,
+      });
+      const data = res?.data || res;
+      console.log('✅ Local Business KYC Submission Response:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error submitting Local Business KYC:', error);
+      throw error;
+    }
+  }
+
+  // Submit Individual KYC
+  async submitIndividualKYC(payload: FormData) {
+    try {
+      console.log('📝 Submitting Individual KYC');
+      const res = await this.request<any>(`/kyc/employer/individual`, {
+        method: 'POST',
+        body: payload,
+      });
+      const data = res?.data || res;
+      console.log('✅ Individual KYC Submission Response:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error submitting Individual KYC:', error);
+      throw error;
+    }
+  }
+
   // Refresh KYC status (useful after submission)
   async refreshEmployerKYCStatus(employerId: string): Promise<{ status: string; kyc?: any; user?: any }> {
     try {
@@ -765,11 +838,12 @@ class ApiService {
     } as unknown as JobsResponse;
   }
 
-  async getEmployerDashboardJobs(employerId: string, page = 1, limit = 1000): Promise<JobsResponse> {
+  // Get employer jobs list - does NOT call /jobs/:jobId, only fetches list
+  async getEmployerJobsList(page = 1, limit = 1000): Promise<JobsResponse> {
     // Backend gets employerId from JWT token, not from URL path
     const query = new URLSearchParams({ page: String(page), limit: String(limit) });
     const endpoint = `/enhanced-jobs/employer-dashboard?${query.toString()}`;
-    console.log('🔍 API: Fetching employer dashboard jobs from:', endpoint);
+    console.log('🔍 API: Fetching employer jobs list from:', endpoint);
     const raw = await this.request<any>(endpoint);
     console.log('🔍 API: Raw response:', raw);
     const payload = this.unwrap<any>(raw);
@@ -805,6 +879,12 @@ class ApiService {
         pages: payload?.pagination?.pages || 1,
       }
     } as unknown as JobsResponse;
+  }
+
+  async getEmployerDashboardJobs(employerId: string, page = 1, limit = 1000): Promise<JobsResponse> {
+    // This method is kept for backward compatibility but now delegates to getEmployerJobsList
+    // The employerId parameter is ignored as backend gets it from JWT token
+    return this.getEmployerJobsList(page, limit);
   }
 
   async applyToJobEnhanced(jobId: string, applicationData: any) {
@@ -932,6 +1012,11 @@ class ApiService {
   }
 
   async getJob(jobId: string) {
+    // Add null check to prevent calling API with undefined jobId
+    if (!jobId || typeof jobId !== 'string' || jobId.trim() === '') {
+      throw new Error('Invalid job ID provided');
+    }
+    
     try {
       const raw = await this.request<any>(`/jobs/${jobId}`);
       const payload = this.unwrap<any>(raw);
@@ -942,7 +1027,7 @@ class ApiService {
         console.log('Job validation error, trying to fetch from jobs list...');
         try {
           // Fallback to fetching all jobs if we have no current user context
-          const jobsResponse = await this.getEmployerDashboardJobs("", 1, 1000);
+          const jobsResponse = await this.getEmployerJobsList(1, 1000);
           const job = jobsResponse.jobs.find((j: any) => j._id === jobId);
           if (job) {
             console.log('Found job in jobs list');
@@ -986,19 +1071,9 @@ class ApiService {
   }
 
   async getEmployerJobs(): Promise<JobsResponse> {
-    // Route through enhanced dashboard endpoint to ensure we fetch the employer's own jobs
-    // Try to get employerId from localStorage if not provided
-    let employerId = '';
-    try {
-      const storedUser = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
-      if (storedUser) {
-        const parsed = JSON.parse(storedUser);
-        employerId = parsed?._id || parsed?.id || '';
-      }
-    } catch {
-      // ignore parse errors and proceed with empty id
-    }
-    return this.getEmployerDashboardJobs(employerId);
+    // Use the new getEmployerJobsList method which doesn't require employerId
+    // Backend gets employerId from JWT token
+    return this.getEmployerJobsList();
   }
 
   async updateJobStatus(id: string, status: string) {
@@ -1844,6 +1919,74 @@ class ApiService {
       return response;
     } catch (error) {
       console.error('❌ Error fetching all KYC records for admin:', error);
+      throw error;
+    }
+  }
+
+  // Get all employer KYC types (Corporate, Local Business, Individual)
+  async getAllEmployerKYCAdmin(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    search?: string;
+    type?: 'all' | 'corporate' | 'local_business' | 'individual';
+  }) {
+    try {
+      console.log('🔍 Fetching all employer KYC records for admin...');
+      const queryParams = new URLSearchParams();
+      
+      if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            queryParams.append(key, String(value));
+          }
+        });
+      }
+
+      const endpoint = queryParams.toString() 
+        ? `/admin/kyc/employers?${queryParams.toString()}`
+        : '/admin/kyc/employers';
+      
+      const response = await this.request(endpoint, {
+        method: 'GET',
+      });
+      
+      console.log('📊 All Employer KYC admin response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error fetching all employer KYC records for admin:', error);
+      throw error;
+    }
+  }
+
+  // Approve employer KYC (Corporate, Local Business, or Individual)
+  async approveEmployerKYCByType(kycId: string, kycType: 'corporate' | 'local_business' | 'individual', reason?: string) {
+    try {
+      console.log('✅ Approving employer KYC:', kycId, 'Type:', kycType);
+      const response = await this.request(`/admin/kyc/employer/${kycId}/approve`, {
+        method: 'PUT',
+        body: JSON.stringify({ kycType, reason }),
+      });
+      console.log('📊 Approve Employer KYC response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error approving employer KYC:', error);
+      throw error;
+    }
+  }
+
+  // Reject employer KYC (Corporate, Local Business, or Individual)
+  async rejectEmployerKYCByType(kycId: string, kycType: 'corporate' | 'local_business' | 'individual', rejectionReason: string) {
+    try {
+      console.log('❌ Rejecting employer KYC:', kycId, 'Type:', kycType, 'Reason:', rejectionReason);
+      const response = await this.request(`/admin/kyc/employer/${kycId}/reject`, {
+        method: 'PUT',
+        body: JSON.stringify({ kycType, reason: rejectionReason }),
+      });
+      console.log('📊 Reject Employer KYC response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error rejecting employer KYC:', error);
       throw error;
     }
   }

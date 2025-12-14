@@ -5,6 +5,8 @@ import Job from '../models/Job';
 import KYC from '../models/KYC';
 import Application from '../models/Application';
 import { EmployerKYC } from '../models/EmployerKYC';
+import LocalBusinessKYC from '../models/LocalBusinessKYC';
+import IndividualKYC from '../models/IndividualKYC';
 import { KYCAudit } from '../models/KYCAudit';
 import { AdminLogin } from '../models/AdminLogin';
 import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth';
@@ -590,6 +592,103 @@ router.get('/kyc/stats', authenticateToken, requireRole(['admin']), asyncHandler
   }, 'KYC statistics retrieved successfully');
 }));
 
+// @route   GET /api/admin/kyc/employers
+// @desc    Get all employer KYC records (Corporate, Local Business, Individual) with filtering
+// @access  Private (Admin only)
+router.get('/kyc/employers', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  try {
+    const { page = 1, limit = 50, status, search, type = 'all' } = req.query;
+    
+    const query: any = { isArchived: { $ne: true } }; // Exclude archived records
+    if (status && status !== 'all') query.status = status;
+    
+    // Build search query
+    if (search) {
+      query.$or = [
+        { companyName: { $regex: search, $options: 'i' } },
+        { businessName: { $regex: search, $options: 'i' } },
+        { fullName: { $regex: search, $options: 'i' } },
+        { ownerName: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    // Fetch all three types based on type filter
+    let corporateKYC: any[] = [];
+    let localBusinessKYC: any[] = [];
+    let individualKYC: any[] = [];
+
+    if (type === 'all' || type === 'corporate') {
+      corporateKYC = await EmployerKYC.find(query)
+        .populate('employerId', 'name email companyName employerCategory')
+        .sort({ createdAt: -1 })
+        .skip(type === 'all' ? 0 : skip)
+        .limit(type === 'all' ? Number(limit) : Number(limit))
+        .lean();
+    }
+
+    if (type === 'all' || type === 'local_business') {
+      localBusinessKYC = await LocalBusinessKYC.find(query)
+        .populate('employerId', 'name email companyName employerCategory')
+        .sort({ createdAt: -1 })
+        .skip(type === 'all' ? 0 : skip)
+        .limit(type === 'all' ? Number(limit) : Number(limit))
+        .lean();
+    }
+
+    if (type === 'all' || type === 'individual') {
+      individualKYC = await IndividualKYC.find(query)
+        .populate('employerId', 'name email companyName employerCategory')
+        .sort({ createdAt: -1 })
+        .skip(type === 'all' ? 0 : skip)
+        .limit(type === 'all' ? Number(limit) : Number(limit))
+        .lean();
+    }
+
+    // Combine and normalize all KYC records
+    const allKYC = [
+      ...corporateKYC.map(k => ({ ...k, kycType: 'corporate' })),
+      ...localBusinessKYC.map(k => ({ ...k, kycType: 'local_business' })),
+      ...individualKYC.map(k => ({ ...k, kycType: 'individual' }))
+    ].sort((a, b) => new Date(b.createdAt || b.submittedAt || 0).getTime() - new Date(a.createdAt || a.submittedAt || 0).getTime());
+
+    // Get counts
+    const [corporateTotal, localTotal, individualTotal] = await Promise.all([
+      type === 'all' || type === 'corporate' ? EmployerKYC.countDocuments(query) : Promise.resolve(0),
+      type === 'all' || type === 'local_business' ? LocalBusinessKYC.countDocuments(query) : Promise.resolve(0),
+      type === 'all' || type === 'individual' ? IndividualKYC.countDocuments(query) : Promise.resolve(0)
+    ]);
+
+    const total = corporateTotal + localTotal + individualTotal;
+
+    return sendSuccessResponse(res, {
+      kyc: allKYC.slice(0, Number(limit)), // Limit combined results
+      corporate: {
+        records: corporateKYC,
+        total: corporateTotal
+      },
+      localBusiness: {
+        records: localBusinessKYC,
+        total: localTotal
+      },
+      individual: {
+        records: individualKYC,
+        total: individualTotal
+      },
+      pagination: {
+        current: Number(page),
+        total: Math.ceil(total / Number(limit)),
+        count: allKYC.slice(0, Number(limit)).length,
+        totalRecords: total
+      }
+    }, 'All employer KYC records retrieved successfully');
+  } catch (error) {
+    console.error('❌ Error fetching employer KYC records:', error);
+    throw new ValidationError('Failed to fetch employer KYC records');
+  }
+}));
+
 // @route   GET /api/admin/kyc/all
 // @desc    Get all KYC records with filtering and pagination
 // @access  Private (Admin only)
@@ -598,7 +697,7 @@ router.get('/kyc/all', authenticateToken, requireRole(['admin']), asyncHandler(a
     const { page = 1, limit = 50, status, search, type = 'student' } = req.query;
     
     if (type === 'employer') {
-      const query: any = {};
+      const query: any = { isArchived: { $ne: true } };
       if (status && status !== 'all') query.status = status;
       if (search) {
         query.$or = [
@@ -664,27 +763,266 @@ router.get('/kyc/all', authenticateToken, requireRole(['admin']), asyncHandler(a
 }));
 
 // @route   GET /api/admin/kyc/:id
-// @desc    Get specific KYC submission details
+// @desc    Get specific KYC submission details (supports all types)
 // @access  Private (Admin only)
 router.get('/kyc/:id', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { id } = req.params;
+  const { type } = req.query; // 'student', 'corporate', 'local_business', 'individual'
   
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new ValidationError('Invalid KYC ID');
   }
   
-  const kyc = await KYC.findById(id)
-    .populate('userId', 'name email phone userType college');
+  let kyc: any = null;
+  let kycType = 'student';
+  
+  // Try to find in the appropriate collection
+  if (type === 'corporate' || !type) {
+    kyc = await EmployerKYC.findById(id)
+      .populate('employerId', 'name email companyName employerCategory');
+    if (kyc) kycType = 'corporate';
+  }
+  
+  if (!kyc && (type === 'local_business' || !type)) {
+    kyc = await LocalBusinessKYC.findById(id)
+      .populate('employerId', 'name email companyName employerCategory');
+    if (kyc) kycType = 'local_business';
+  }
+  
+  if (!kyc && (type === 'individual' || !type)) {
+    kyc = await IndividualKYC.findById(id)
+      .populate('employerId', 'name email companyName employerCategory');
+    if (kyc) kycType = 'individual';
+  }
+  
+  if (!kyc && (type === 'student' || !type)) {
+    kyc = await KYC.findById(id)
+      .populate('userId', 'name email phone userType college');
+    if (kyc) kycType = 'student';
+  }
   
   if (!kyc) {
     throw new ValidationError('KYC submission not found');
   }
   
-  sendSuccessResponse(res, { kyc }, 'KYC submission retrieved successfully');
+  sendSuccessResponse(res, { kyc, kycType }, 'KYC submission retrieved successfully');
+}));
+
+// @route   PUT /api/admin/kyc/employer/:id/approve
+// @desc    Approve employer KYC submission (Corporate, Local Business, or Individual)
+// @access  Private (Admin only)
+router.put('/kyc/employer/:id/approve', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { id } = req.params;
+  const { reason, kycType } = req.body; // kycType: 'corporate', 'local_business', 'individual'
+  
+  console.log('🔍 Admin Employer KYC Approve - Starting approval process');
+  console.log('  Admin User ID:', req.user!._id);
+  console.log('  KYC ID:', id);
+  console.log('  KYC Type:', kycType);
+  
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ValidationError('Invalid KYC ID');
+  }
+  
+  if (!kycType || !['corporate', 'local_business', 'individual'].includes(kycType)) {
+    throw new ValidationError('Invalid KYC type. Must be: corporate, local_business, or individual');
+  }
+  
+  const session = await mongoose.startSession();
+  
+  try {
+    await session.withTransaction(async () => {
+      let kyc: any = null;
+      let employerId: any = null;
+      
+      // Find KYC in the appropriate collection
+      if (kycType === 'corporate') {
+        kyc = await EmployerKYC.findById(id).session(session);
+        if (kyc) employerId = kyc.employerId;
+      } else if (kycType === 'local_business') {
+        kyc = await LocalBusinessKYC.findById(id).session(session);
+        if (kyc) employerId = kyc.employerId;
+      } else if (kycType === 'individual') {
+        kyc = await IndividualKYC.findById(id).session(session);
+        if (kyc) employerId = kyc.employerId;
+      }
+      
+      if (!kyc) {
+        throw new ValidationError('KYC submission not found');
+      }
+      
+      const prevStatus = kyc.status;
+      
+      // Update KYC status
+      kyc.status = 'approved';
+      kyc.reviewedAt = new Date();
+      kyc.reviewedBy = req.user!._id;
+      if (reason) kyc.rejectionReason = undefined; // Clear rejection reason if exists
+      await kyc.save({ session });
+      
+      // Update user status atomically
+      await User.findByIdAndUpdate(employerId, { 
+        kycStatus: 'approved',
+        isVerified: true,
+        kycVerifiedAt: new Date(),
+        $unset: { kycRejectedAt: 1, kycPendingAt: 1 }
+      }, { session });
+      
+      console.log('✅ Admin Employer KYC Approve - Approval completed');
+    });
+    
+    // Get updated data
+    let updatedKYC: any = null;
+    if (kycType === 'corporate') {
+      updatedKYC = await EmployerKYC.findById(id).populate('employerId', 'name email companyName employerCategory');
+    } else if (kycType === 'local_business') {
+      updatedKYC = await LocalBusinessKYC.findById(id).populate('employerId', 'name email companyName employerCategory');
+    } else if (kycType === 'individual') {
+      updatedKYC = await IndividualKYC.findById(id).populate('employerId', 'name email companyName employerCategory');
+    }
+    
+    const updatedUser = await User.findById(updatedKYC?.employerId);
+    
+    // Create notification
+    try {
+      const { Notification } = await import('../models/Notification');
+      await (Notification as any).create({
+        userId: updatedKYC!.employerId,
+        type: 'kyc',
+        title: 'KYC Approved ✅',
+        message: 'Your employer KYC has been approved. You can now post jobs.',
+        createdBy: req.user!._id
+      });
+    } catch (e) {
+      console.warn('⚠️ Failed to create approval notification:', (e as any)?.message);
+    }
+    
+    sendSuccessResponse(res, {
+      kyc: updatedKYC,
+      user: updatedUser,
+      kycType,
+      message: 'Employer KYC approved successfully'
+    }, 'Employer KYC approved successfully');
+    
+  } catch (error) {
+    console.error('❌ Admin Employer KYC Approve - Transaction failed:', error);
+    throw error;
+  } finally {
+    await session.endSession();
+  }
+}));
+
+// @route   PUT /api/admin/kyc/employer/:id/reject
+// @desc    Reject employer KYC submission (Corporate, Local Business, or Individual)
+// @access  Private (Admin only)
+router.put('/kyc/employer/:id/reject', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { id } = req.params;
+  const { reason, kycType } = req.body;
+  
+  console.log('🔍 Admin Employer KYC Reject - Starting rejection process');
+  console.log('  Admin User ID:', req.user!._id);
+  console.log('  KYC ID:', id);
+  console.log('  KYC Type:', kycType);
+  console.log('  Rejection reason:', reason);
+  
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ValidationError('Invalid KYC ID');
+  }
+  
+  if (!reason || reason.trim().length === 0) {
+    throw new ValidationError('Rejection reason is required');
+  }
+  
+  if (!kycType || !['corporate', 'local_business', 'individual'].includes(kycType)) {
+    throw new ValidationError('Invalid KYC type. Must be: corporate, local_business, or individual');
+  }
+  
+  const session = await mongoose.startSession();
+  
+  try {
+    await session.withTransaction(async () => {
+      let kyc: any = null;
+      let employerId: any = null;
+      
+      // Find KYC in the appropriate collection
+      if (kycType === 'corporate') {
+        kyc = await EmployerKYC.findById(id).session(session);
+        if (kyc) employerId = kyc.employerId;
+      } else if (kycType === 'local_business') {
+        kyc = await LocalBusinessKYC.findById(id).session(session);
+        if (kyc) employerId = kyc.employerId;
+      } else if (kycType === 'individual') {
+        kyc = await IndividualKYC.findById(id).session(session);
+        if (kyc) employerId = kyc.employerId;
+      }
+      
+      if (!kyc) {
+        throw new ValidationError('KYC submission not found');
+      }
+      
+      const prevStatus = kyc.status;
+      
+      // Update KYC status
+      kyc.status = 'rejected';
+      kyc.reviewedAt = new Date();
+      kyc.reviewedBy = req.user!._id;
+      kyc.rejectionReason = reason;
+      await kyc.save({ session });
+      
+      // Update user status atomically
+      await User.findByIdAndUpdate(employerId, { 
+        kycStatus: 'rejected',
+        isVerified: false,
+        kycRejectedAt: new Date(),
+        $unset: { kycVerifiedAt: 1, kycPendingAt: 1 }
+      }, { session });
+      
+      console.log('✅ Admin Employer KYC Reject - Rejection completed');
+    });
+    
+    // Get updated data
+    let updatedKYC: any = null;
+    if (kycType === 'corporate') {
+      updatedKYC = await EmployerKYC.findById(id).populate('employerId', 'name email companyName employerCategory');
+    } else if (kycType === 'local_business') {
+      updatedKYC = await LocalBusinessKYC.findById(id).populate('employerId', 'name email companyName employerCategory');
+    } else if (kycType === 'individual') {
+      updatedKYC = await IndividualKYC.findById(id).populate('employerId', 'name email companyName employerCategory');
+    }
+    
+    const updatedUser = await User.findById(updatedKYC?.employerId);
+    
+    // Create notification
+    try {
+      const { Notification } = await import('../models/Notification');
+      await (Notification as any).create({
+        userId: updatedKYC!.employerId,
+        type: 'kyc',
+        title: 'KYC Rejected ❌',
+        message: `Your employer KYC was rejected. Reason: ${reason}`,
+        createdBy: req.user!._id
+      });
+    } catch (e) {
+      console.warn('⚠️ Failed to create rejection notification:', (e as any)?.message);
+    }
+    
+    sendSuccessResponse(res, {
+      kyc: updatedKYC,
+      user: updatedUser,
+      kycType,
+      message: 'Employer KYC rejected successfully'
+    }, 'Employer KYC rejected successfully');
+    
+  } catch (error) {
+    console.error('❌ Admin Employer KYC Reject - Transaction failed:', error);
+    throw error;
+  } finally {
+    await session.endSession();
+  }
 }));
 
 // @route   PUT /api/admin/kyc/:id/approve
-// @desc    Approve KYC submission (atomic transaction)
+// @desc    Approve KYC submission (atomic transaction) - Student KYC
 // @access  Private (Admin only)
 router.put('/kyc/:id/approve', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
   const { id } = req.params;

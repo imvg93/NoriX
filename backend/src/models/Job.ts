@@ -4,6 +4,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface IJob extends Document {
   jobId: mongoose.Types.ObjectId;
   employerId: mongoose.Types.ObjectId;
+  jobType: 'job' | 'task'; // 'job' for corporate/local business, 'task' for individual
   jobTitle: string;
   description: string;
   location: string;
@@ -11,6 +12,11 @@ export interface IJob extends Document {
   workType: 'Part-time' | 'Full-time' | 'Remote' | 'On-site';
   skillsRequired: string[];
   applicationDeadline: Date;
+  
+  // Task-specific fields (for Category C - Individual)
+  taskTime?: string; // When the task needs to be done
+  taskBudget?: string; // Budget for the task
+  autoExpireDays?: number; // Auto-expire after X days (default 7 for tasks)
   
   // Auto-filled employer info
   companyName: string;
@@ -52,6 +58,12 @@ const jobSchema = new Schema<IJob>({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: [true, 'Employer ID is required']
+  },
+  jobType: {
+    type: String,
+    enum: ['job', 'task'],
+    default: 'job',
+    index: true
   },
   jobTitle: {
     type: String,
@@ -101,6 +113,26 @@ const jobSchema = new Schema<IJob>({
       },
       message: 'Application deadline must be in the future'
     }
+  },
+  
+  // Task-specific fields (for Category C - Individual)
+  taskTime: {
+    type: String,
+    trim: true,
+    maxlength: [200, 'Task time cannot exceed 200 characters']
+  },
+  taskBudget: {
+    type: String,
+    trim: true,
+    maxlength: [100, 'Task budget cannot exceed 100 characters']
+  },
+  autoExpireDays: {
+    type: Number,
+    default: function(this: IJob) {
+      // Tasks auto-expire in 7 days, jobs use applicationDeadline
+      return this.jobType === 'task' ? 7 : undefined;
+    },
+    min: [1, 'Auto-expire days must be at least 1']
   },
   
   // Auto-filled employer info
@@ -192,6 +224,7 @@ const jobSchema = new Schema<IJob>({
 
 // Indexes for performance
 jobSchema.index({ employerId: 1, status: 1 });
+jobSchema.index({ jobType: 1, status: 1 });
 jobSchema.index({ status: 1, highlighted: 1 });
 jobSchema.index({ createdAt: -1 });
 jobSchema.index({ applicationDeadline: 1 });
@@ -234,10 +267,17 @@ jobSchema.methods.updateStatus = async function(this: IJob, newStatus: 'active' 
 
 // Pre-save middleware to handle status updates
 jobSchema.pre('save', function(this: IJob) {
-  // Auto-expire jobs past their deadline (safely check isExpired virtual)
+  // Auto-expire jobs/tasks past their deadline (safely check isExpired virtual)
   try {
     if (this.isExpired && this.status === 'active') {
       this.status = 'expired';
+    }
+    
+    // For tasks, auto-set expiration date based on autoExpireDays
+    if (this.jobType === 'task' && this.autoExpireDays && this.isNew) {
+      const expireDate = new Date();
+      expireDate.setDate(expireDate.getDate() + this.autoExpireDays);
+      this.applicationDeadline = expireDate;
     }
   } catch (error) {
     // If isExpired virtual fails, skip the auto-expire logic

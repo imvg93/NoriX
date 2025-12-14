@@ -98,8 +98,10 @@ export class ChunkErrorHandler {
   }
 }
 
-// Disable automatic global handler setup to prevent unwanted auto-reloads
-// The error handler will only be used when explicitly called by ErrorBoundary
+// Enable global handler setup for chunk loading errors
+// These errors need to be caught early before React can handle them
 if (typeof window !== 'undefined') {
-  console.log('🔧 Chunk error handler available but not auto-setup to prevent unwanted reloads');
+  // Set up immediately when this module loads
+  ChunkErrorHandler.setupGlobalHandler();
+  console.log('🔧 Global chunk error handler enabled');
 }

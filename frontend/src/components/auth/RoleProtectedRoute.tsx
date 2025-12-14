@@ -30,6 +30,12 @@ const RoleProtectedRoute: React.FC<RoleProtectedRouteProps> = ({
 
   useEffect(() => {
     if (!loading) {
+      // Check if user is logging out - don't show access denied modal
+      if (typeof window !== 'undefined' && sessionStorage.getItem('isLoggingOut') === 'true') {
+        setShowAccessDenied(false);
+        return;
+      }
+
       // If allowing unauthenticated access, don't show access denied
       if (allowUnauthenticated) {
         setShowAccessDenied(false);

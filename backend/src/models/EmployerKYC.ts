@@ -8,11 +8,16 @@ export interface IEmployerKYCDocument extends Document {
   companyEmail?: string;
   companyPhone?: string;
   businessRegNo?: string;
+  businessRegistrationType?: string; // Pvt Ltd, LLP, etc.
+  website?: string;
+  pinCode?: string;
   
   // Authorized Person Details
   fullName?: string;
   authorizedName?: string;
   designation?: string;
+  adminEmail?: string; // Admin contact email
+  adminPhone?: string; // Admin contact phone
   
   // Company Location
   address?: string;
@@ -48,6 +53,8 @@ export interface IEmployerKYCDocument extends Document {
   reviewedBy?: mongoose.Types.ObjectId; // Admin who reviewed
   reviewedAt?: Date;
   submittedAt: Date;
+  isArchived?: boolean; // For archiving when employer type changes
+  archivedAt?: Date;
   
   // Timestamps
   createdAt: Date;
@@ -99,6 +106,26 @@ const employerKYCSchema = new Schema<IEmployerKYCDocument>(
       trim: true,
       maxlength: 100
     },
+    businessRegistrationType: {
+      type: String,
+      trim: true,
+      enum: ['Pvt Ltd', 'LLP', 'Public Ltd', 'Partnership', 'Sole Proprietorship', 'Other']
+    },
+    website: {
+      type: String,
+      trim: true,
+      validate: {
+        validator: function(v: string) {
+          return !v || /^https?:\/\/.+/.test(v);
+        },
+        message: 'Please provide a valid URL'
+      }
+    },
+    pinCode: {
+      type: String,
+      trim: true,
+      maxlength: 10
+    },
     
     // Authorized Person Details
     fullName: {
@@ -116,6 +143,23 @@ const employerKYCSchema = new Schema<IEmployerKYCDocument>(
       trim: true,
       maxlength: 50,
       enum: ['Owner', 'HR Manager', 'Recruiter', 'Director', 'Manager', 'Other']
+    },
+    adminEmail: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      maxlength: 255,
+      validate: {
+        validator: function(v: string) {
+          return !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+        },
+        message: 'Please provide a valid email address'
+      }
+    },
+    adminPhone: {
+      type: String,
+      trim: true,
+      maxlength: 20
     },
     
     // Company Location
@@ -294,6 +338,14 @@ const employerKYCSchema = new Schema<IEmployerKYCDocument>(
     submittedAt: {
       type: Date,
       default: Date.now
+    },
+    isArchived: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    archivedAt: {
+      type: Date
     }
   },
   { 

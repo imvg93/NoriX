@@ -1,6 +1,10 @@
 import express from 'express';
 import multer from 'multer';
 import User from '../models/User';
+import { RoleSelectionAudit } from '../models/RoleSelectionAudit';
+import EmployerKYC from '../models/EmployerKYC';
+import LocalBusinessKYC from '../models/LocalBusinessKYC';
+import IndividualKYC from '../models/IndividualKYC';
 import { authenticateToken, requireStudent, requireEmployer, AuthRequest } from '../middleware/auth';
 import { asyncHandler, sendSuccessResponse, ValidationError } from '../middleware/errorHandler';
 import { uploadImage, deleteImage } from '../config/cloudinary';
@@ -306,6 +310,231 @@ router.post('/upload-avatar', authenticateToken, upload.single('avatar'), asyncH
     console.error('Upload error:', error);
     throw new ValidationError('Failed to upload profile picture');
   }
+}));
+
+// @route   PUT /api/users/employer-category
+// @desc    Update employer category
+// @access  Private (Employers only)
+router.put('/employer-category', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { employerCategory } = req.body;
+
+  if (!employerCategory || !['corporate', 'local_business', 'individual'].includes(employerCategory)) {
+    throw new ValidationError('Valid employer category is required. Must be one of: corporate, local_business, individual');
+  }
+
+  const user = await User.findById(req.user!._id);
+  if (!user) {
+    throw new ValidationError('User not found');
+  }
+
+  if (user.userType !== 'employer') {
+    throw new ValidationError('Only employers can update their category');
+  }
+
+  // Update employer category
+  user.employerCategory = employerCategory;
+  await user.save();
+
+  sendSuccessResponse(res, { 
+    user: {
+      _id: user._id,
+      employerCategory: user.employerCategory
+    }
+  }, 'Employer category updated successfully');
+}));
+
+// @route   POST /api/users/choose-role
+// @desc    Choose employer role and start onboarding
+// @access  Private
+router.post('/choose-role', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  console.log('✅ /api/users/choose-role endpoint called');
+  const { intent, employerType } = req.body;
+
+  // Validate input
+  if (!intent || !employerType) {
+    throw new ValidationError('intent and employerType are required');
+  }
+
+  if (!['corporate', 'local', 'individual'].includes(employerType)) {
+    throw new ValidationError('employerType must be one of: corporate, local, individual');
+  }
+
+  const user = await User.findById(req.user!._id);
+  if (!user) {
+    throw new ValidationError('User not found');
+  }
+
+  // Ensure user is employer
+  if (user.userType !== 'employer') {
+    user.userType = 'employer';
+  }
+
+  // Map API employerType to DB employerCategory
+  const employerCategoryMap: Record<string, 'corporate' | 'local_business' | 'individual'> = {
+    'corporate': 'corporate',
+    'local': 'local_business',
+    'individual': 'individual'
+  };
+
+  const employerCategory = employerCategoryMap[employerType];
+
+  // Check if user already has a category and if type change is allowed
+  if (user.employerCategory && user.employerCategory !== employerCategory) {
+    // Check KYC status - type change only allowed if not-submitted or rejected
+    const kycStatus = user.kycStatus || 'not-submitted';
+    if (kycStatus === 'pending' || kycStatus === 'approved' || kycStatus === 'suspended') {
+      throw new ValidationError(`Cannot change employer type. Your KYC is ${kycStatus}. Please contact admin to reset.`);
+    }
+  }
+
+  // Update user
+  user.employerCategory = employerCategory;
+  user.onboardingCompleted = false;
+  await user.save();
+
+  // Get client IP and user agent
+  const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
+  const userAgent = req.get('User-Agent') || 'unknown';
+
+  // Create audit entry
+  try {
+    await RoleSelectionAudit.create({
+      userId: user._id,
+      intent,
+      employerType: employerType as 'corporate' | 'local' | 'individual',
+      clientIp,
+      userAgent
+    });
+  } catch (auditError) {
+    console.error('❌ Failed to create role selection audit:', auditError);
+    // Don't fail the request if audit fails
+  }
+
+  // Determine redirect URL based on employer type
+  const redirectMap: Record<string, string> = {
+    'corporate': '/employer/kyc/corporate',
+    'local': '/employer/kyc/local',
+    'individual': '/employer/kyc/individual'
+  };
+
+  const redirectTo = redirectMap[employerType];
+
+  sendSuccessResponse(res, {
+    success: true,
+    redirectTo
+  }, 'Role selected successfully');
+}));
+
+// @route   PUT /api/users/change-employer-type
+// @desc    Change employer type (only allowed if KYC is not-submitted or rejected)
+// @access  Private
+router.put('/change-employer-type', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { employerType } = req.body;
+
+  // Validate input
+  if (!employerType || !['corporate', 'local', 'individual'].includes(employerType)) {
+    throw new ValidationError('Valid employerType is required. Must be one of: corporate, local, individual');
+  }
+
+  const user = await User.findById(req.user!._id);
+  if (!user) {
+    throw new ValidationError('User not found');
+  }
+
+  if (user.userType !== 'employer') {
+    throw new ValidationError('Only employers can change their type');
+  }
+
+  // Map API employerType to DB employerCategory
+  const employerCategoryMap: Record<string, 'corporate' | 'local_business' | 'individual'> = {
+    'corporate': 'corporate',
+    'local': 'local_business',
+    'individual': 'individual'
+  };
+
+  const newCategory = employerCategoryMap[employerType];
+
+  // Check if type is actually changing
+  if (user.employerCategory === newCategory) {
+    throw new ValidationError('You are already registered as this employer type');
+  }
+
+  // Check KYC status - type change only allowed if not-submitted or rejected
+  const kycStatus = user.kycStatus || 'not-submitted';
+  if (kycStatus === 'pending' || kycStatus === 'approved' || kycStatus === 'suspended') {
+    throw new ValidationError(`Cannot change employer type. Your KYC is ${kycStatus}. Please contact admin to reset.`);
+  }
+
+  const oldCategory = user.employerCategory;
+
+  // Archive old KYC records based on old category
+  try {
+    if (oldCategory === 'corporate') {
+      const oldKYC = await EmployerKYC.findOne({ employerId: user._id, isArchived: false });
+      if (oldKYC) {
+        oldKYC.isArchived = true;
+        oldKYC.archivedAt = new Date();
+        await oldKYC.save();
+      }
+    } else if (oldCategory === 'local_business') {
+      const oldKYC = await LocalBusinessKYC.findOne({ employerId: user._id, isArchived: false });
+      if (oldKYC) {
+        oldKYC.isArchived = true;
+        oldKYC.archivedAt = new Date();
+        await oldKYC.save();
+      }
+    } else if (oldCategory === 'individual') {
+      const oldKYC = await IndividualKYC.findOne({ employerId: user._id, isArchived: false });
+      if (oldKYC) {
+        oldKYC.isArchived = true;
+        oldKYC.archivedAt = new Date();
+        await oldKYC.save();
+      }
+    }
+  } catch (archiveError) {
+    console.error('❌ Failed to archive old KYC:', archiveError);
+    // Don't fail the request if archiving fails, but log it
+  }
+
+  // Update user
+  user.employerCategory = newCategory;
+  user.kycStatus = 'not-submitted';
+  user.onboardingCompleted = false;
+  await user.save();
+
+  // Get client IP and user agent for audit
+  const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
+  const userAgent = req.get('User-Agent') || 'unknown';
+
+  // Create audit entry
+  try {
+    await RoleSelectionAudit.create({
+      userId: user._id,
+      intent: 'change-type',
+      employerType: employerType as 'corporate' | 'local' | 'individual',
+      clientIp,
+      userAgent
+    });
+  } catch (auditError) {
+    console.error('❌ Failed to create type change audit:', auditError);
+    // Don't fail the request if audit fails
+  }
+
+  // Determine redirect URL to new type's KYC page
+  const redirectMap: Record<string, string> = {
+    'corporate': '/employer/kyc/corporate',
+    'local': '/employer/kyc/local',
+    'individual': '/employer/kyc/individual'
+  };
+
+  const redirectTo = redirectMap[employerType];
+
+  sendSuccessResponse(res, {
+    success: true,
+    redirectTo,
+    newType: employerType,
+    oldType: oldCategory
+  }, 'Employer type changed successfully. Please complete KYC for the new type.');
 }));
 
 // @route   DELETE /api/users/account

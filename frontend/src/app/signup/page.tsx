@@ -18,7 +18,8 @@ const setLocalStorage = (key: string, value: string): void => {
 export default function Signup() {
   const router = useRouter();
   const { login } = useAuth();
-  const [userType, setUserType] = useState<'student' | 'employer' | 'admin'>('student');
+  const [selectedRole, setSelectedRole] = useState<'find-work' | 'hire-talent' | null>(null);
+  const [userType, setUserType] = useState<'student' | 'employer'>('student');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -26,20 +27,13 @@ export default function Signup() {
     password: '',
     confirmPassword: '',
     otp: '',
-    // Student-specific fields
-    college: '',
-    skills: '',
-    availability: 'flexible', // Default value
-    // Employer-specific fields
-    companyName: '',
-    businessType: '',
-    address: ''
+    college: '' // Only for students
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [otpData, setOtpData] = useState({ email: '', phone: '' });
-  const [step, setStep] = useState<'form' | 'otp' | 'success'>('form');
+  const [step, setStep] = useState<'role-selection' | 'form' | 'otp' | 'success'>('role-selection');
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -68,20 +62,12 @@ export default function Signup() {
       return;
     }
 
-    if (userType === 'student' && !formData.college) {
-      setError('Please enter your college/university');
+    // Validate college for students only
+    if (userType === 'student' && !formData.college?.trim()) {
+      setError('College/University is required for students');
       setLoading(false);
       return;
     }
-
-    if (userType === 'student' && !formData.availability) {
-      setError('Please select your availability');
-      setLoading(false);
-      return;
-    }
-
-    // Note: Employer-specific fields (companyName, businessType, address) are optional during signup
-    // They will be collected during KYC verification process
 
     try {
       // Send OTP to email address
@@ -132,24 +118,19 @@ export default function Signup() {
 
     try {
       // Prepare user data for registration
-      const userData = {
+      const userData: any = {
         name: formData.name,
         email: formData.email,
         phone: formData.phone,
         password: formData.password,
         userType,
-        otp: formData.otp, // Include the verified OTP
-        ...(userType === 'student' && {
-          college: formData.college,
-          skills: formData.skills,
-          availability: formData.availability
-        }),
-        ...(userType === 'employer' && {
-          companyName: formData.companyName,
-          businessType: formData.businessType,
-          address: formData.address
-        })
+        otp: formData.otp // Include the verified OTP
       };
+
+      // Add college for students only
+      if (userType === 'student' && formData.college?.trim()) {
+        userData.college = formData.college.trim();
+      }
 
       // Register the user
       const response = await apiService.register(userData) as any;
@@ -171,15 +152,39 @@ export default function Signup() {
         login(user, token);
         
         setStep('success');
-        setSuccess('Account created successfully! Redirecting to your dashboard...');
+        setSuccess('Account created successfully! Redirecting...');
         
-        // Redirect immediately to main page
-        const redirectPath = '/';
+        // Redirect based on user type
+        let redirectPath = '/';
+        if (user.userType === 'employer') {
+          // If employer doesn't have a category, redirect to role selection
+          if (!user.employerCategory) {
+            redirectPath = '/employer/select-role';
+          } else {
+            // If already has category, redirect to their type-specific KYC page
+            const category = user.employerCategory;
+            if (category === 'corporate') {
+              redirectPath = '/employer/kyc/corporate';
+            } else if (category === 'local_business') {
+              redirectPath = '/employer/kyc/local';
+            } else if (category === 'individual') {
+              redirectPath = '/employer/kyc/individual';
+            } else {
+              redirectPath = '/employer/select-role';
+            }
+          }
+        } else if (user.userType === 'student') {
+          redirectPath = '/student/dashboard';
+        } else if (user.userType === 'admin' || user.role === 'admin') {
+          redirectPath = '/admin/dashboard';
+        }
         
         console.log('🚀 Redirecting to:', redirectPath); // Debug log
         
-        // Use router.push immediately instead of setTimeout
-        router.push(redirectPath);
+        // Redirect after a short delay
+        setTimeout(() => {
+          router.push(redirectPath);
+        }, 1500);
       } else {
         console.error('❌ Missing user or token in response:', { user, token }); // Debug log
         setError('Registration failed. Please try again.');
@@ -213,7 +218,7 @@ export default function Signup() {
         </div>
       </div>
 
-      <div className="mx-auto grid h-[calc(100vh-64px)] max-w-6xl grid-cols-1 items-center gap-4 sm:gap-6 lg:gap-8 px-3 sm:px-4 py-6 sm:py-8 md:grid-cols-2">
+      <div className="mx-auto grid min-h-[calc(100vh-64px)] max-w-6xl grid-cols-1 items-center gap-4 sm:gap-6 lg:gap-8 px-3 sm:px-4 py-4 sm:py-6 md:grid-cols-2">
         {/* Left: Branding */}
         <div className="hidden md:block">
           <div className="mb-4 inline-flex items-center gap-3 rounded-full border border-gray-200 bg-white/70 px-3 py-2 shadow-sm backdrop-blur-md">
@@ -242,96 +247,132 @@ export default function Signup() {
         </div>
 
         {/* Right: Auth card */}
-        <div className="w-full flex items-center justify-center">
-          <div className="mx-auto w-full max-w-md rounded-xl sm:rounded-2xl border border-gray-200 bg-white/85 shadow-xl backdrop-blur-sm flex flex-col max-h-[85vh]">
-            {/* Card Header - Fixed */}
-            <div className="flex-shrink-0 p-4 sm:p-6 pb-0">
+        <div className="w-full flex items-center justify-center py-4">
+          <div className="mx-auto w-full max-w-md rounded-xl sm:rounded-2xl border border-gray-200 bg-white/85 shadow-xl backdrop-blur-sm overflow-hidden flex flex-col">
+            {/* Card Header */}
+            <div className="pt-3 sm:pt-4 px-4 sm:px-5 pb-2">
               {/* Mobile Logo - Hidden on desktop */}
-              <div className="mb-4 sm:mb-6 flex md:hidden items-center justify-center">
-                <div className="inline-flex items-center gap-3 rounded-full border border-gray-200 bg-white/70 px-3 py-2 shadow-sm backdrop-blur-md">
-                  <Image src="/img/norixnobg.jpg" alt="NoriX" width={40} height={40} className="h-10 w-10" />
-                  <span className="text-sm font-semibold tracking-wide text-gray-800">Welcome to NoriX</span>
+              <div className="mb-2 flex md:hidden items-center justify-center">
+                <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white/70 px-2 py-1 shadow-sm backdrop-blur-md">
+                  <Image src="/img/norixnobg.jpg" alt="NoriX" width={32} height={32} className="h-8 w-8" />
+                  <span className="text-xs font-semibold tracking-wide text-gray-800">Welcome to NoriX</span>
                 </div>
               </div>
 
-              <div className="mb-4 flex flex-col items-center text-center">
+              <div className="mb-2 flex flex-col items-center text-center">
                 {/* Big logo - Hidden on mobile */}
-                <Image src="/img/norixnobg.jpg" alt="NoriX" width={160} height={160} className="hidden md:block h-20 w-20 sm:h-24 sm:w-24" priority />
-                <h2 className="mt-2 sm:mt-3 text-lg sm:text-xl font-semibold text-gray-900">Create account</h2>
+                <Image src="/img/norixnobg.jpg" alt="NoriX" width={80} height={80} className="hidden md:block h-12 w-12" priority />
+                <h2 className="mt-1 text-base sm:text-lg font-semibold text-gray-900">
+                  {step === 'role-selection' ? 'Choose Your Path' : 'Create account'}
+                </h2>
+                {step === 'form' && selectedRole && (
+                  <div className="mt-1 flex items-center justify-center gap-2">
+                    <span className="text-xl">
+                      {selectedRole === 'find-work' ? '🎓' : '💼'}
+                    </span>
+                    <span className="text-xs text-gray-600">
+                      {selectedRole === 'find-work' ? 'Find Work' : 'Hire Talent'}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setStep('role-selection');
+                        setSelectedRole(null);
+                      }}
+                      className="ml-1 text-xs text-indigo-600 hover:text-indigo-700 underline"
+                    >
+                      Change
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Scrollable Content */}
-            <div 
-              className="flex-1 overflow-y-auto px-4 sm:px-6 pb-4 sm:pb-6 custom-scrollbar"
-              style={{
-                scrollbarWidth: 'thin',
-                scrollbarColor: '#cbd5e1 #f1f5f9'
-              }}
-            >
+            {/* Content - No scrolling */}
+            <div className="px-4 sm:px-5 pb-5 sm:pb-6">
+              {/* Role Selection Screen */}
+              {step === 'role-selection' && (
+                <>
+                  <div className="text-center mb-4">
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
+                      What do you want to do in NoriX?
+                    </h2>
+                    <p className="text-xs sm:text-sm text-gray-600">
+                      Choose the option that best describes your goal
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    {/* Find Work Option */}
+                    <button
+                      onClick={() => {
+                        setSelectedRole('find-work');
+                        setUserType('student');
+                        setStep('form');
+                      }}
+                      className="w-full p-4 border-2 border-gray-200 rounded-xl bg-white hover:border-indigo-500 hover:bg-indigo-50 transition-all text-left group"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="flex-shrink-0">
+                          <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl bg-gradient-to-br from-indigo-100 to-indigo-200 flex items-center justify-center text-4xl sm:text-5xl group-hover:scale-110 transition-transform shadow-md">
+                            🎓
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">Find Work</h3>
+                          <p className="text-xs sm:text-sm text-gray-600 leading-relaxed mb-2">
+                            Looking for job opportunities? Connect with employers and browse part-time jobs.
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium">Part-time</span>
+                            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium">Flexible</span>
+                            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium">Student</span>
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Hire Talent Option */}
+                    <button
+                      onClick={() => {
+                        setSelectedRole('hire-talent');
+                        setUserType('employer');
+                        setStep('form');
+                      }}
+                      className="w-full p-4 border-2 border-gray-200 rounded-xl bg-white hover:border-indigo-500 hover:bg-indigo-50 transition-all text-left group"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="flex-shrink-0">
+                          <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl bg-gradient-to-br from-purple-100 to-purple-200 flex items-center justify-center text-4xl sm:text-5xl group-hover:scale-110 transition-transform shadow-md">
+                            💼
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">Hire Talent</h3>
+                          <p className="text-xs sm:text-sm text-gray-600 leading-relaxed mb-2">
+                            Post jobs and recruit talented individuals. Find skilled students for your team.
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">Post Jobs</span>
+                            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">Recruit</span>
+                            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">Quick Hire</span>
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                </>
+              )}
+
               {step === 'form' && (
             <>
-              {/* User Type Selection */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  I am a:
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setUserType('student');
-                    }}
-                    className={`flex-1 py-2 sm:py-2.5 px-2 sm:px-4 border-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
-                      userType === 'student'
-                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm'
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-indigo-300 hover:bg-indigo-50'
-                    }`}
-                  >
-                    🎓 <span className="hidden xs:inline">Student</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setUserType('employer');
-                    }}
-                    className={`flex-1 py-2 sm:py-2.5 px-2 sm:px-4 border-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
-                      userType === 'employer'
-                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm'
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-indigo-300 hover:bg-indigo-50'
-                    }`}
-                  >
-                    💼 <span className="hidden xs:inline">Employer</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setUserType('admin');
-                    }}
-                    className={`flex-1 py-2 sm:py-2.5 px-2 sm:px-4 border-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
-                      userType === 'admin'
-                        ? 'border-amber-500 bg-amber-50 text-amber-700 shadow-sm'
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-amber-300 hover:bg-amber-50'
-                    }`}
-                  >
-                    👑 <span className="hidden xs:inline">Admin</span>
-                  </button>
-                </div>
-              </div>
 
-              <form className="space-y-6" onSubmit={handleSendOTP}>
+              <form className="space-y-3" onSubmit={handleSendOTP}>
                 {/* Common Fields */}
                 <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="name" className="block text-xs font-medium text-gray-700">
                     Full Name
                   </label>
-                  <div className="mt-1">
+                  <div className="mt-0.5">
                     <input
                       id="name"
                       name="name"
@@ -339,17 +380,17 @@ export default function Signup() {
                       required
                       value={formData.name}
                       onChange={handleInputChange}
-                      className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
+                      className="appearance-none block w-full px-3 py-2 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-colors"
                       placeholder="Enter your full name"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="email" className="block text-xs font-medium text-gray-700">
                     Email address
                   </label>
-                  <div className="mt-1">
+                  <div className="mt-0.5">
                     <input
                       id="email"
                       name="email"
@@ -358,17 +399,17 @@ export default function Signup() {
                       required
                       value={formData.email}
                       onChange={handleInputChange}
-                      className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
+                      className="appearance-none block w-full px-3 py-2 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-colors"
                       placeholder="Enter your email"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="phone" className="block text-xs font-medium text-gray-700">
                     Phone Number
                   </label>
-                  <div className="mt-1">
+                  <div className="mt-0.5">
                     <input
                       id="phone"
                       name="phone"
@@ -376,17 +417,17 @@ export default function Signup() {
                       required
                       value={formData.phone}
                       onChange={handleInputChange}
-                      className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
+                      className="appearance-none block w-full px-3 py-2 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-colors"
                       placeholder="Enter your phone number"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="password" className="block text-xs font-medium text-gray-700">
                     Password
                   </label>
-                  <div className="mt-1">
+                  <div className="mt-0.5">
                     <input
                       id="password"
                       name="password"
@@ -395,17 +436,17 @@ export default function Signup() {
                       required
                       value={formData.password}
                       onChange={handleInputChange}
-                      className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
+                      className="appearance-none block w-full px-3 py-2 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-colors"
                       placeholder="Create a password"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="confirmPassword" className="block text-xs font-medium text-gray-700">
                     Confirm Password
                   </label>
-                  <div className="mt-1">
+                  <div className="mt-0.5">
                     <input
                       id="confirmPassword"
                       name="confirmPassword"
@@ -414,144 +455,37 @@ export default function Signup() {
                       required
                       value={formData.confirmPassword}
                       onChange={handleInputChange}
-                      className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
+                      className="appearance-none block w-full px-3 py-2 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-colors"
                       placeholder="Confirm your password"
                     />
                   </div>
                 </div>
 
-                {/* Student-specific fields */}
+                {/* College field - Only for students */}
                 {userType === 'student' && (
-                  <>
-                    <div>
-                      <label htmlFor="college" className="block text-sm font-medium text-gray-700">
-                        College/University
-                      </label>
-                      <div className="mt-1">
-                        <input
-                          id="college"
-                          name="college"
-                          type="text"
-                          required
-                          value={formData.college}
-                          onChange={handleInputChange}
-                          className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
-                          placeholder="Enter your college name"
-                        />
-                      </div>
+                  <div>
+                    <label htmlFor="college" className="block text-xs font-medium text-gray-700">
+                      College/University <span className="text-red-500">*</span>
+                    </label>
+                    <div className="mt-0.5">
+                      <input
+                        id="college"
+                        name="college"
+                        type="text"
+                        required
+                        value={formData.college}
+                        onChange={handleInputChange}
+                        className="appearance-none block w-full px-3 py-2 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-colors"
+                        placeholder="Enter your college/university name"
+                      />
                     </div>
-
-                    <div>
-                      <label htmlFor="skills" className="block text-sm font-medium text-gray-700">
-                        Skills
-                      </label>
-                      <div className="mt-1">
-                        <textarea
-                          id="skills"
-                          name="skills"
-                          rows={3}
-                          value={formData.skills}
-                          onChange={handleInputChange}
-                          className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
-                          placeholder="List your skills (e.g., Customer Service, Data Entry, Tutoring)"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label htmlFor="availability" className="block text-sm font-medium text-gray-700">
-                        Availability
-                      </label>
-                      <div className="mt-1">
-                        <select
-                          id="availability"
-                          name="availability"
-                          required
-                          value={formData.availability}
-                          onChange={handleInputChange}
-                          className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
-                        >
-                          <option value="">Select your availability</option>
-                          <option value="weekdays">Weekdays</option>
-                          <option value="weekends">Weekends</option>
-                          <option value="both">Both (Weekdays & Weekends)</option>
-                          <option value="flexible">Flexible</option>
-                        </select>
-                      </div>
-                    </div>
-                  </>
+                  </div>
                 )}
 
-                {/* Employer-specific fields */}
-                {userType === 'employer' && (
-                  <>
-                    <div>
-                      <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">
-                        Company Name
-                      </label>
-                      <div className="mt-1">
-                        <input
-                          id="companyName"
-                          name="companyName"
-                          type="text"
-                          value={formData.companyName}
-                          onChange={handleInputChange}
-                          className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
-                          placeholder="Enter your company name (optional)"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label htmlFor="businessType" className="block text-sm font-medium text-gray-700">
-                        Business Type
-                      </label>
-                      <div className="mt-1">
-                        <select
-                          id="businessType"
-                          name="businessType"
-                          value={formData.businessType}
-                          onChange={handleInputChange}
-                          className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
-                        >
-                          <option value="">Select business type (optional)</option>
-                          <option value="Cafe & Restaurant">Cafe & Restaurant</option>
-                          <option value="Retail Store">Retail Store</option>
-                          <option value="Tuition Center">Tuition Center</option>
-                          <option value="Events & Entertainment">Events & Entertainment</option>
-                          <option value="Delivery Service">Delivery Service</option>
-                          <option value="Office & Corporate">Office & Corporate</option>
-                          <option value="Tech Company">Tech Company</option>
-                          <option value="Creative Agency">Creative Agency</option>
-                          <option value="Healthcare">Healthcare</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label htmlFor="address" className="block text-sm font-medium text-gray-700">
-                        Business Address
-                      </label>
-                      <div className="mt-1">
-                        <textarea
-                          id="address"
-                          name="address"
-                          rows={3}
-                          value={formData.address}
-                          onChange={handleInputChange}
-                          className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
-                          placeholder="Enter your business address (optional)"
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                <div>
+                <div className="pt-1">
                   <button
                     type="submit"
-                    className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={loading}
                   >
                     {loading ? 'Sending OTP...' : 'Continue'}
@@ -563,39 +497,36 @@ export default function Signup() {
 
           {step === 'otp' && (
             <>
-              <div className="text-center mb-4">
-                <h2 className="text-2xl font-bold text-gray-900">
+              <div className="text-center mb-3">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900">
                 Verify your email
               </h2>
-                <p className="mt-2 text-sm text-gray-600">
-                We sent a verification code to <strong>{otpData.email}</strong>. Enter it below to complete your registration.
+                <p className="mt-1 text-xs text-gray-600">
+                Code sent to <strong>{otpData.email}</strong>
               </p>
               </div>
 
               {/* Display entered information for review */}
-              <div className="bg-indigo-50 border-2 border-indigo-200 rounded-lg p-4 mb-4">
-                <h3 className="text-sm font-semibold text-indigo-900 mb-2 flex items-center gap-2">
+              <div className="bg-indigo-50 border-2 border-indigo-200 rounded-lg p-3 mb-3">
+                <h3 className="text-xs font-semibold text-indigo-900 mb-1.5 flex items-center gap-1">
                   <span className="text-indigo-600">✓</span> Your Details:
                 </h3>
-                <div className="space-y-1 text-sm text-gray-700">
+                <div className="space-y-0.5 text-xs text-gray-700">
                   <p><strong>Name:</strong> {formData.name}</p>
                   <p><strong>Email:</strong> {formData.email}</p>
                   <p><strong>Phone:</strong> {formData.phone}</p>
                   {userType === 'student' && formData.college && (
                     <p><strong>College:</strong> {formData.college}</p>
                   )}
-                  {userType === 'employer' && formData.companyName && (
-                    <p><strong>Company:</strong> {formData.companyName}</p>
-                  )}
                 </div>
               </div>
 
-              <form className="space-y-6" onSubmit={handleVerifyOTP}>
+              <form className="space-y-3" onSubmit={handleVerifyOTP}>
                 <div>
-                  <label htmlFor="otp" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="otp" className="block text-xs font-medium text-gray-700">
                     Verification Code
                   </label>
-                  <div className="mt-1">
+                  <div className="mt-0.5">
                     <input
                       id="otp"
                       name="otp"
@@ -603,16 +534,16 @@ export default function Signup() {
                       required
                       value={formData.otp}
                       onChange={(e) => setFormData(prev => ({ ...prev, otp: e.target.value }))}
-                      className="appearance-none block w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
-                      placeholder="Enter the 6-digit code"
+                      className="appearance-none block w-full px-3 py-2 border-2 border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm transition-colors"
+                      placeholder="Enter 6-digit code"
                     />
                   </div>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-2">
                   <button
                     type="submit"
-                    className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={loading}
                   >
                     {loading ? 'Verifying...' : 'Verify OTP'}
@@ -627,7 +558,7 @@ export default function Signup() {
                       setError('');
                       setSuccess('');
                     }}
-                    className="w-full flex justify-center py-3 px-4 border-2 border-gray-200 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
+                    className="w-full flex justify-center py-2 px-4 border-2 border-gray-200 rounded-lg shadow-sm text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
                     disabled={loading}
                   >
                     ← Edit Details
@@ -641,17 +572,17 @@ export default function Signup() {
                         setLoading(true);
                         setError('');
                         await apiService.sendOTP(formData.email.trim(), 'signup');
-                        setSuccess('OTP resent to your email!');
+                        setSuccess('OTP resent!');
                       } catch (error: any) {
                         setError(apiService.handleError(error));
                       } finally {
                         setLoading(false);
                       }
                     }}
-                    className="w-full flex justify-center py-2 px-4 text-sm font-medium text-indigo-600 hover:text-indigo-800"
+                    className="w-full flex justify-center py-1.5 px-4 text-xs font-medium text-indigo-600 hover:text-indigo-800"
                     disabled={loading}
                   >
-                    Didn't receive code? Resend OTP
+                    Resend OTP
                   </button>
                 </div>
               </form>
@@ -679,34 +610,46 @@ export default function Signup() {
           )}
 
               {error && (
-                <div className="mt-4 text-center text-sm text-red-600 bg-red-50 border-2 border-red-200 rounded-lg p-3">
+                <div className="mt-2 text-center text-xs text-red-600 bg-red-50 border-2 border-red-200 rounded-lg p-2">
                   {error}
                 </div>
               )}
               {success && (
-                <div className="mt-4 text-center text-sm text-green-700 bg-green-50 border-2 border-green-200 rounded-lg p-3">
+                <div className="mt-2 text-center text-xs text-green-700 bg-green-50 border-2 border-green-200 rounded-lg p-2">
                   {success}
                 </div>
               )}
 
               {step === 'form' && (
                 <>
-                  <div className="my-6 flex items-center gap-3">
+                  <div className="my-3 flex items-center gap-2">
                     <span className="h-px flex-1 bg-gray-200" />
                     <span className="text-xs uppercase tracking-wide text-gray-400">or</span>
                     <span className="h-px flex-1 bg-gray-200" />
                   </div>
 
-                  <div className="text-center">
-                    <span className="text-sm text-gray-600">Already have an account?</span>{' '}
+                  <div className="text-center pb-1">
+                    <span className="text-xs text-gray-600">Already have an account?</span>{' '}
                     <Link
                       href="/login"
-                      className="text-sm font-semibold text-indigo-600 hover:text-indigo-700"
+                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
                     >
                       Sign in
                     </Link>
                   </div>
                 </>
+              )}
+
+              {step === 'role-selection' && (
+                <div className="text-center pt-2 pb-1">
+                  <span className="text-xs text-gray-600">Already have an account?</span>{' '}
+                  <Link
+                    href="/login"
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+                  >
+                    Sign in
+                  </Link>
+                </div>
               )}
             </div>
           </div>

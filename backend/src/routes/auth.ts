@@ -225,6 +225,13 @@ const generateToken = (user: IUser): string => {
 // @desc    Register a new user
 // @access  Public
 router.post('/register', asyncHandler(async (req: express.Request, res: express.Response) => {
+  console.log('📝 Registration request received:', {
+    userType: req.body.userType,
+    hasCollege: !!req.body.college,
+    college: req.body.college,
+    bodyKeys: Object.keys(req.body)
+  });
+
   const {
     name,
     email,
@@ -234,13 +241,14 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
     college,
     skills,
     availability,
+    employerCategory,
     companyName,
     businessType,
     address,
     otp
   } = req.body;
 
-  // Validate required fields
+  // Validate required fields - only basic fields required
   if (!name || !email || !phone || !password || !userType || !otp) {
     throw new ValidationError('All required fields including OTP must be provided');
   }
@@ -269,13 +277,20 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
     console.log('✅ Authorized admin registration attempt:', email);
   }
 
-  // Validate student-specific fields
-  if (userType === 'student' && !college) {
-    throw new ValidationError('College/University is required for students');
+  // Validate college for students
+  if (userType === 'student') {
+    if (!college || !college.trim()) {
+      console.error('❌ College validation failed:', { userType, college, hasCollege: !!college });
+      throw new ValidationError('College/University is required for students');
+    }
+    console.log('✅ College validated for student:', college);
   }
 
-  // Note: Employer-specific fields (companyName, businessType, address) are optional during registration
-  // They will be collected during KYC verification process
+  // Note: Employer category is optional during registration
+  // It will be collected when employer first accesses their dashboard
+
+  // Note: Other student-specific fields (skills, availability) are optional - will be collected during KYC
+  // Note: Employer-specific fields (companyName, businessType, address) are optional - will be collected during KYC
 
   // Verify OTP before proceeding
   const otpValid = await verifyOTP(email, otp, 'verification');
@@ -297,7 +312,7 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
     }
   }
 
-  // Create user data
+  // Create user data - basic fields + college for students + employerCategory for employers
   const userData: any = {
     name,
     email,
@@ -309,20 +324,18 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
     submittedAt: new Date()
   };
 
-  // Add student-specific fields
+  // Add college for students (required, already validated above)
   if (userType === 'student') {
-    userData.college = college;
-    userData.skills = skills ? skills.split(',').map((s: string) => s.trim()) : [];
-    userData.availability = availability || 'flexible';
+    userData.college = college.trim();
   }
 
-  // Add employer-specific fields (optional - can be filled during KYC)
-  if (userType === 'employer') {
-    if (companyName) userData.companyName = companyName;
-    if (businessType) userData.businessType = businessType;
-    if (address) userData.address = address;
-    userData.isVerified = false; // Employers need verification
+  // Add employerCategory for employers if provided (optional during registration)
+  if (userType === 'employer' && employerCategory) {
+    userData.employerCategory = employerCategory;
   }
+
+  // Note: Other role-specific fields (skills, availability for students;
+  // companyName, businessType, address for employers) will be collected during KYC verification
 
   // Create user
   const user = await User.create(userData);
@@ -346,6 +359,7 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
       phone: user.phone,
       userType: user.userType,
       role: resolveUserRole(user),
+      employerCategory: user.employerCategory,
       college: user.college,
       skills: user.skills,
       availability: user.availability,
