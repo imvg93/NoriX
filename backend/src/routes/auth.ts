@@ -178,6 +178,9 @@ const resolveUserRole = (user: Pick<IUser, 'userType' | 'role'>): 'user' | 'admi
   if (user.role === 'admin' || user.role === 'user') {
     return user.role;
   }
+  if (!user.userType) {
+    return 'user';
+  }
   return user.userType === 'admin' ? 'admin' : 'user';
 };
 
@@ -347,7 +350,7 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
   // Set headers BEFORE sending body
   res.setHeader('X-OTP-Status', 'verified');
   res.setHeader('X-Verification-Status', 'success');
-  res.setHeader('X-User-Type', user.userType);
+  res.setHeader('X-User-Type', user.userType || '');
   res.setHeader('X-User-Role', resolveUserRole(user));
 
   // Send response
