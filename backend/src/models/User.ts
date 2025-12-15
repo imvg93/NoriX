@@ -6,7 +6,8 @@ export interface IUser extends Document {
   email: string;
   phone: string;
   password: string;
-  userType: 'student' | 'employer' | 'admin';
+  userType: 'student' | 'employer' | 'admin' | null;
+  role: 'user' | 'admin';
   
   // Student specific fields
   college?: string;
@@ -87,8 +88,16 @@ const userSchema = new Schema<IUser>({
   },
   userType: {
     type: String,
-    enum: ['student', 'employer', 'admin'],
-    default: 'student'
+    enum: ['student', 'employer', 'admin', null],
+    default: null
+  },
+  role: {
+    type: String,
+    enum: ['user', 'admin'],
+    default: function(this: IUser) {
+      if (!this.userType) return 'user';
+      return this.userType === 'admin' ? 'admin' : 'user';
+    }
   },
   
   // Student specific fields - college is required for students

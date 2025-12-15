@@ -56,12 +56,21 @@ export const authenticateToken = async (
       return;
     }
 
-    const resolvedRole = user.role === 'admin' || user.role === 'user'
-      ? user.role
-      : (user.userType === 'admin' ? 'admin' : 'user');
+    // Resolve role: use existing role if set, otherwise derive from userType
+    let resolvedRole: 'user' | 'admin';
+    if (user.role === 'admin' || user.role === 'user') {
+      resolvedRole = user.role;
+    } else {
+      // Handle null userType
+      if (!user.userType) {
+        resolvedRole = 'user';
+      } else {
+        resolvedRole = user.userType === 'admin' ? 'admin' : 'user';
+      }
+    }
 
     if (user.role !== resolvedRole) {
-      user.role = resolvedRole as any;
+      user.role = resolvedRole;
       try {
         await user.save();
       } catch (saveError) {

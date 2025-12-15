@@ -79,7 +79,7 @@ export class SocketService {
 
         // Attach user info to socket
         authSocket.userId = (user._id as any).toString();
-        authSocket.userType = user.userType;
+        authSocket.userType = user.userType || undefined;
         authSocket.userEmail = user.email;
 
         console.log(`🔌 Socket authenticated: ${user.email} (${user.userType})`);
