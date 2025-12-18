@@ -5,7 +5,7 @@ import cors from 'cors';
   import User, { IUser } from '../models/User';
 import OTP from '../models/OTP';
 import { AdminLogin } from '../models/AdminLogin';
-import { authenticateToken, rateLimit, AuthRequest } from '../middleware/auth';
+import { authenticateToken, rateLimit, AuthRequest, isSuperAdmin } from '../middleware/auth';
 import { asyncHandler, sendSuccessResponse, sendErrorResponse, ValidationError } from '../middleware/errorHandler';
 import { generateOTP, sendOTPEmail, verifyOTP, getEmailConfigStatus } from '../services/emailService';
 
@@ -25,7 +25,7 @@ router.get('/verify-token', authenticateToken, asyncHandler(async (req: AuthRequ
       });
     }
 
-    const role = resolveUserRole(user);
+    const role = getUserRole(user);
 
     // Return user data without sensitive information
     const userData = {
@@ -33,7 +33,6 @@ router.get('/verify-token', authenticateToken, asyncHandler(async (req: AuthRequ
       name: user.name,
       email: user.email,
       role,
-      userType: user.userType,
       companyName: user.companyName,
       isActive: user.isActive,
       emailVerified: user.emailVerified,
@@ -71,7 +70,7 @@ router.post('/refresh-token', authenticateToken, asyncHandler(async (req: AuthRe
     }
 
     // Generate new token
-    const role = resolveUserRole(user);
+    const role = getUserRole(user);
 
     const token = generateToken(user as IUser);
     setAuthCookie(res, token);
@@ -85,7 +84,6 @@ router.post('/refresh-token', authenticateToken, asyncHandler(async (req: AuthRe
         _id: user._id,
         name: user.name,
         email: user.email,
-        userType: user.userType,
         role,
         companyName: user.companyName,
         isActive: user.isActive,
@@ -174,14 +172,10 @@ router.use('/forgot-password', cors(otpCorsOptions));
 router.use('/reset-password', cors(otpCorsOptions));
 
 // Generate JWT token
-const resolveUserRole = (user: Pick<IUser, 'userType' | 'role'>): 'user' | 'admin' => {
-  if (user.role === 'admin' || user.role === 'user') {
-    return user.role;
-  }
-  if (!user.userType) {
-    return 'user';
-  }
-  return user.userType === 'admin' ? 'admin' : 'user';
+// Role is now directly stored in user.role - no resolution needed
+// This function is kept for backward compatibility but just returns the role
+const getUserRole = (user: Pick<IUser, 'role'>): 'student' | 'individual' | 'corporate' | 'local' => {
+  return user.role;
 };
 
 const setAuthCookie = (res: express.Response, token: string) => {
@@ -216,8 +210,7 @@ const generateToken = (user: IUser): string => {
     { 
       userId: user._id,
       email: user.email,
-      userType: user.userType,
-      role: resolveUserRole(user)
+      role: user.role
     },
     secret,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
@@ -229,7 +222,7 @@ const generateToken = (user: IUser): string => {
 // @access  Public
 router.post('/register', asyncHandler(async (req: express.Request, res: express.Response) => {
   console.log('📝 Registration request received:', {
-    userType: req.body.userType,
+    role: req.body.role,
     hasCollege: !!req.body.college,
     college: req.body.college,
     bodyKeys: Object.keys(req.body)
@@ -240,11 +233,10 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
     email,
     phone,
     password,
-    userType,
+    role,
     college,
     skills,
     availability,
-    employerCategory,
     companyName,
     businessType,
     address,
@@ -252,38 +244,19 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
   } = req.body;
 
   // Validate required fields - only basic fields required
-  if (!name || !email || !phone || !password || !userType || !otp) {
+  if (!name || !email || !phone || !password || !role || !otp) {
     throw new ValidationError('All required fields including OTP must be provided');
   }
 
-  // Validate user type
-  if (!['student', 'employer', 'admin'].includes(userType)) {
-    throw new ValidationError('Invalid user type');
-  }
-
-  // 🔒 SECURITY: Prevent unauthorized admin creation
-  if (userType === 'admin') {
-    const AUTHORIZED_ADMIN_EMAILS = [
-      'mework2003@gmail.com'        // Only authorized admin email
-    ];
-    
-    if (!AUTHORIZED_ADMIN_EMAILS.includes(email.toLowerCase())) {
-      console.log('🚨 SECURITY ALERT: Unauthorized admin creation attempt:', {
-        email: email,
-        ip: req.ip,
-        userAgent: req.get('User-Agent'),
-        timestamp: new Date().toISOString()
-      });
-      throw new ValidationError('Admin account creation is restricted. Please contact support.');
-    }
-    
-    console.log('✅ Authorized admin registration attempt:', email);
+  // Validate role - LOCKED: student | individual | corporate | local
+  if (!['student', 'individual', 'corporate', 'local'].includes(role)) {
+    throw new ValidationError('Invalid role. Must be one of: student, individual, corporate, local');
   }
 
   // Validate college for students
-  if (userType === 'student') {
+  if (role === 'student') {
     if (!college || !college.trim()) {
-      console.error('❌ College validation failed:', { userType, college, hasCollege: !!college });
+      console.error('❌ College validation failed:', { role, college, hasCollege: !!college });
       throw new ValidationError('College/University is required for students');
     }
     console.log('✅ College validated for student:', college);
@@ -315,26 +288,20 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
     }
   }
 
-  // Create user data - basic fields + college for students + employerCategory for employers
+  // Create user data - basic fields + college for students
   const userData: any = {
     name,
     email,
     phone,
     password,
-    userType,
-    role: userType === 'admin' ? 'admin' : 'user',
+    role, // LOCKED: student | individual | corporate | local
     emailVerified: true, // Mark as verified since OTP was verified
     submittedAt: new Date()
   };
 
   // Add college for students (required, already validated above)
-  if (userType === 'student') {
+  if (role === 'student') {
     userData.college = college.trim();
-  }
-
-  // Add employerCategory for employers if provided (optional during registration)
-  if (userType === 'employer' && employerCategory) {
-    userData.employerCategory = employerCategory;
   }
 
   // Note: Other role-specific fields (skills, availability for students;
@@ -350,8 +317,7 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
   // Set headers BEFORE sending body
   res.setHeader('X-OTP-Status', 'verified');
   res.setHeader('X-Verification-Status', 'success');
-  res.setHeader('X-User-Type', user.userType || '');
-  res.setHeader('X-User-Role', resolveUserRole(user));
+  res.setHeader('X-User-Role', user.role);
 
   // Send response
   sendSuccessResponse(res, {
@@ -360,9 +326,7 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
       name: user.name,
       email: user.email,
       phone: user.phone,
-      userType: user.userType,
-      role: resolveUserRole(user),
-      employerCategory: user.employerCategory,
+      role: user.role,
       college: user.college,
       skills: user.skills,
       availability: user.availability,
@@ -398,7 +362,7 @@ router.post('/login-auto', asyncHandler(async (req: express.Request, res: expres
     throw new ValidationError('No account found with this email address');
   }
 
-  console.log('✅ User found:', { id: user._id, email: user.email, userType: user.userType });
+  console.log('✅ User found:', { id: user._id, email: user.email, role: user.role });
 
   // Check if user is active
   if (!user.isActive) {
@@ -413,36 +377,13 @@ router.post('/login-auto', asyncHandler(async (req: express.Request, res: expres
     throw new ValidationError('Invalid email or password');
   }
 
-  const role = resolveUserRole(user);
-
-  if (user.role !== role) {
-    user.role = role;
-    await user.save();
-  }
-
   // Generate JWT token
   const token = generateToken(user);
   setAuthCookie(res, token);
 
-  // Log successful login for admin users
-  if (user.userType === 'admin') {
-    try {
-      await AdminLogin.create({
-        adminId: user._id,
-        adminEmail: user.email,
-        adminName: user.name,
-        loginStatus: 'success',
-        ipAddress: req.ip || req.connection.remoteAddress,
-        userAgent: req.get('User-Agent')
-      });
-    } catch (logError) {
-      console.error('Failed to log admin login:', logError);
-    }
-  }
+  console.log('✅ Auto-login successful:', { email, role: user.role });
 
-  console.log('✅ Auto-login successful:', { email, userType: user.userType });
-
-  res.setHeader('X-User-Role', role);
+  res.setHeader('X-User-Role', user.role);
 
   sendSuccessResponse(res, {
     user: {
@@ -450,8 +391,7 @@ router.post('/login-auto', asyncHandler(async (req: express.Request, res: expres
       name: user.name,
       email: user.email,
       phone: user.phone,
-      userType: user.userType,
-      role,
+      role: user.role,
       college: user.college,
       skills: user.skills,
       availability: user.availability,
@@ -470,65 +410,20 @@ router.post('/login-auto', asyncHandler(async (req: express.Request, res: expres
 // @desc    Login with email and password
 // @access  Public
 router.post('/login', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { email, password, userType } = req.body;
+  const { email, password, role } = req.body;
 
-  console.log('🔐 Login attempt:', { email, userType, passwordLength: password?.length });
+  console.log('🔐 Login attempt:', { email, role, passwordLength: password?.length });
 
   // Validate input
-  if (!email || !password || !userType) {
+  if (!email || !password || !role) {
     console.log('❌ Missing required fields');
-    throw new ValidationError('Email, password, and user type are required');
+    throw new ValidationError('Email, password, and role are required');
   }
 
-  // Validate user type
-  if (!['student', 'employer', 'admin'].includes(userType)) {
-    console.log('❌ Invalid user type:', userType);
-    throw new ValidationError('Invalid user type');
-  }
-
-  // Admin access validation - check if admin exists in MongoDB
-  if (userType === 'admin') {
-    const adminUser = await User.findOne({ email, userType: 'admin' });
-    if (!adminUser) {
-      console.log('❌ Admin login attempt with non-existent admin email:', email);
-      
-      // Log failed admin login attempt
-      try {
-        await AdminLogin.create({
-          adminId: new mongoose.Types.ObjectId(), // Dummy ID for non-existent admin
-          adminEmail: email,
-          adminName: 'Unknown',
-          loginStatus: 'failed',
-          failureReason: 'Admin account not found',
-          ipAddress: req.ip || req.connection.remoteAddress,
-          userAgent: req.get('User-Agent')
-        });
-      } catch (logError) {
-        console.error('Failed to log admin login attempt:', logError);
-      }
-      
-      throw new ValidationError('Access denied. Admin account not found.');
-    }
-    if (!adminUser.isActive) {
-      console.log('❌ Admin login attempt with inactive admin account:', email);
-      
-      // Log failed admin login attempt
-      try {
-        await AdminLogin.create({
-          adminId: adminUser._id,
-          adminEmail: email,
-          adminName: adminUser.name,
-          loginStatus: 'failed',
-          failureReason: 'Admin account is deactivated',
-          ipAddress: req.ip || req.connection.remoteAddress,
-          userAgent: req.get('User-Agent')
-        });
-      } catch (logError) {
-        console.error('Failed to log admin login attempt:', logError);
-      }
-      
-      throw new ValidationError('Access denied. Admin account is deactivated.');
-    }
+  // Validate role - LOCKED: student | individual | corporate | local
+  if (!['student', 'individual', 'corporate', 'local'].includes(role)) {
+    console.log('❌ Invalid role:', role);
+    throw new ValidationError('Invalid role. Must be one of: student, individual, corporate, local');
   }
 
   // Find user by email
@@ -538,12 +433,12 @@ router.post('/login', asyncHandler(async (req: express.Request, res: express.Res
     throw new ValidationError('No account found with this email address');
   }
 
-  console.log('✅ User found:', { id: user._id, email: user.email, userType: user.userType });
+  console.log('✅ User found:', { id: user._id, email: user.email, role: user.role });
 
-  // Check if user type matches
-  if (user.userType !== userType) {
-    console.log('❌ User type mismatch:', { expected: userType, actual: user.userType });
-    throw new ValidationError('Invalid user type for this account');
+  // Check if user role matches
+  if (user.role !== role) {
+    console.log('❌ User role mismatch:', { expected: role, actual: user.role });
+    throw new ValidationError('Invalid role for this account');
   }
 
   // Check if user is active
@@ -557,35 +452,10 @@ router.post('/login', asyncHandler(async (req: express.Request, res: express.Res
   const isPasswordValid = await user.comparePassword(password);
   if (!isPasswordValid) {
     console.log('❌ Password mismatch for:', email);
-    
-    // Log failed admin login attempt (wrong password)
-    if (userType === 'admin') {
-      try {
-        await AdminLogin.create({
-          adminId: user._id,
-          adminEmail: user.email,
-          adminName: user.name,
-          loginStatus: 'failed',
-          failureReason: 'Incorrect password',
-          ipAddress: req.ip || req.connection.remoteAddress,
-          userAgent: req.get('User-Agent')
-        });
-      } catch (logError) {
-        console.error('Failed to log admin login attempt:', logError);
-      }
-    }
-    
     throw new ValidationError('Incorrect password');
   }
 
   console.log('✅ Password verified for:', email);
-
-  const role = resolveUserRole(user);
-
-  if (user.role !== role) {
-    user.role = role;
-    await user.save();
-  }
 
   // Generate token
   const token = generateToken(user);
@@ -593,24 +463,7 @@ router.post('/login', asyncHandler(async (req: express.Request, res: express.Res
 
   console.log('🎉 Login successful for:', email);
 
-  // Log successful admin login
-  if (userType === 'admin') {
-    try {
-      await AdminLogin.create({
-        adminId: user._id,
-        adminEmail: user.email,
-        adminName: user.name,
-        loginStatus: 'success',
-        ipAddress: req.ip || req.connection.remoteAddress,
-        userAgent: req.get('User-Agent')
-      });
-      console.log('📝 Admin login logged successfully');
-    } catch (logError) {
-      console.error('Failed to log admin login:', logError);
-    }
-  }
-
-  res.setHeader('X-User-Role', role);
+  res.setHeader('X-User-Role', user.role);
 
   // Send response
   sendSuccessResponse(res, {
@@ -619,8 +472,7 @@ router.post('/login', asyncHandler(async (req: express.Request, res: express.Res
       name: user.name,
       email: user.email,
       phone: user.phone,
-      userType: user.userType,
-      role,
+      role: user.role,
       college: user.college,
       skills: user.skills,
       availability: user.availability,
@@ -639,32 +491,26 @@ router.post('/login', asyncHandler(async (req: express.Request, res: express.Res
 // @desc    Request OTP for login
 // @access  Public
 router.post('/login-request-otp', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { email, userType } = req.body;
+  const { email, role } = req.body;
   const normalizedEmail = String(email || '').toLowerCase().trim();
-  const normalizedUserType = String(userType || '').toLowerCase().trim();
+  const normalizedRole = String(role || '').toLowerCase().trim();
 
   console.log('🔐 OTP Login Request:', {
     email: normalizedEmail,
-    requestedUserType: normalizedUserType,
-    allowedUserTypes: ['student', 'employer', 'admin'],
+    requestedRole: normalizedRole,
+    allowedRoles: ['student', 'individual', 'corporate', 'local'],
     db: (mongoose.connection as any)?.db?.databaseName,
     host: (mongoose.connection as any)?.host
   });
 
   // Validate input
-  if (!normalizedEmail || !normalizedUserType) {
-    throw new ValidationError('Email and user type are required');
+  if (!normalizedEmail || !normalizedRole) {
+    throw new ValidationError('Email and role are required');
   }
 
-  // Validate user type
-  if (!['student', 'employer', 'admin'].includes(normalizedUserType)) {
-    throw new ValidationError('Invalid user type');
-  }
-
-  // Admin email restriction - only allow specific admin emails
-  const allowedAdminEmails = ['mework2003@gmail.com', 'admin@studentjobs.com'];
-  if (normalizedUserType === 'admin' && !allowedAdminEmails.includes(normalizedEmail)) {
-    throw new ValidationError('Access denied. Only authorized admin can log in.');
+  // Validate role - LOCKED: student | individual | corporate | local
+  if (!['student', 'individual', 'corporate', 'local'].includes(normalizedRole)) {
+    throw new ValidationError('Invalid role. Must be one of: student, individual, corporate, local');
   }
 
   // Find user by email
@@ -676,18 +522,18 @@ router.post('/login-request-otp', asyncHandler(async (req: express.Request, res:
   console.log('✅ User located for OTP login:', {
     id: (user._id as any)?.toString?.() || 'unknown',
     email: user.email,
-    userType: user.userType,
+    role: user.role,
     isActive: user.isActive
   });
 
-  // Check if user type matches
-  if ((user.userType || '').toLowerCase().trim() !== normalizedUserType) {
-    console.log('❌ User type mismatch during OTP request:', {
+  // Check if user role matches
+  if (user.role !== normalizedRole) {
+    console.log('❌ User role mismatch during OTP request:', {
       email: normalizedEmail,
-      requestedUserType: normalizedUserType,
-      dbUserType: user.userType
+      requestedRole: normalizedRole,
+      dbRole: user.role
     });
-    throw new ValidationError(`userType mismatch: expected ${user.userType}, got ${normalizedUserType}`);
+    throw new ValidationError(`Role mismatch: expected ${user.role}, got ${normalizedRole}`);
   }
 
   // Check if user is active
@@ -742,13 +588,13 @@ router.post('/login-request-otp', asyncHandler(async (req: express.Request, res:
 
   // Add CORS headers for OTP response BEFORE sending body
   res.setHeader('X-OTP-Status', 'sent');
-  res.setHeader('X-User-Type', normalizedUserType);
-  res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status, X-User-Type');
+  res.setHeader('X-User-Role', normalizedRole);
+  res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status, X-User-Role');
 
   sendSuccessResponse(res, {
     message: 'OTP sent to your email address',
     email: normalizedEmail,
-    userType: normalizedUserType
+    role: normalizedRole
   }, 'OTP sent successfully');
 }));
 
@@ -756,24 +602,18 @@ router.post('/login-request-otp', asyncHandler(async (req: express.Request, res:
 // @desc    Verify OTP and login user
 // @access  Public
 router.post('/login-verify-otp', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { email, userType, otp } = req.body;
+  const { email, role, otp } = req.body;
   const normalizedEmail = String(email || '').toLowerCase().trim();
-  const normalizedUserType = String(userType || '').toLowerCase().trim();
+  const normalizedRole = String(role || '').toLowerCase().trim();
 
   // Validate input
-  if (!normalizedEmail || !normalizedUserType || !otp) {
-    throw new ValidationError('Email, user type, and OTP are required');
+  if (!normalizedEmail || !normalizedRole || !otp) {
+    throw new ValidationError('Email, role, and OTP are required');
   }
 
-  // Validate user type
-  if (!['student', 'employer', 'admin'].includes(normalizedUserType)) {
-    throw new ValidationError('Invalid user type');
-  }
-
-  // Admin email restriction - only allow specific admin emails
-  const allowedAdminEmails = ['mework2003@gmail.com', 'admin@studentjobs.com'];
-  if (normalizedUserType === 'admin' && !allowedAdminEmails.includes(normalizedEmail)) {
-    throw new ValidationError('Access denied. Only authorized admin can log in.');
+  // Validate role - LOCKED: student | individual | corporate | local
+  if (!['student', 'individual', 'corporate', 'local'].includes(normalizedRole)) {
+    throw new ValidationError('Invalid role. Must be one of: student, individual, corporate, local');
   }
 
   // Find user by email
@@ -782,14 +622,14 @@ router.post('/login-verify-otp', asyncHandler(async (req: express.Request, res: 
     throw new ValidationError('No account found with this email address');
   }
 
-  // Check if user type matches
-  if ((user.userType || '').toLowerCase().trim() !== normalizedUserType) {
-    console.log('❌ User type mismatch during OTP verification:', {
+  // Check if user role matches
+  if (user.role !== normalizedRole) {
+    console.log('❌ User role mismatch during OTP verification:', {
       email: normalizedEmail,
-      requestedUserType: normalizedUserType,
-      dbUserType: user.userType
+      requestedRole: normalizedRole,
+      dbRole: user.role
     });
-    throw new ValidationError(`userType mismatch: expected ${user.userType}, got ${normalizedUserType}`);
+    throw new ValidationError(`Role mismatch: expected ${user.role}, got ${normalizedRole}`);
   }
 
   // Check if user is active
@@ -814,7 +654,7 @@ router.post('/login-verify-otp', asyncHandler(async (req: express.Request, res: 
     console.log('🧪 Test OTP used for login:', normalizedEmail);
   }
 
-  const role = resolveUserRole(user);
+  const role = getUserRole(user);
 
   if (user.role !== role) {
     user.role = role;
@@ -832,8 +672,7 @@ router.post('/login-verify-otp', asyncHandler(async (req: express.Request, res: 
       name: user.name,
       email: user.email,
       phone: user.phone,
-      userType: user.userType,
-      role,
+      role: user.role,
       college: user.college,
       skills: user.skills,
       availability: user.availability,
@@ -848,8 +687,8 @@ router.post('/login-verify-otp', asyncHandler(async (req: express.Request, res: 
   }, 'Login successful');
   
   // Expose headers
-  res.setHeader('X-User-Role', role);
-  res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status, X-Verification-Status, X-User-Type, X-User-Role');
+  res.setHeader('X-User-Role', user.role);
+  res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status, X-Verification-Status, X-User-Role');
 }));
 
 // @route   POST /api/auth/forgot-password
@@ -961,15 +800,15 @@ router.post('/change-password', authenticateToken, asyncHandler(async (req: Auth
 // @desc    Send OTP for email verification
 // @access  Public
 router.post('/send-otp', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { email, purpose = 'verification', userType } = req.body as { email: string; purpose?: string; userType?: string };
+  const { email, purpose = 'verification', role } = req.body as { email: string; purpose?: string; role?: string };
   const normalizedEmail = String(email || '').toLowerCase().trim();
   let normalizedPurpose = String(purpose || 'verification').toLowerCase().trim();
-  const normalizedUserType = typeof userType === 'string' ? String(userType).toLowerCase().trim() : undefined;
+  const normalizedRole = typeof role === 'string' ? String(role).toLowerCase().trim() : undefined;
 
   console.log('📨 Send OTP request:', {
     email: normalizedEmail,
     purpose: normalizedPurpose,
-    userType: normalizedUserType,
+    role: normalizedRole,
     allowedPurposes: ['verification', 'password-reset', 'signup', 'login'],
     db: (mongoose.connection as any)?.db?.databaseName,
     host: (mongoose.connection as any)?.host
@@ -982,7 +821,7 @@ router.post('/send-otp', asyncHandler(async (req: express.Request, res: express.
   // Support alias 'signup' -> 'verification'
   if (normalizedPurpose === 'signup') normalizedPurpose = 'verification';
 
-  // Accept 'login' here as well (when userType is provided), otherwise keep existing valid purposes
+  // Accept 'login' here as well (when role is provided), otherwise keep existing valid purposes
   const allowedPurposes = ['verification', 'password-reset', 'login'];
   if (!allowedPurposes.includes(normalizedPurpose)) {
     throw new ValidationError(`Invalid purpose. Allowed: ${allowedPurposes.join(', ')}, also supports alias 'signup' for 'verification'`);
@@ -1001,27 +840,23 @@ router.post('/send-otp', asyncHandler(async (req: express.Request, res: express.
 
   // If purpose is 'login' via this endpoint, enforce minimal login validations to ensure consistency
   if (normalizedPurpose === 'login') {
-    if (!normalizedUserType) {
-      throw new ValidationError('userType is required when purpose is login');
+    if (!normalizedRole) {
+      throw new ValidationError('Role is required when purpose is login');
     }
-    if (!['student', 'employer', 'admin'].includes(normalizedUserType)) {
-      throw new ValidationError('Invalid user type');
-    }
-    const allowedAdminEmails = ['mework2003@gmail.com', 'admin@studentjobs.com'];
-    if (normalizedUserType === 'admin' && !allowedAdminEmails.includes(normalizedEmail)) {
-      throw new ValidationError('Access denied. Only authorized admin can log in.');
+    if (!['student', 'individual', 'corporate', 'local'].includes(normalizedRole)) {
+      throw new ValidationError('Invalid role. Must be one of: student, individual, corporate, local');
     }
     const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
       throw new ValidationError('No account found with this email address');
     }
-    if ((user.userType || '').toLowerCase().trim() !== normalizedUserType) {
-      console.log('❌ User type mismatch during send-otp (login purpose):', {
+    if (user.role !== normalizedRole) {
+      console.log('❌ User role mismatch during send-otp (login purpose):', {
         email: normalizedEmail,
-        requestedUserType: normalizedUserType,
-        dbUserType: user.userType
+        requestedRole: normalizedRole,
+        dbRole: user.role
       });
-      throw new ValidationError(`userType mismatch: expected ${user.userType}, got ${normalizedUserType}`);
+      throw new ValidationError(`Role mismatch: expected ${user.role}, got ${normalizedRole}`);
     }
     if (!user.isActive) {
       throw new ValidationError('Account is deactivated');
@@ -1205,6 +1040,69 @@ router.get('/debug-email', asyncHandler(async (req: express.Request, res: expres
   } catch (e: any) {
     throw new ValidationError(e?.message || 'SMTP verify failed');
   }
+}));
+
+// @route   POST /api/auth/switch-role
+// @desc    Switch role for super admin (updates database and returns new token)
+// @access  Private (Super Admin only)
+router.post('/switch-role', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { role } = req.body;
+  const user = req.user;
+
+  if (!user) {
+    throw new ValidationError('User not found');
+  }
+
+  // Only super admin can switch roles
+  if (!isSuperAdmin(user)) {
+    throw new ValidationError('Only super admin can switch roles');
+  }
+
+  // Validate role
+  if (!role || !['student', 'individual', 'corporate', 'local'].includes(role)) {
+    throw new ValidationError('Invalid role. Must be one of: student, individual, corporate, local');
+  }
+
+  // Update user role in database
+  const updatedUser = await User.findByIdAndUpdate(
+    user._id,
+    { role },
+    { new: true }
+  );
+
+  if (!updatedUser) {
+    throw new ValidationError('Failed to update role');
+  }
+
+  // Generate new token with updated role
+  const token = generateToken(updatedUser);
+  setAuthCookie(res, token);
+
+  console.log('✅ Super admin role switched:', {
+    email: updatedUser.email,
+    oldRole: user.role,
+    newRole: role
+  });
+
+  sendSuccessResponse(res, {
+    user: {
+      _id: updatedUser._id,
+      name: updatedUser.name,
+      email: updatedUser.email,
+      phone: updatedUser.phone,
+      role: updatedUser.role,
+      college: updatedUser.college,
+      skills: updatedUser.skills,
+      availability: updatedUser.availability,
+      companyName: updatedUser.companyName,
+      businessType: updatedUser.businessType,
+      address: updatedUser.address,
+      isVerified: updatedUser.isVerified,
+      emailVerified: updatedUser.emailVerified,
+      createdAt: updatedUser.createdAt
+    },
+    token
+  }, 'Role switched successfully');
 }));
 
 export default router;

@@ -79,12 +79,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* Logo - Left */}
             <div className="flex items-center">
               <Link href="/" className="flex items-center">
-                <div className="relative h-10 w-40 sm:h-12 sm:w-48">
+                <div className="relative h-10 w-10 sm:h-12 sm:w-12">
                   <Image
-                    src="/img/norixgreen.png"
+                    src="/img/norixnobg.jpg"
                     alt="NoriX logo"
                     fill
-                    sizes="(max-width: 640px) 160px, 192px"
+                    sizes="(max-width: 640px) 40px, 48px"
                     className="object-contain"
                     priority
                   />
@@ -173,14 +173,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                               <span>Dashboard</span>
                             </Link>
                             <Link
-                              href="/student/jobs"
-                              className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
-                              onClick={() => setProfileDropdownOpen(false)}
-                            >
-                              <Briefcase className="w-5 h-5" />
-                              <span>My Jobs</span>
-                            </Link>
-                            <Link
                               href="/student/approved-applications"
                               className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
                               onClick={() => setProfileDropdownOpen(false)}
@@ -193,22 +185,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                         
                         {user?.userType === 'employer' && (
                           <>
-                            <Link
-                              href="/employer"
-                              className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
-                              onClick={() => setProfileDropdownOpen(false)}
-                            >
-                              <BarChart3 className="w-5 h-5" />
-                              <span>Dashboard</span>
-                            </Link>
-                            <Link
-                              href="/employer/dashboard"
-                              className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
-                              onClick={() => setProfileDropdownOpen(false)}
-                            >
-                              <BarChart3 className="w-5 h-5" />
-                              <span>Employer Dashboard</span>
-                            </Link>
                             <Link
                               href="/employer/post-job"
                               className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
@@ -328,17 +304,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <Link href="/" className="flex items-center">
-                <div className="relative h-8 w-32 sm:h-10 sm:w-40">
+              <Link href="/" className="flex items-center gap-2">
+                <div className="relative h-8 w-8 sm:h-10 sm:w-10">
                   <Image
-                    src="/img/norixgreen.png"
+                    src="/img/norixnobg.jpg"
                     alt="NoriX logo"
                     fill
-                    sizes="(max-width: 640px) 128px, 160px"
+                    sizes="(max-width: 640px) 32px, 40px"
                     className="object-contain"
                     priority
                   />
                 </div>
+                <span className="text-xl font-bold text-gray-900">Norix</span>
               </Link>
             </div>
             

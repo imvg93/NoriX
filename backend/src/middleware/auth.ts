@@ -7,6 +7,14 @@ export interface AuthRequest extends Request {
   user?: any;
 }
 
+// Super Admin email - has access to all pages
+const SUPER_ADMIN_EMAIL = 'mework2003@gmail.com';
+
+// Check if user is super admin
+export const isSuperAdmin = (user: any): boolean => {
+  return user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+};
+
 // Verify JWT token
 export const authenticateToken = async (
   req: AuthRequest,
@@ -56,26 +64,19 @@ export const authenticateToken = async (
       return;
     }
 
-    // Resolve role: use existing role if set, otherwise derive from userType
-    let resolvedRole: 'user' | 'admin';
-    if (user.role === 'admin' || user.role === 'user') {
-      resolvedRole = user.role;
-    } else {
-      // Handle null userType
-      if (!user.userType) {
-        resolvedRole = 'user';
-      } else {
-        resolvedRole = user.userType === 'admin' ? 'admin' : 'user';
-      }
+    // Role is now directly stored in user.role - no resolution needed
+    // Validate that role exists and is valid (super admin bypasses this)
+    if (!isSuperAdmin(user) && (!user.role || !['student', 'individual', 'corporate', 'local'].includes(user.role))) {
+      res.status(401).json({
+        success: false,
+        message: 'Invalid user role'
+      });
+      return;
     }
 
-    if (user.role !== resolvedRole) {
-      user.role = resolvedRole;
-      try {
-        await user.save();
-      } catch (saveError) {
-        console.error('Failed to persist user role during authentication:', saveError);
-      }
+    // Mark super admin in user object for easy access
+    if (isSuperAdmin(user)) {
+      (user as any).isSuperAdmin = true;
     }
 
     req.user = user as any;
@@ -100,7 +101,7 @@ export const authenticateToken = async (
   }
 };
 
-// Check if user is student
+// Check if user is student (super admin can bypass)
 export const requireStudent = (
   req: AuthRequest,
   res: Response,
@@ -108,8 +109,9 @@ export const requireStudent = (
 ): void => {
   console.log('🔍 requireStudent middleware:', {
     hasUser: !!req.user,
-    userType: req.user?.userType,
-    userId: req.user?._id
+    role: req.user?.role,
+    userId: req.user?._id,
+    isSuperAdmin: isSuperAdmin(req.user)
   });
   
   if (!req.user) {
@@ -121,8 +123,15 @@ export const requireStudent = (
     return;
   }
   
-  if (req.user.userType !== 'student') {
-    console.log('❌ requireStudent: User is not a student:', req.user.userType);
+  // Super admin can access student pages
+  if (isSuperAdmin(req.user)) {
+    console.log('✅ requireStudent: Super admin accessing student page');
+    next();
+    return;
+  }
+  
+  if (req.user.role !== 'student') {
+    console.log('❌ requireStudent: User is not a student:', req.user.role);
     res.status(403).json({
       success: false,
       message: 'Access denied. Student account required.'
@@ -134,48 +143,161 @@ export const requireStudent = (
   next();
 };
 
-// Check if user is employer
+// Check if user is individual, corporate, or local (employer roles) - super admin can bypass
 export const requireEmployer = (
   req: AuthRequest,
   res: Response,
   next: NextFunction
 ): void => {
-  if (!req.user || req.user.userType !== 'employer') {
+  if (!req.user) {
+    res.status(401).json({
+      success: false,
+      message: 'Authentication required.'
+    });
+    return;
+  }
+
+  // Super admin can access employer pages
+  if (isSuperAdmin(req.user)) {
+    next();
+    return;
+  }
+
+  if (req.user.role !== 'individual' && req.user.role !== 'corporate' && req.user.role !== 'local') {
     res.status(403).json({
       success: false,
-      message: 'Access denied. Employer account required.'
+      message: 'Access denied. Employer account (individual, corporate, or local) required.'
     });
     return;
   }
   next();
 };
 
-// Check if user is admin
+// Check if user is individual - super admin can bypass
+export const requireIndividual = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): void => {
+  if (!req.user) {
+    res.status(401).json({
+      success: false,
+      message: 'Authentication required.'
+    });
+    return;
+  }
+
+  if (isSuperAdmin(req.user)) {
+    next();
+    return;
+  }
+
+  if (req.user.role !== 'individual') {
+    res.status(403).json({
+      success: false,
+      message: 'Access denied. Individual account required.'
+    });
+    return;
+  }
+  next();
+};
+
+// Check if user is corporate - super admin can bypass
+export const requireCorporate = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): void => {
+  if (!req.user) {
+    res.status(401).json({
+      success: false,
+      message: 'Authentication required.'
+    });
+    return;
+  }
+
+  if (isSuperAdmin(req.user)) {
+    next();
+    return;
+  }
+
+  if (req.user.role !== 'corporate') {
+    res.status(403).json({
+      success: false,
+      message: 'Access denied. Corporate account required.'
+    });
+    return;
+  }
+  next();
+};
+
+// Check if user is local - super admin can bypass
+export const requireLocal = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): void => {
+  if (!req.user) {
+    res.status(401).json({
+      success: false,
+      message: 'Authentication required.'
+    });
+    return;
+  }
+
+  if (isSuperAdmin(req.user)) {
+    next();
+    return;
+  }
+
+  if (req.user.role !== 'local') {
+    res.status(403).json({
+      success: false,
+      message: 'Access denied. Local business account required.'
+    });
+    return;
+  }
+  next();
+};
+
+// Note: Admin role removed - if needed, implement separately
+// For now, this middleware is kept for backward compatibility but will always deny
 export const requireAdmin = (
   req: AuthRequest,
   res: Response,
   next: NextFunction
 ): void => {
-  if (!req.user || req.user.userType !== 'admin') {
-    res.status(403).json({
-      success: false,
-      message: 'Access denied. Admin account required.'
-    });
-    return;
-  }
-  next();
+  res.status(403).json({
+    success: false,
+    message: 'Admin access is not available in the current role system.'
+  });
+  return;
 };
 
-// Check if user is verified employer
+// Check if user is verified employer (individual, corporate, or local) - super admin can bypass
 export const requireVerifiedEmployer = (
   req: AuthRequest,
   res: Response,
   next: NextFunction
 ): void => {
-  if (!req.user || req.user.userType !== 'employer') {
+  if (!req.user) {
+    res.status(401).json({
+      success: false,
+      message: 'Authentication required.'
+    });
+    return;
+  }
+
+  // Super admin can access verified employer pages
+  if (isSuperAdmin(req.user)) {
+    next();
+    return;
+  }
+
+  if (req.user.role !== 'individual' && req.user.role !== 'corporate' && req.user.role !== 'local') {
     res.status(403).json({
       success: false,
-      message: 'Access denied. Employer account required.'
+      message: 'Access denied. Employer account (individual, corporate, or local) required.'
     });
     return;
   }
@@ -190,10 +312,24 @@ export const requireVerifiedEmployer = (
   next();
 };
 
-// Check if user has required role(s)
-export const requireRole = (roles: string[]) => {
+// Check if user has required role(s) - super admin can bypass
+export const requireRole = (roles: ('student' | 'individual' | 'corporate' | 'local')[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
-    if (!req.user || !roles.includes(req.user.userType)) {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        message: 'Authentication required.'
+      });
+      return;
+    }
+
+    // Super admin can access any role page
+    if (isSuperAdmin(req.user)) {
+      next();
+      return;
+    }
+
+    if (!roles.includes(req.user.role)) {
       res.status(403).json({
         success: false,
         message: 'Access denied. Insufficient permissions.'

@@ -41,12 +41,12 @@ const formatDate = (dateString: string): string => {
 };
 
 const categories = [
-  { icon: Briefcase, label: 'Accountant', color: 'bg-[#2A8A8C]/10 text-[#2A8A8C]' },
-  { icon: Code, label: 'Software Engineer', color: 'bg-[#2A8A8C]/10 text-[#2A8A8C]' },
-  { icon: Building, label: 'Architect', color: 'bg-[#2A8A8C]/10 text-[#2A8A8C]' },
-  { icon: BookOpen, label: 'Teacher', color: 'bg-[#2A8A8C]/10 text-[#2A8A8C]' },
-  { icon: Scale, label: 'Lawyer', color: 'bg-[#2A8A8C]/10 text-[#2A8A8C]' },
-  { icon: Settings, label: 'Engineer', color: 'bg-[#2A8A8C]/10 text-[#2A8A8C]' },
+  { icon: Clock, label: 'Part Time', color: 'bg-[#2A8A8C]/10 text-[#2A8A8C]' },
+  { icon: Briefcase, label: 'Corporate', color: 'bg-[#2A8A8C]/10 text-[#2A8A8C]' },
+  { icon: Building, label: 'On-site', color: 'bg-[#2A8A8C]/10 text-[#2A8A8C]' },
+  { icon: MapPin, label: 'Local Jobs', color: 'bg-[#2A8A8C]/10 text-[#2A8A8C]' },
+  { icon: GraduationCap, label: 'Student Friendly', color: 'bg-[#2A8A8C]/10 text-[#2A8A8C]' },
+  { icon: Settings, label: 'Non-IT', color: 'bg-[#2A8A8C]/10 text-[#2A8A8C]' },
 ];
 
 const workingProcess = [
@@ -128,7 +128,34 @@ const JobsPage = () => {
   const filteredJobs = jobs.filter(job => {
     const matchesSearch = [job.title, job.description, job.company]
       .some(value => value?.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesCategory = !selectedCategory || job.category?.toLowerCase().includes(selectedCategory.toLowerCase());
+    
+    // Category filtering based on job type and category
+    let matchesCategory: boolean = true;
+    if (selectedCategory) {
+      const categoryLower = selectedCategory.toLowerCase();
+      const jobType = ((job as any)?.workType || job.type || '').toLowerCase();
+      const jobCategory = (job.category || '').toLowerCase();
+      const jobTitle = (job.title || '').toLowerCase();
+      
+      if (categoryLower === 'part time') {
+        matchesCategory = jobType.includes('part') || jobType.includes('part-time');
+      } else if (categoryLower === 'corporate') {
+        matchesCategory = jobCategory.includes('corporate') || jobType.includes('corporate');
+      } else if (categoryLower === 'on-site') {
+        matchesCategory = jobType.includes('on-site') || jobType.includes('onsite') || 
+                         (!jobType.includes('remote') && !jobType.includes('online'));
+      } else if (categoryLower === 'local jobs') {
+        matchesCategory = !!(job.location && job.location.length > 0);
+      } else if (categoryLower === 'student friendly') {
+        matchesCategory = jobType.includes('part') || jobType.includes('student') ||
+                         jobCategory.includes('student') || jobCategory.includes('entry');
+      } else if (categoryLower === 'non-it') {
+        matchesCategory = !jobCategory.includes('software') && !jobCategory.includes('it') && 
+                         !jobCategory.includes('developer') && !jobCategory.includes('programming') &&
+                         !jobTitle.includes('software') && !jobTitle.includes('developer');
+      }
+    }
+    
     const matchesLocation = !selectedLocation || job.location?.toLowerCase().includes(selectedLocation.toLowerCase());
     const matchesType = !selectedType || job.type === selectedType;
     return matchesSearch && matchesCategory && matchesLocation && matchesType;
@@ -167,8 +194,8 @@ const JobsPage = () => {
               Job portal empowers job seekers and employers alike. It serves as a digital marketplace where individuals can explore verified opportunities.
             </p>
 
-            {/* Search Bar */}
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 max-w-3xl mx-auto mb-6 sm:mb-8">
+            {/* Search Bar and Filters - Combined */}
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 max-w-7xl mx-auto mb-4 sm:mb-6">
               <div className="flex-1 relative">
                 <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
@@ -179,16 +206,56 @@ const JobsPage = () => {
                   className="w-full pl-12 pr-4 py-3 sm:py-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#2A8A8C] focus:border-transparent text-sm sm:text-base"
                 />
               </div>
+              {isAuthenticated && (
+                <>
+                  <div className="relative sm:w-48">
+                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5" />
+                    <select
+                      value={selectedLocation}
+                      onChange={(e) => setSelectedLocation(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 sm:py-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#2A8A8C] focus:border-transparent text-sm sm:text-base bg-white"
+                    >
+                      <option value="">All Locations</option>
+                      {locations.map(location => (
+                        <option key={location} value={location}>{location}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <select
+                    value={selectedType}
+                    onChange={(e) => setSelectedType(e.target.value)}
+                    className="sm:w-48 px-4 py-3 sm:py-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#2A8A8C] focus:border-transparent text-sm sm:text-base bg-white"
+                  >
+                    <option value="">All Types</option>
+                    {workTypes.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </>
+              )}
               <button
                 onClick={handleSearch}
-                className="px-6 sm:px-8 py-3 sm:py-4 bg-[#2A8A8C] text-white rounded-xl hover:bg-[#1f6a6c] transition-colors font-medium text-sm sm:text-base"
+                className="px-6 sm:px-8 py-3 sm:py-4 bg-[#2A8A8C] text-white rounded-xl hover:bg-[#1f6a6c] transition-colors font-medium text-sm sm:text-base whitespace-nowrap"
               >
                 Find Your Job
               </button>
+              {isAuthenticated && (
+                <button
+                  onClick={() => {
+                    setSearchTerm("");
+                    setSelectedCategory("");
+                    setSelectedLocation("");
+                    setSelectedType("");
+                  }}
+                  className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-medium text-sm sm:text-base whitespace-nowrap"
+                >
+                  Clear
+                </button>
+              )}
             </div>
 
             {/* Popular Categories */}
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-gray-600 mb-0">
               <span className="font-medium">Popular Categories: </span>
               <span className="text-[#2A8A8C]">Product Designer, Developer, Designer</span>
             </div>
@@ -196,105 +263,8 @@ const JobsPage = () => {
         </div>
       </section>
 
-      {/* Trending Categories Section */}
-      <section className="py-12 sm:py-16 lg:py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="text-center mb-8 sm:mb-12"
-          >
-            <p className="text-sm sm:text-base font-medium text-[#2A8A8C] mb-2 uppercase tracking-wide">Trending Categories</p>
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900">Explore By Category</h2>
-          </motion.div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 sm:gap-6 mb-8 sm:mb-12">
-            {categories.map((category, index) => {
-              const Icon = category.icon;
-              return (
-                <motion.div
-                  key={category.label}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  whileInView={{ opacity: 1, scale: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.1, duration: 0.4 }}
-                  onClick={() => setSelectedCategory(category.label)}
-                  className={`cursor-pointer p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all ${
-                    selectedCategory === category.label
-                      ? 'border-[#2A8A8C] bg-[#2A8A8C]/5'
-                      : 'border-gray-200 bg-white hover:border-[#2A8A8C]/50'
-                  }`}
-                >
-                  <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-xl flex items-center justify-center mb-3 sm:mb-4 mx-auto ${category.color}`}>
-                    <Icon className="w-6 h-6 sm:w-8 sm:h-8" />
-                  </div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-900 text-center">{category.label}</p>
-                </motion.div>
-              );
-            })}
-          </div>
-
-          <div className="text-center">
-            <button
-              onClick={() => setSelectedCategory("")}
-              className="px-6 sm:px-8 py-2.5 sm:py-3 bg-[#2A8A8C] text-white rounded-xl hover:bg-[#1f6a6c] transition-colors font-medium text-sm sm:text-base"
-            >
-              All Categories
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* Filters Section */}
-      {isAuthenticated && (
-        <section className="bg-white border-b border-gray-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-              <div className="flex-1 relative">
-                <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5" />
-                <select
-                  value={selectedLocation}
-                  onChange={(e) => setSelectedLocation(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2A8A8C] focus:border-transparent text-sm sm:text-base bg-white"
-                >
-                  <option value="">All Locations</option>
-                  {locations.map(location => (
-                    <option key={location} value={location}>{location}</option>
-                  ))}
-                </select>
-              </div>
-
-              <select
-                value={selectedType}
-                onChange={(e) => setSelectedType(e.target.value)}
-                className="w-full sm:w-auto px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2A8A8C] focus:border-transparent text-sm sm:text-base bg-white"
-              >
-                <option value="">All Types</option>
-                {workTypes.map(type => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
-
-              <button
-                onClick={() => {
-                  setSearchTerm("");
-                  setSelectedCategory("");
-                  setSelectedLocation("");
-                  setSelectedType("");
-                }}
-                className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm sm:text-base"
-              >
-                Clear Filters
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
-
       {/* Job Listings Section */}
-      <section className="py-6 sm:py-8 lg:py-10">
+      <section className="pt-4 pb-8 sm:pb-12 lg:pb-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {!isAuthenticated ? (
             <div className="text-center py-12 sm:py-16">
@@ -345,7 +315,7 @@ const JobsPage = () => {
                       whileInView={{ opacity: 1, y: 0 }}
                       viewport={{ once: true }}
                       transition={{ delay: index * 0.05, duration: 0.4 }}
-                      className="bg-white rounded-lg border border-gray-200 p-4 sm:p-5 hover:shadow-md transition-shadow"
+                      className="bg-white rounded-lg border border-gray-200 p-4 sm:p-5 transition-all"
                     >
                       {/* Job Header */}
                       <div className="mb-3">
@@ -471,6 +441,57 @@ const JobsPage = () => {
           </div>
         </section>
       )}
+
+      {/* Trending Categories Section - Moved to Bottom */}
+      <section className="py-12 sm:py-16 lg:py-20 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="text-center mb-8 sm:mb-12"
+          >
+            <p className="text-sm sm:text-base font-medium text-[#2A8A8C] mb-2 uppercase tracking-wide">Trending Categories</p>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900">Explore By Category</h2>
+          </motion.div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 sm:gap-6 mb-8 sm:mb-12">
+            {categories.map((category, index) => {
+              const Icon = category.icon;
+              return (
+                <motion.div
+                  key={category.label}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.1, duration: 0.4 }}
+                  onClick={() => setSelectedCategory(category.label)}
+                  className={`cursor-pointer p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all ${
+                    selectedCategory === category.label
+                      ? 'border-[#2A8A8C] bg-[#2A8A8C]/5'
+                      : 'border-gray-200 bg-white hover:border-[#2A8A8C]/50'
+                  }`}
+                >
+                  <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-xl flex items-center justify-center mb-3 sm:mb-4 mx-auto ${category.color}`}>
+                    <Icon className="w-6 h-6 sm:w-8 sm:h-8" />
+                  </div>
+                  <p className="text-xs sm:text-sm font-medium text-gray-900 text-center">{category.label}</p>
+                </motion.div>
+              );
+            })}
+          </div>
+
+          <div className="text-center">
+            <button
+              onClick={() => setSelectedCategory("")}
+              className="px-6 sm:px-8 py-2.5 sm:py-3 bg-[#2A8A8C] text-white rounded-xl hover:bg-[#1f6a6c] transition-colors font-medium text-sm sm:text-base"
+            >
+              All Categories
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
   );
 };

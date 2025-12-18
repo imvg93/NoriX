@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '../contexts/AuthContext';
+import { isSuperAdmin, isStudentProfilePage } from '../utils/superAdmin';
 import LoadingOverlay from './LoadingOverlay';
 import AccessDeniedModal from './AccessDeniedModal';
 
@@ -19,6 +20,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const { user, isAuthenticated, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [showAccessDenied, setShowAccessDenied] = useState(false);
   const [accessDeniedMessage, setAccessDeniedMessage] = useState('');
 
@@ -37,6 +39,21 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         return;
       }
 
+      // Super admin check - allow access to all pages except student profile pages
+      if (user && isSuperAdmin(user)) {
+        // Block student profile pages for super admin
+        if (pathname && isStudentProfilePage(pathname)) {
+          console.log('🔒 Super admin cannot access student profile pages');
+          setAccessDeniedMessage('Super admin cannot access student profile pages.');
+          setShowAccessDenied(true);
+          return;
+        }
+        // Super admin can access everything else
+        console.log('✅ Super admin accessing page');
+        setShowAccessDenied(false);
+        return;
+      }
+
       if (requiredUserType && user?.userType !== requiredUserType) {
         console.log(`🔒 User type ${user?.userType} does not match required type ${requiredUserType}`);
         setAccessDeniedMessage(`This page is only accessible to ${requiredUserType}s. You are currently logged in as a ${user?.userType}.`);
@@ -47,7 +64,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       // User has access
       setShowAccessDenied(false);
     }
-  }, [isAuthenticated, user, loading, requiredUserType, router, fallbackPath]);
+  }, [isAuthenticated, user, loading, requiredUserType, router, fallbackPath, pathname]);
 
   const handleCloseAccessDenied = () => {
     setShowAccessDenied(false);
@@ -61,7 +78,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   // Show access denied modal if user doesn't have access
-  if (!isAuthenticated || (requiredUserType && user?.userType !== requiredUserType)) {
+  // Super admin can access all pages except student profile pages
+  const hasAccess = isAuthenticated && (
+    (user && isSuperAdmin(user) && (!pathname || !isStudentProfilePage(pathname))) ||
+    (!requiredUserType || user?.userType === requiredUserType)
+  );
+
+  if (!hasAccess) {
     return (
       <>
         <AccessDeniedModal

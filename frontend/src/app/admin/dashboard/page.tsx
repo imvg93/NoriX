@@ -25,6 +25,7 @@ import {
   Download,
   Clock,
 } from 'lucide-react';
+import RoleSwitcher from '../../../components/admin/RoleSwitcher';
 
 type AdminSection = 'overview' | 'users' | 'jobs' | 'applications' | 'kyc' | 'analytics' | 'notifications' | 'settings';
 
@@ -2528,6 +2529,9 @@ export default function AdminDashboardPage(): React.JSX.Element {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {/* Role Switcher */}
+                <RoleSwitcher />
+                
                 <a
                   href="/"
                   className="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-gray-900 hover:bg-gray-200"

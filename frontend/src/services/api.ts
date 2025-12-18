@@ -16,9 +16,17 @@ const getApiBaseUrl = () => {
       return railwayUrl;
     }
 
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      const localUrl = 'http://localhost:5000/api';
-      console.log('🔧 Local development detected, using local backend:', localUrl);
+    // Check if accessing via IP address (mobile/network access)
+    const hostname = window.location.hostname;
+    const isLocalNetwork = hostname !== 'localhost' && hostname !== '127.0.0.1' && 
+                          !hostname.includes('.') && 
+                          /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
+    
+    if (isLocalNetwork || hostname === 'localhost' || hostname === '127.0.0.1') {
+      // Use the same hostname for API (if on network IP, use network IP for backend)
+      const apiHost = isLocalNetwork ? hostname : 'localhost';
+      const localUrl = `http://${apiHost}:5000/api`;
+      console.log('🔧 Local development detected, using backend:', localUrl);
       return localUrl;
     }
   }

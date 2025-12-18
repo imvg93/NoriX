@@ -117,6 +117,7 @@ router.post('/', authenticateToken, requireEmployer, asyncHandler(async (req: Au
     workType,
     skillsRequired,
     applicationDeadline,
+    genderPreference,
     // Task-specific fields (for Category C)
     taskTime,
     taskBudget,
@@ -219,6 +220,7 @@ router.post('/', authenticateToken, requireEmployer, asyncHandler(async (req: Au
     jobData.workType = workType;
     jobData.skillsRequired = skillsRequired || [];
     jobData.applicationDeadline = new Date(applicationDeadline);
+    jobData.genderPreference = genderPreference || 'any';
     // Jobs require admin approval (for corporate) or auto-approve (for local business)
     jobData.approvalStatus = employer.employerCategory === 'corporate' ? 'pending' : 'approved';
   }
