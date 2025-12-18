@@ -37,9 +37,19 @@ const LoginForm: React.FC<LoginFormProps> = ({ compact = false }) => {
       if (response.user && response.token) {
         // Store user data and token
         login(response.user, response.token);
-        
-        // Always redirect to home page after login
-        router.replace('/');
+
+        // Role-based redirect
+        const userType = response.user?.userType;
+        const target =
+          userType === 'employer'
+            ? '/'
+            : userType === 'student'
+              ? '/'
+              : response.user?.role === 'admin'
+                ? '/admin'
+                : '/';
+
+        router.replace(target);
       } else {
         setError('Login failed. Please check your credentials.');
       }

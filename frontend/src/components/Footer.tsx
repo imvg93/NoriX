@@ -1,6 +1,7 @@
 "use client";
 
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Footer() {
   return (
@@ -12,10 +13,16 @@ export default function Footer() {
             {/* Company Info */}
             <div className="space-y-4">
               <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-[#32A4A6] rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">NX</span>
+                <div className="relative w-10 h-10">
+                  <Image
+                    src="/img/norixnobg.jpg"
+                    alt="NoriX logo"
+                    fill
+                    sizes="40px"
+                    className="object-contain"
+                    priority
+                  />
                 </div>
-                <span className="text-xl font-bold">NoriX</span>
               </div>
               <p className="text-gray-400 text-sm leading-relaxed">
                 Connecting skilled students with opportunities worldwide. Find trusted help for your projects.

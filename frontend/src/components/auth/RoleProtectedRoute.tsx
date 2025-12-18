@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '../../contexts/AuthContext';
 import { AuthPreservation } from '../../utils/authPreservation';
+import { isSuperAdmin, isStudentProfilePage } from '../../utils/superAdmin';
 import LoadingOverlay from '../LoadingOverlay';
 import AccessDeniedModal from '../AccessDeniedModal';
 
@@ -22,6 +23,7 @@ const RoleProtectedRoute: React.FC<RoleProtectedRouteProps> = ({
 }) => {
   const { user, isAuthenticated, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [showAccessDenied, setShowAccessDenied] = useState(false);
   const [accessDeniedMessage, setAccessDeniedMessage] = useState('');
 
@@ -49,6 +51,21 @@ const RoleProtectedRoute: React.FC<RoleProtectedRouteProps> = ({
         return;
       }
 
+      // Super admin check - allow access to all pages except student profile pages
+      if (user && isSuperAdmin(user)) {
+        // Block student profile pages for super admin
+        if (pathname && isStudentProfilePage(pathname)) {
+          console.log('🔒 Super admin cannot access student profile pages');
+          setAccessDeniedMessage('Super admin cannot access student profile pages.');
+          setShowAccessDenied(true);
+          return;
+        }
+        // Super admin can access everything else
+        console.log('✅ Super admin accessing page');
+        setShowAccessDenied(false);
+        return;
+      }
+
       if (user && !memoizedAllowedRoles.includes(user.userType)) {
         console.log(`🔒 User type ${user.userType} not allowed. Allowed types: ${memoizedAllowedRoles.join(', ')}`);
         setAccessDeniedMessage(`This page is only accessible to ${memoizedAllowedRoles.join(', ')}. You are currently logged in as a ${user.userType}.`);
@@ -59,7 +76,7 @@ const RoleProtectedRoute: React.FC<RoleProtectedRouteProps> = ({
       // User is authenticated and has correct role
       setShowAccessDenied(false);
     }
-  }, [isAuthenticated, user?._id, user?.userType, loading, memoizedAllowedRoles, allowUnauthenticated]);
+  }, [isAuthenticated, user?._id, user?.userType, loading, memoizedAllowedRoles, allowUnauthenticated, pathname]);
 
   // Track navigation when component mounts
   useEffect(() => {
@@ -85,7 +102,13 @@ const RoleProtectedRoute: React.FC<RoleProtectedRouteProps> = ({
   }
 
   // Show access denied modal if user doesn't have access
-  if (!isAuthenticated || (user && !allowedRoles.includes(user.userType))) {
+  // Super admin can access all pages except student profile pages
+  const hasAccess = isAuthenticated && (
+    (user && isSuperAdmin(user) && (!pathname || !isStudentProfilePage(pathname))) ||
+    (user && allowedRoles.includes(user.userType))
+  );
+
+  if (!hasAccess) {
     return (
       <>
         <AccessDeniedModal

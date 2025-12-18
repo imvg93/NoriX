@@ -92,6 +92,13 @@ const corsOptions = {
       return callback(null, true);
     }
     
+    // Allow local network IP addresses (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+    const localNetworkPattern = /^http:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)/;
+    if (localNetworkPattern.test(origin)) {
+      console.log('✅ CORS: Allowing local network origin:', origin);
+      return callback(null, true);
+    }
+    
     if (allowedOrigins.includes(origin)) {
       console.log('✅ CORS: Allowing configured origin:', origin);
       return callback(null, true);
@@ -213,14 +220,15 @@ const startServer = async (): Promise<void> => {
   try {
     await connectDB();
     
-    server.listen(PORT, () => {
+    server.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📱 Environment: ${process.env.NODE_ENV}`);
+      console.log(`🌐 Server accessible on all network interfaces (0.0.0.0:${PORT})`);
       console.log(`🔗 Health check: http://localhost:${PORT}/health`);
       console.log(`📚 API Documentation: http://localhost:${PORT}/api`);
       console.log(`🔌 Socket.IO enabled for real-time updates`);
       console.log(`🔒 CORS: ENABLED - Environment-aware configuration`);
-      console.log(`   Allowed origins: ${allowedOrigins.join(', ')}`);
+      console.log(`   Allowed origins: ${allowedOrigins.join(', ')} (plus local network IPs)`);
     });
 
     // Verify email configuration

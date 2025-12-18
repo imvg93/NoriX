@@ -12,6 +12,7 @@ export interface IJob extends Document {
   workType: 'Part-time' | 'Full-time' | 'Remote' | 'On-site';
   skillsRequired: string[];
   applicationDeadline: Date;
+  genderPreference?: 'male' | 'female' | 'any';
   
   // Task-specific fields (for Category C - Individual)
   taskTime?: string; // When the task needs to be done
@@ -100,6 +101,11 @@ const jobSchema = new Schema<IJob>({
     trim: true,
     maxlength: [100, 'Skill cannot exceed 100 characters']
   }],
+  genderPreference: {
+    type: String,
+    enum: ['male', 'female', 'any'],
+    default: 'any'
+  },
   applicationDeadline: {
     type: Date,
     required: [true, 'Application deadline is required'],

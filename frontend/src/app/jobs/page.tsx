@@ -3,74 +3,80 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { motion } from "framer-motion";
-import Footer from "@/components/Footer";
-
 import {
   Search,
   MapPin,
   Building,
   Clock,
-  IndianRupee,
-  Eye,
-  ArrowLeft,
-  Shield
+  DollarSign,
+  Briefcase,
+  GraduationCap,
+  Code,
+  Hammer,
+  BookOpen,
+  Scale,
+  Settings,
+  ArrowRight,
+  Star,
+  Filter,
+  Loader
 } from "lucide-react";
-
-import { apiService } from "../../services/api";
-import { kycStatusService } from "../../services/kycStatusService";
+import { apiService, type JobsResponse, type Job } from "../../services/api";
 import { useAuth } from "../../contexts/AuthContext";
-import { useSafeNavigation } from "../../hooks/useSafeNavigation";
-import LoadingOverlay from "../../components/LoadingOverlay";
+import { kycStatusService } from "../../services/kycStatusService";
 
-interface Job {
-  _id: string;
-  title: string;
-  description: string;
-  company: string;
-  location: string;
-  salary?: number;
-  payType?: string;
-  type: string;
-  category: string;
-  status: string;
-  employer: string;
-  createdAt: string;
-  views?: number;
-  applicationsCount?: number;
-  requirements?: string[];
-}
+const INDIAN_CURRENCY_FORMATTER = new Intl.NumberFormat('en-IN', {
+  maximumFractionDigits: 0,
+});
 
-interface JobsResponse {
-  jobs: Job[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    pages: number;
-  };
-}
+const formatCurrency = (amount: number | string): string => {
+  if (typeof amount === 'string') return amount;
+  return `₹${INDIAN_CURRENCY_FORMATTER.format(amount)}`;
+};
 
-interface ApplicationsResponse {
-  applications: Array<{
-    _id: string;
-    job: Job | string;
-    student: string;
-    employer: string;
-    status: string;
-    appliedDate: string;
-  }>;
-}
+const formatDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+const categories = [
+  { icon: Clock, label: 'Part Time', color: 'bg-[#2A8A8C]/10 text-[#2A8A8C]' },
+  { icon: Briefcase, label: 'Corporate', color: 'bg-[#2A8A8C]/10 text-[#2A8A8C]' },
+  { icon: Building, label: 'On-site', color: 'bg-[#2A8A8C]/10 text-[#2A8A8C]' },
+  { icon: MapPin, label: 'Local Jobs', color: 'bg-[#2A8A8C]/10 text-[#2A8A8C]' },
+  { icon: GraduationCap, label: 'Student Friendly', color: 'bg-[#2A8A8C]/10 text-[#2A8A8C]' },
+  { icon: Settings, label: 'Non-IT', color: 'bg-[#2A8A8C]/10 text-[#2A8A8C]' },
+];
+
+const workingProcess = [
+  {
+    number: '01',
+    icon: Search,
+    title: 'Browse Jobs',
+    description: 'Explore verified job opportunities that match your skills and availability.'
+  },
+  {
+    number: '02',
+    icon: Briefcase,
+    title: 'Submit Resume',
+    description: 'Apply with one click. Employers see your verified profile instantly.'
+  },
+  {
+    number: '03',
+    icon: GraduationCap,
+    title: 'Get Hired',
+    description: 'Start working and track your progress. Get paid on time, every time.'
+  }
+];
 
 const JobsPage = () => {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
-  const { navigateBack } = useSafeNavigation();
-
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedType, setSelectedType] = useState("");
   const [appliedJobs, setAppliedJobs] = useState<string[]>([]);
@@ -80,28 +86,19 @@ const JobsPage = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
+        const jobsResponse = await apiService.getJobs() as JobsResponse;
+        setJobs(jobsResponse.jobs || []);
 
-        // Only fetch jobs if user is authenticated
-        if (isAuthenticated) {
-          const jobsResponse = await apiService.getJobs() as JobsResponse;
-          console.log('📊 Fetched jobs from /api/jobs:', jobsResponse.jobs?.length || 0, jobsResponse);
-          console.log('📊 Sample job data:', jobsResponse.jobs?.[0]);
-          setJobs(jobsResponse.jobs || []);
-
-          if (user?.userType === "student") {
-            try {
-              const applicationsResponse = await apiService.getUserApplications() as ApplicationsResponse;
-              const appliedJobIds = (applicationsResponse.applications || []).map(app =>
-                typeof app.job === "string" ? app.job : app.job._id
-              );
-              setAppliedJobs(appliedJobIds);
-            } catch (error) {
-              console.error("Error fetching applications:", error);
-            }
+        if (isAuthenticated && user?.userType === "student") {
+          try {
+            const applicationsResponse = await apiService.getUserApplications();
+            const appliedJobIds = (applicationsResponse.applications || []).map(app =>
+              typeof app.job === "string" ? app.job : app.job._id
+            );
+            setAppliedJobs(appliedJobIds);
+          } catch (error) {
+            console.error("Error fetching applications:", error);
           }
-        } else {
-          // If not authenticated, don't show any jobs
-          setJobs([]);
         }
       } catch (error) {
         console.error("Error fetching jobs:", error);
@@ -114,15 +111,12 @@ const JobsPage = () => {
     fetchData();
   }, [isAuthenticated, user]);
 
-  // Load KYC status for students to gate Apply buttons
   useEffect(() => {
     const loadKYC = async () => {
       try {
         if (isAuthenticated && user?.userType === 'student') {
           const status = await kycStatusService.checkKYCStatus();
           setKycStatus(status.status);
-        } else {
-          setKycStatus('not_submitted');
         }
       } catch (_) {
         // ignore
@@ -133,366 +127,371 @@ const JobsPage = () => {
 
   const filteredJobs = jobs.filter(job => {
     const matchesSearch = [job.title, job.description, job.company]
-      .some(value => value.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    const matchesLocation = !selectedLocation || job.location.toLowerCase().includes(selectedLocation.toLowerCase());
+      .some(value => value?.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    // Category filtering based on job type and category
+    let matchesCategory: boolean = true;
+    if (selectedCategory) {
+      const categoryLower = selectedCategory.toLowerCase();
+      const jobType = ((job as any)?.workType || job.type || '').toLowerCase();
+      const jobCategory = (job.category || '').toLowerCase();
+      const jobTitle = (job.title || '').toLowerCase();
+      
+      if (categoryLower === 'part time') {
+        matchesCategory = jobType.includes('part') || jobType.includes('part-time');
+      } else if (categoryLower === 'corporate') {
+        matchesCategory = jobCategory.includes('corporate') || jobType.includes('corporate');
+      } else if (categoryLower === 'on-site') {
+        matchesCategory = jobType.includes('on-site') || jobType.includes('onsite') || 
+                         (!jobType.includes('remote') && !jobType.includes('online'));
+      } else if (categoryLower === 'local jobs') {
+        matchesCategory = !!(job.location && job.location.length > 0);
+      } else if (categoryLower === 'student friendly') {
+        matchesCategory = jobType.includes('part') || jobType.includes('student') ||
+                         jobCategory.includes('student') || jobCategory.includes('entry');
+      } else if (categoryLower === 'non-it') {
+        matchesCategory = !jobCategory.includes('software') && !jobCategory.includes('it') && 
+                         !jobCategory.includes('developer') && !jobCategory.includes('programming') &&
+                         !jobTitle.includes('software') && !jobTitle.includes('developer');
+      }
+    }
+    
+    const matchesLocation = !selectedLocation || job.location?.toLowerCase().includes(selectedLocation.toLowerCase());
     const matchesType = !selectedType || job.type === selectedType;
-
-    return matchesSearch && matchesLocation && matchesType;
+    return matchesSearch && matchesCategory && matchesLocation && matchesType;
   });
-
-  const handleApply = async (jobId: string) => {
-    if (!isAuthenticated || user?.userType !== "student") {
-      alert("You need to be logged in as a student to apply for jobs.");
-      return;
-    }
-
-    try {
-      await apiService.applyForJob(jobId);
-      setAppliedJobs(prev => [...prev, jobId]);
-      alert("Application submitted successfully!");
-    } catch (error: any) {
-      console.error("Error applying for job:", error);
-      alert(error?.message || "Failed to apply for job");
-    }
-  };
-
-  const salaryRanges: Record<string, string> = {
-    "Catering boy / Catering staff": "₹180-260/hr",
-    "Waiter / Server": "₹150-230/hr",
-    "Barista (coffee shop staff)": "₹180-240/hr",
-    "Fast food crew (KFC, McDonald's, Domino's, etc.)": "₹12,000-17,000/mo",
-    "Delivery boy (food delivery like Zomato/Swiggy)": "₹22,000-32,000/mo",
-    "Dishwasher / Kitchen helper": "₹140-200/hr",
-    "Event staff (serving, cleaning, organizing)": "₹800-1,200/shift",
-    "Bartender assistant": "₹200-320/hr",
-    "Sales associate (mall, clothing store, electronics shop)": "₹14,000-20,000/mo",
-    "Cashier": "₹13,000-18,000/mo",
-    "Customer service helper": "₹15,000-22,000/mo",
-    "Store stocker / Shelf organizer": "₹700-1,000/shift",
-    "Promotional staff (handing flyers, samples, etc.)": "₹900-1,400/shift",
-    "Mall kiosk helper": "₹12,000-16,000/mo",
-    "Courier delivery (Amazon, Flipkart, DTDC, etc.)": "₹18,000-26,000/mo",
-    "Warehouse helper": "₹700-1,100/day",
-    "Loading/unloading staff": "₹750-1,200/day",
-    "Bike/Car driver (with license)": "₹20,000-28,000/mo",
-    "Office boy / Peon": "₹12,000-16,000/mo",
-    "Part-time tutor (school/college subjects)": "₹400-700/hr",
-    "Home tuition teacher": "₹500-900/hr",
-    "Library assistant": "₹10,000-14,000/mo",
-    "Teaching assistant (for coaching institutes)": "₹15,000-22,000/mo",
-    "Construction helper": "₹750-1,200/day",
-    "Painter's helper": "₹700-1,100/day",
-    "Security guard": "₹14,000-20,000/mo",
-    "Housekeeping staff (hotels, offices, apartments)": "₹12,000-17,000/mo",
-    "Cleaning boy / Janitor": "₹500-800/shift",
-    "Gardener": "₹600-900/day",
-    "Event coordinator assistant": "₹1,000-1,600/shift",
-    "Wedding helper (decoration, serving, setup)": "₹900-1,400/shift",
-    "Ticket checker (cinema, events, exhibitions)": "₹9,000-13,000/mo",
-    "Stage setup crew": "₹800-1,300/shift",
-    "Data entry (basic, offline)": "₹10,000-15,000/mo",
-    "Call center (voice/non-voice, non-tech support)": "₹16,000-24,000/mo",
-    "Babysitting / Caretaker": "₹300-500/hr",
-    "Pet walking / Pet care": "₹200-350/hr",
-    "Delivery of newspapers/milk": "₹6,000-10,000/mo",
-    "Packing staff (factories, small industries)": "₹700-1,000/shift"
-  };
-
-  const getSalaryRange = (jobTitle: string) => salaryRanges[jobTitle] ?? "₹500-900/shift";
 
   const locations = [...new Set(jobs.map(job => job.location).filter(Boolean))];
   const workTypes = [...new Set(jobs.map(job => job.type).filter(Boolean))];
 
+  const handleSearch = () => {
+    // Search is handled by filteredJobs
+  };
+
   if (loading) {
-    return <LoadingOverlay message="Loading jobs..." />;
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader className="w-8 h-8 text-[#2A8A8C] animate-spin" />
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6">
-        {/* Back Button */}
-        <div className="mb-4 sm:mb-6">
-          <button
-            onClick={() => router.back()}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors group text-sm sm:text-base"
+      {/* Hero Section */}
+      <section className="relative bg-white overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-20">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="text-center max-w-4xl mx-auto mb-8 sm:mb-12"
           >
-            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 group-hover:-translate-x-1 transition-transform" />
-            <span className="font-medium">Back</span>
-          </button>
-        </div>
-        
-        {/* Page Title */}
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-            {isAuthenticated ? 'Currently Available Works' : 'Job Opportunities'}
-          </h1>
-          
-          {/* KYC Banner */}
-          {isAuthenticated && user?.userType === 'student' && kycStatus !== 'approved' && (
-            <div className="mt-4 bg-orange-50 border-2 border-orange-300 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-orange-100 rounded-full">
-                    <Shield className="w-6 h-6 text-orange-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">
-                      {kycStatus === 'not_submitted' && 'Complete KYC to Apply for Jobs'}
-                      {kycStatus === 'pending' && 'KYC Pending Approval'}
-                      {kycStatus === 'rejected' && 'KYC Rejected - Please Resubmit'}
-                    </h3>
-                    <p className="text-sm text-gray-600">
-                      {kycStatus === 'not_submitted' && 'Please complete your KYC verification to apply for jobs.'}
-                      {kycStatus === 'pending' && 'Your KYC is pending approval. Jobs will appear once approved.'}
-                      {kycStatus === 'rejected' && 'Your KYC was rejected. Please submit again with correct details.'}
-                    </p>
-                  </div>
-                </div>
-                {(kycStatus === 'not_submitted' || kycStatus === 'rejected') && (
-                  <Link
-                    href="/kyc-profile"
-                    className="bg-orange-600 text-white px-6 py-2 rounded-lg hover:bg-orange-700 transition-colors font-medium"
-                  >
-                    {kycStatus === 'not_submitted' ? 'Complete KYC' : 'Resubmit KYC'}
-                  </Link>
-                )}
-              </div>
-            </div>
-          )}
-          <p className="text-gray-600 mt-2">
-            {isAuthenticated ? 'Find your next opportunity' : 'Connect students with employers'}
-          </p>
-          {isAuthenticated && (
-            <span className="text-sm text-gray-500 mt-2 inline-block">
-              {filteredJobs.length} works found
-            </span>
-          )}
-        </div>
-      </div>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 mb-4 sm:mb-6">
+              Find Your Dream Jobs Today
+            </h1>
+            <p className="text-base sm:text-lg text-gray-600 mb-8 sm:mb-10 max-w-2xl mx-auto leading-relaxed">
+              Job portal empowers job seekers and employers alike. It serves as a digital marketplace where individuals can explore verified opportunities.
+            </p>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {isAuthenticated && (
-          <section className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
-            <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <div className="relative md:col-span-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5" />
+            {/* Search Bar and Filters - Combined */}
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 max-w-7xl mx-auto mb-4 sm:mb-6">
+              <div className="flex-1 relative">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="text"
-                  className="w-full pl-9 sm:pl-10 pr-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm sm:text-base"
-                  placeholder="Search jobs..."
+                  placeholder="Job Title & Keyword..."
                   value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 sm:py-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#2A8A8C] focus:border-transparent text-sm sm:text-base"
                 />
               </div>
-
-              <select
-                value={selectedLocation}
-                onChange={(event) => setSelectedLocation(event.target.value)}
-                className="px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm sm:text-base"
-              >
-                <option value="">All Locations</option>
-                {locations.map(location => (
-                  <option key={location} value={location}>{location}</option>
-                ))}
-              </select>
-
-              <select
-                value={selectedType}
-                onChange={(event) => setSelectedType(event.target.value)}
-                className="px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm sm:text-base"
-              >
-                <option value="">All Types</option>
-                {workTypes.map(type => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
-
+              {isAuthenticated && (
+                <>
+                  <div className="relative sm:w-48">
+                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5" />
+                    <select
+                      value={selectedLocation}
+                      onChange={(e) => setSelectedLocation(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 sm:py-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#2A8A8C] focus:border-transparent text-sm sm:text-base bg-white"
+                    >
+                      <option value="">All Locations</option>
+                      {locations.map(location => (
+                        <option key={location} value={location}>{location}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <select
+                    value={selectedType}
+                    onChange={(e) => setSelectedType(e.target.value)}
+                    className="sm:w-48 px-4 py-3 sm:py-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#2A8A8C] focus:border-transparent text-sm sm:text-base bg-white"
+                  >
+                    <option value="">All Types</option>
+                    {workTypes.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </>
+              )}
               <button
-                onClick={() => {
-                  setSearchTerm("");
-                  setSelectedLocation("");
-                  setSelectedType("");
-                }}
-                className="px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-100 text-gray-700 rounded-lg sm:rounded-xl hover:bg-gray-200 transition-colors text-sm sm:text-base font-medium"
+                onClick={handleSearch}
+                className="px-6 sm:px-8 py-3 sm:py-4 bg-[#2A8A8C] text-white rounded-xl hover:bg-[#1f6a6c] transition-colors font-medium text-sm sm:text-base whitespace-nowrap"
               >
-                Clear Filters
+                Find Your Job
               </button>
+              {isAuthenticated && (
+                <button
+                  onClick={() => {
+                    setSearchTerm("");
+                    setSelectedCategory("");
+                    setSelectedLocation("");
+                    setSelectedType("");
+                  }}
+                  className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-medium text-sm sm:text-base whitespace-nowrap"
+                >
+                  Clear
+                </button>
+              )}
             </div>
-          </section>
-        )}
 
-        {!isAuthenticated ? (
-          // Show login prompt for unauthenticated users
-          <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              className="max-w-2xl mx-auto space-y-6"
-            >
-              <div className="w-20 h-20 bg-[#32A4A6] rounded-full flex items-center justify-center mx-auto">
-                <Building className="w-10 h-10 text-white" />
-              </div>
-              
-              <div className="space-y-4">
-                <h2 className="text-3xl font-bold text-gray-900">
-                  Discover Amazing Job Opportunities
-                </h2>
+            {/* Popular Categories */}
+            <div className="text-sm text-gray-600 mb-0">
+              <span className="font-medium">Popular Categories: </span>
+              <span className="text-[#2A8A8C]">Product Designer, Developer, Designer</span>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Job Listings Section */}
+      <section className="pt-4 pb-8 sm:pb-12 lg:pb-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {!isAuthenticated ? (
+            <div className="text-center py-12 sm:py-16">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6 }}
+                className="max-w-2xl mx-auto space-y-6"
+              >
+                <div className="w-20 h-20 bg-[#2A8A8C] rounded-full flex items-center justify-center mx-auto">
+                  <Building className="w-10 h-10 text-white" />
+                </div>
+                <h2 className="text-3xl font-bold text-gray-900">Sign In to Browse Jobs</h2>
                 <p className="text-lg text-gray-600">
                   Join thousands of students and employers who are already using NoriX to connect and grow.
                 </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-                {/* Student Card */}
-                <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="w-12 h-12 bg-[#32A4A6] rounded-lg flex items-center justify-center mx-auto mb-4">
-                    <span className="text-white text-xl">🎓</span>
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">I'm a Student</h3>
-                  <p className="text-gray-600 mb-4">
-                    Find flexible part-time jobs that fit your schedule. Earn while you learn!
-                  </p>
-                  <Link
-                    href="/signup?type=student"
-                    className="inline-block w-full bg-[#32A4A6] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#2a8a8c] transition-colors"
-                  >
-                    Find Jobs
-                  </Link>
-                </div>
-
-                {/* Employer Card */}
-                <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="w-12 h-12 bg-[#32A4A6] rounded-lg flex items-center justify-center mx-auto mb-4">
-                    <span className="text-white text-xl">💼</span>
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">I'm an Employer</h3>
-                  <p className="text-gray-600 mb-4">
-                    Post job opportunities and find talented students to join your team.
-                  </p>
-                  <Link
-                    href="/signup?type=employer"
-                    className="inline-block w-full bg-[#32A4A6] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#2a8a8c] transition-colors"
-                  >
-                    Post Jobs
-                  </Link>
-                </div>
-              </div>
-
-              <div className="pt-6 border-t border-gray-200">
-                <p className="text-gray-500 mb-4">Already have an account?</p>
                 <Link
                   href="/login"
-                  className="inline-block bg-[#32A4A6] text-white px-8 py-3 rounded-lg font-semibold hover:bg-[#2a8a8c] transition-colors"
+                  className="inline-block px-8 py-3 bg-[#2A8A8C] text-white rounded-xl hover:bg-[#1f6a6c] transition-colors font-medium"
                 >
                   Sign In
                 </Link>
+              </motion.div>
+            </div>
+          ) : filteredJobs.length === 0 ? (
+            <div className="text-center py-12 sm:py-16">
+              <p className="text-lg text-gray-600">No jobs found matching your criteria.</p>
+            </div>
+          ) : (
+            <>
+              <div className="mb-4 sm:mb-6">
+                <p className="text-xs sm:text-sm text-[#2A8A8C] font-medium uppercase tracking-wide mb-1">Available Jobs</p>
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">
+                  {filteredJobs.length} {filteredJobs.length === 1 ? 'Job' : 'Jobs'} Available
+                </h2>
               </div>
-            </motion.div>
-          </section>
-        ) : (
-          // Show jobs for authenticated users
-          <section className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-            {filteredJobs.map((job, index) => (
-              <motion.article
-                key={job._id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.05 }}
-                className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow"
-              >
-                <div className="flex flex-col gap-3 sm:gap-4">
-                  <div className="flex flex-col gap-3 sm:gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex items-start gap-2 sm:gap-3">
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg sm:rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0">
-                        <Building className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400" />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+                {filteredJobs.map((job, index) => {
+                  const isApplied = appliedJobs.includes(job._id);
+                  const workType = (job as any)?.workType || job.type || '';
+                  const isRemote = workType.toLowerCase().includes('remote') || workType.toLowerCase().includes('online');
+                  
+                  return (
+                    <motion.div
+                      key={job._id}
+                      initial={{ opacity: 0, y: 20 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: index * 0.05, duration: 0.4 }}
+                      className="bg-white rounded-lg border border-gray-200 p-4 sm:p-5 transition-all"
+                    >
+                      {/* Job Header */}
+                      <div className="mb-3">
+                        <div className="flex items-center justify-between mb-2">
+                          {isRemote ? (
+                            <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-xs font-medium">
+                              Remote
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
+                              {job.type || 'Full Time'}
+                            </span>
+                          )}
+                          <span className="text-xs text-gray-500">{formatDate(job.createdAt)}</span>
+                        </div>
+                        <h3 className="text-base font-bold text-gray-900 mb-1 line-clamp-1">{job.title}</h3>
+                        <p className="text-sm text-gray-600 mb-2">{job.company}</p>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold text-gray-900 text-base sm:text-lg break-words">{job.title}</h3>
-                        <p className="text-gray-600 text-sm sm:text-base">{job.company}</p>
+
+                      {/* Job Details - Compact */}
+                      <div className="space-y-2 mb-3">
+                        <div className="flex items-center gap-2 text-xs text-gray-600">
+                          <MapPin className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                          <span className="truncate">{job.location}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-600">
+                          <DollarSign className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                          <span>{job.salary ? formatCurrency(job.salary) : 'Not specified'}</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2 sm:gap-3 text-xs sm:text-sm text-gray-500">
-                      <span className="inline-flex items-center gap-1">
-                        <MapPin className="w-4 h-4" />
-                        {job.location}
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <Clock className="w-4 h-4" />
-                        {job.type}
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-green-600 font-semibold">
-                        <IndianRupee className="w-4 h-4" />
-                        {getSalaryRange(job.title)}
-                      </span>
-                    </div>
-                  </div>
 
-                  <p className="text-gray-700 line-clamp-3">{job.description}</p>
+                      {/* Description */}
+                      <p className="text-xs text-gray-600 mb-4 line-clamp-2 min-h-[2.5rem]">{job.description}</p>
 
-                  {job.requirements && job.requirements.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {job.requirements.slice(0, 3).map((requirement, requirementIndex) => (
-                        <span key={requirementIndex} className="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-xs">
-                          {requirement}
-                        </span>
-                      ))}
-                      {job.requirements.length > 3 && (
-                        <span className="text-gray-500 text-xs px-2 py-1">
-                          +{job.requirements.length - 3} more
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="flex flex-col gap-3 sm:gap-4 border-t border-gray-200 pt-3 sm:pt-4 text-xs sm:text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-                      <span>Posted {new Date(job.createdAt).toLocaleDateString()}</span>
-                      <span className="hidden sm:inline">Views: {job.views || 0}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => router.push(`/jobs/${job._id}`)}
-                        className="p-2 sm:px-3 sm:py-2 text-gray-600 hover:text-gray-900 transition-colors rounded-lg hover:bg-gray-100"
-                        aria-label="View details"
-                      >
-                        <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
-                      </button>
-                      {user?.userType === "student" ? (
-                        appliedJobs.includes(job._id) ? (
-                          <span className="px-3 sm:px-4 py-1.5 sm:py-2 bg-green-100 text-green-600 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium">
-                            Applied
-                          </span>
+                      {/* Action Button */}
+                      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                        {user?.userType === "student" ? (
+                          isApplied ? (
+                            <span className="px-3 py-1.5 bg-green-50 text-green-700 rounded-lg text-xs font-medium">
+                              Applied
+                            </span>
+                          ) : (
+                            <Link
+                              href={`/jobs/${job._id}`}
+                              className={`px-3 py-1.5 rounded-lg transition-colors text-xs font-medium ${
+                                kycStatus === 'approved'
+                                  ? 'bg-[#2A8A8C] text-white hover:bg-[#1f6a6c]'
+                                  : 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                              }`}
+                            >
+                              {kycStatus === 'approved' ? 'Apply' : 'KYC Required'}
+                            </Link>
+                          )
                         ) : (
-                          <button
-                            onClick={() => router.push(`/jobs/${job._id}`)}
-                            disabled={kycStatus !== 'approved'}
-                            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl transition-colors text-xs sm:text-sm font-medium ${kycStatus === 'approved' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-gray-300 text-gray-600 cursor-not-allowed'}`}
+                          <Link
+                            href={`/jobs/${job._id}`}
+                            className="px-3 py-1.5 bg-[#2A8A8C] text-white rounded-lg hover:bg-[#1f6a6c] transition-colors text-xs font-medium"
                           >
-                            {kycStatus === 'approved' ? 'Apply Now' : 'KYC Required'}
-                          </button>
-                        )
-                      ) : (
-                        <button
-                          onClick={() => router.push(`/jobs/${job._id}`)}
-                          className="px-3 sm:px-4 py-1.5 sm:py-2 bg-orange-600 text-white rounded-lg sm:rounded-xl hover:bg-orange-700 transition-colors text-xs sm:text-sm font-medium"
+                            View Details
+                          </Link>
+                        )}
+                        <Link
+                          href={`/jobs/${job._id}`}
+                          className="text-[#2A8A8C] hover:text-[#1f6a6c] transition-colors text-xs font-medium flex items-center gap-1"
                         >
-                          View Details
-                        </button>
-                      )}
+                          More
+                          <ArrowRight className="w-3 h-3" />
+                        </Link>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      </section>
+
+      {/* Working Process Section */}
+      {isAuthenticated && (
+        <section className="py-12 sm:py-16 lg:py-20 bg-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="text-center mb-8 sm:mb-12"
+            >
+              <p className="text-sm sm:text-base font-medium text-[#2A8A8C] mb-2 uppercase tracking-wide">Working Process</p>
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900">How Does You Apply</h2>
+            </motion.div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 lg:gap-12">
+              {workingProcess.map((step, index) => {
+                const Icon = step.icon;
+                return (
+                  <motion.div
+                    key={step.number}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: index * 0.2, duration: 0.5 }}
+                    className="relative text-center"
+                  >
+                    {index < workingProcess.length - 1 && (
+                      <div className="hidden md:block absolute top-12 left-[60%] w-full h-0.5 bg-[#2A8A8C]/30" />
+                    )}
+                    <div className="relative z-10">
+                      <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-[#2A8A8C] rounded-full mb-4 sm:mb-6">
+                        <Icon className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
+                      </div>
+                      <div className="absolute -top-2 -left-2 w-8 h-8 bg-[#2A8A8C]/20 rounded-full flex items-center justify-center">
+                        <span className="text-xs sm:text-sm font-bold text-[#2A8A8C]">{step.number}</span>
+                      </div>
+                      <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2 sm:mb-3">{step.title}</h3>
+                      <p className="text-sm sm:text-base text-gray-600 leading-relaxed">{step.description}</p>
                     </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Trending Categories Section - Moved to Bottom */}
+      <section className="py-12 sm:py-16 lg:py-20 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="text-center mb-8 sm:mb-12"
+          >
+            <p className="text-sm sm:text-base font-medium text-[#2A8A8C] mb-2 uppercase tracking-wide">Trending Categories</p>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900">Explore By Category</h2>
+          </motion.div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 sm:gap-6 mb-8 sm:mb-12">
+            {categories.map((category, index) => {
+              const Icon = category.icon;
+              return (
+                <motion.div
+                  key={category.label}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.1, duration: 0.4 }}
+                  onClick={() => setSelectedCategory(category.label)}
+                  className={`cursor-pointer p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 transition-all ${
+                    selectedCategory === category.label
+                      ? 'border-[#2A8A8C] bg-[#2A8A8C]/5'
+                      : 'border-gray-200 bg-white hover:border-[#2A8A8C]/50'
+                  }`}
+                >
+                  <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-xl flex items-center justify-center mb-3 sm:mb-4 mx-auto ${category.color}`}>
+                    <Icon className="w-6 h-6 sm:w-8 sm:h-8" />
                   </div>
-                </div>
-              </motion.article>
-            ))}
-          </section>
-        )}
+                  <p className="text-xs sm:text-sm font-medium text-gray-900 text-center">{category.label}</p>
+                </motion.div>
+              );
+            })}
+          </div>
 
-       
-      </main>
-
-      <Footer />
+          <div className="text-center">
+            <button
+              onClick={() => setSelectedCategory("")}
+              className="px-6 sm:px-8 py-2.5 sm:py-3 bg-[#2A8A8C] text-white rounded-xl hover:bg-[#1f6a6c] transition-colors font-medium text-sm sm:text-base"
+            >
+              All Categories
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
   );
 };

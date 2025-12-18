@@ -6,8 +6,7 @@ export interface IUser extends Document {
   email: string;
   phone: string;
   password: string;
-  userType: 'student' | 'employer' | 'admin' | null;
-  role: 'user' | 'admin';
+  role: 'student' | 'individual' | 'corporate' | 'local';
   
   // Student specific fields
   college?: string;
@@ -17,8 +16,7 @@ export interface IUser extends Document {
   completedJobs?: number;
   totalEarnings?: number;
   
-  // Employer specific fields
-  employerCategory?: 'corporate' | 'local_business' | 'individual';
+  // Individual/Corporate specific fields
   companyName?: string;
   businessType?: string;
   address?: string;
@@ -86,25 +84,17 @@ const userSchema = new Schema<IUser>({
     required: [true, 'Password is required'],
     minlength: [6, 'Password must be at least 6 characters long']
   },
-  userType: {
-    type: String,
-    enum: ['student', 'employer', 'admin', null],
-    default: null
-  },
   role: {
     type: String,
-    enum: ['user', 'admin'],
-    default: function(this: IUser) {
-      if (!this.userType) return 'user';
-      return this.userType === 'admin' ? 'admin' : 'user';
-    }
+    enum: ['student', 'individual', 'corporate', 'local'],
+    required: [true, 'Role is required']
   },
   
   // Student specific fields - college is required for students
   college: {
     type: String,
     required: function(this: IUser) {
-      return this.userType === 'student';
+      return this.role === 'student';
     },
     trim: true,
     maxlength: [200, 'College name cannot exceed 200 characters']
@@ -136,12 +126,6 @@ const userSchema = new Schema<IUser>({
     default: 0
   },
   
-  // Employer specific fields (optional - collected during KYC)
-  employerCategory: {
-    type: String,
-    enum: ['corporate', 'local_business', 'individual'],
-    // Optional - will be set when employer first accesses their dashboard
-  },
   companyName: {
     type: String,
     trim: true,
@@ -246,16 +230,15 @@ const userSchema = new Schema<IUser>({
 // Indexes for better query performance
 userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ phone: 1 }, { unique: true });
-userSchema.index({ userType: 1 });
-userSchema.index({ employerCategory: 1 });
+userSchema.index({ role: 1 });
 userSchema.index({ skills: 1 });
 userSchema.index({ availability: 1 });
 
 // Pre-save hook to ensure optional fields are not validated as required
 userSchema.pre('validate', function(next) {
-  // If college is not provided and userType is student, explicitly set it to undefined
+  // If college is not provided and role is student, explicitly set it to undefined
   // This prevents Mongoose from trying to validate it as required
-  if (this.userType === 'student' && this.college === undefined) {
+  if (this.role === 'student' && this.college === undefined) {
     this.college = undefined;
   }
   next();

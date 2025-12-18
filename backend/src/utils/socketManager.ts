@@ -41,6 +41,13 @@ class SocketManager {
             return callback(null, true);
           }
           
+          // Allow local network IP addresses (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+          const localNetworkPattern = /^http:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)/;
+          if (localNetworkPattern.test(origin)) {
+            console.log('✅ Socket CORS: Allowing local network origin:', origin);
+            return callback(null, true);
+          }
+          
           if (allowedOrigins.includes(origin)) {
             console.log('✅ Socket CORS: Allowing configured origin:', origin);
             return callback(null, true);
