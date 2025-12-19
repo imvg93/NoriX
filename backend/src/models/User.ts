@@ -6,7 +6,9 @@ export interface IUser extends Document {
   email: string;
   phone: string;
   password: string;
-  role: 'student' | 'individual' | 'corporate' | 'local';
+  role: 'student' | 'individual' | 'corporate' | 'local' | 'admin';
+  userType?: 'student' | 'employer' | 'admin';
+  employerCategory?: 'corporate' | 'local_business' | 'individual';
   
   // Student specific fields
   college?: string;
@@ -86,8 +88,16 @@ const userSchema = new Schema<IUser>({
   },
   role: {
     type: String,
-    enum: ['student', 'individual', 'corporate', 'local'],
+    enum: ['student', 'individual', 'corporate', 'local', 'admin'],
     required: [true, 'Role is required']
+  },
+  userType: {
+    type: String,
+    enum: ['student', 'employer', 'admin']
+  },
+  employerCategory: {
+    type: String,
+    enum: ['corporate', 'local_business', 'individual']
   },
   
   // Student specific fields - college is required for students
