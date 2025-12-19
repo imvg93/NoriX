@@ -174,7 +174,7 @@ router.use('/reset-password', cors(otpCorsOptions));
 // Generate JWT token
 // Role is now directly stored in user.role - no resolution needed
 // This function is kept for backward compatibility but just returns the role
-const getUserRole = (user: Pick<IUser, 'role'>): 'student' | 'individual' | 'corporate' | 'local' => {
+const getUserRole = (user: Pick<IUser, 'role'>): 'student' | 'individual' | 'corporate' | 'local' | 'admin' => {
   return user.role;
 };
 
@@ -654,10 +654,10 @@ router.post('/login-verify-otp', asyncHandler(async (req: express.Request, res: 
     console.log('🧪 Test OTP used for login:', normalizedEmail);
   }
 
-  const role = getUserRole(user);
+  const computedRole = getUserRole(user);
 
-  if (user.role !== role) {
-    user.role = role;
+  if (user.role !== computedRole) {
+    user.role = computedRole;
     await user.save();
   }
 

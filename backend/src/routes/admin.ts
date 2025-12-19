@@ -1596,7 +1596,13 @@ router.patch('/users/:id/role', authenticateToken, requireRole(['admin']), async
   }
 
   user.userType = userType;
-  user.role = userType === 'admin' ? 'admin' : 'user';
+  // Only update role if changing to/from admin, otherwise preserve existing role
+  if (userType === 'admin') {
+    user.role = 'admin';
+  } else if (userType === 'student') {
+    user.role = 'student';
+  }
+  // For 'employer' userType, preserve existing role (should be 'individual', 'corporate', or 'local')
 
   await user.save();
 

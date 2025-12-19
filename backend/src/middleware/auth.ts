@@ -313,7 +313,7 @@ export const requireVerifiedEmployer = (
 };
 
 // Check if user has required role(s) - super admin can bypass
-export const requireRole = (roles: ('student' | 'individual' | 'corporate' | 'local')[]) => {
+export const requireRole = (roles: ('student' | 'individual' | 'corporate' | 'local' | 'admin')[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
     if (!req.user) {
       res.status(401).json({

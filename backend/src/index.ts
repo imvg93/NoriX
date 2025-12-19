@@ -39,7 +39,7 @@ dotenv.config();
 
 const app = express();
 const server = createServer(app);
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT) || 5000;
 // Initialize Socket.IO
 const socketManager = new SocketManager(server);
 
