@@ -546,6 +546,138 @@ router.put('/change-employer-type', authenticateToken, requireEmployer, asyncHan
   }, 'Employer type changed successfully. Please complete KYC for the new type.');
 }));
 
+// @route   PUT /api/users/toggle-instant-availability
+// @desc    Toggle student availability for instant jobs
+// @access  Private (Students only)
+router.put('/toggle-instant-availability', authenticateToken, requireStudent, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { available, locationLat, locationLon } = req.body;
+
+  const user = await User.findById(req.user!._id);
+  if (!user) {
+    throw new ValidationError('User not found');
+  }
+
+  if (user.userType !== 'student') {
+    throw new ValidationError('Only students can toggle instant availability');
+  }
+
+  const now = new Date();
+  const eightHoursFromNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+
+  if (available === true) {
+    // Turn ON availability
+    user.availableForInstantJobs = true;
+    user.onlineStatus = 'online';
+    user.lastSeen = now;
+    user.instantAvailabilityExpiresAt = eightHoursFromNow; // Auto-expire after 8 hours
+    
+    // Clear any existing cooldown when turning ON (so they can receive pings immediately)
+    user.instantCooldownUntil = undefined;
+
+    // Update location if provided (used only at match time, not continuously tracked)
+    if (locationLat !== undefined && locationLon !== undefined) {
+      user.locationCoordinates = {
+        latitude: locationLat,
+        longitude: locationLon
+      };
+      console.log(`📍 Updated location for student ${user._id}: ${locationLat}, ${locationLon}`);
+    }
+    
+    console.log(`✅ Student ${user._id} (${user.name}) turned ON instant availability`);
+
+    sendSuccessResponse(res, {
+      availableForInstantJobs: true,
+      expiresAt: eightHoursFromNow,
+      message: 'You are now available for instant jobs. You\'ll receive urgent job alerts and need to respond quickly.'
+    }, 'Availability enabled');
+  } else {
+    // Turn OFF availability
+    user.availableForInstantJobs = false;
+    user.onlineStatus = 'offline';
+    user.instantAvailabilityExpiresAt = undefined;
+
+    sendSuccessResponse(res, {
+      availableForInstantJobs: false,
+      message: 'You are no longer available for instant jobs'
+    }, 'Availability disabled');
+  }
+
+  await user.save();
+}));
+
+// @route   PUT /api/users/update-location
+// @desc    Update student location (used only at match time, not continuously tracked)
+// @access  Private (Students only)
+router.put('/update-location', authenticateToken, requireStudent, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { latitude, longitude } = req.body;
+
+  if (latitude === undefined || longitude === undefined) {
+    throw new ValidationError('Latitude and longitude are required');
+  }
+
+  if (latitude < -90 || latitude > 90) {
+    throw new ValidationError('Invalid latitude (must be between -90 and 90)');
+  }
+
+  if (longitude < -180 || longitude > 180) {
+    throw new ValidationError('Invalid longitude (must be between -180 and 180)');
+  }
+
+  const user = await User.findById(req.user!._id);
+  if (!user) {
+    throw new ValidationError('User not found');
+  }
+
+  if (user.userType !== 'student') {
+    throw new ValidationError('Only students can update location');
+  }
+
+  // Update location coordinates (approximate, used only at match time)
+  user.locationCoordinates = {
+    latitude,
+    longitude
+  };
+  user.lastSeen = new Date(); // Update last seen when location is updated
+
+  await user.save();
+
+  // If student is assigned to an instant job, update location history
+  const { InstantJob } = await import('../models/InstantJob');
+  const assignedJob = await InstantJob.findOne({
+    acceptedBy: user._id,
+    status: 'confirmed'
+  });
+
+  if (assignedJob) {
+    if (!assignedJob.locationHistory) {
+      assignedJob.locationHistory = [];
+    }
+    assignedJob.locationHistory.push({
+      latitude,
+      longitude,
+      timestamp: new Date()
+    });
+    assignedJob.lastLocationUpdate = new Date();
+    await assignedJob.save();
+
+    // Emit Socket.IO event to employer
+    const socketManager = (global as any).socketManager;
+    if (socketManager && socketManager.io) {
+      socketManager.io.to(`user:${assignedJob.employerId.toString()}`).emit('student-location-updated', {
+        jobId: assignedJob._id,
+        studentId: user._id,
+        location: { latitude, longitude },
+        timestamp: new Date()
+      });
+    }
+  }
+
+  sendSuccessResponse(res, {
+    locationCoordinates: user.locationCoordinates,
+    message: 'Location updated successfully'
+  }, 'Location updated');
+}));
+
 // @route   DELETE /api/users/account
 // @desc    Deactivate user account
 // @access  Private

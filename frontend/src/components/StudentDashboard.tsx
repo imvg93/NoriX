@@ -40,6 +40,9 @@ import {
 } from 'lucide-react';
 import { apiService, type Application } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import socketService from '../services/socketService';
+import InstantJobPing from './InstantJobPing';
+import PostAcceptState from './PostAcceptState';
 
 interface StudentDashboardProps {
   user: any;
@@ -307,6 +310,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: userProp }) =
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  
+  // Instant job ping state
+  const [instantJobPing, setInstantJobPing] = useState<any>(null);
+  const [postAcceptState, setPostAcceptState] = useState<{ jobId: string; status: 'waiting' | 'confirmed' | 'rejected' } | null>(null);
 
   // Handle successful upload
   const handleUploadSuccess = async (data: any) => {
@@ -419,6 +426,115 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: userProp }) =
 
     fetchData();
   }, [user]);
+
+  // Socket.IO listeners for instant job pings
+  useEffect(() => {
+    if (!user || user.userType !== 'student') return;
+
+    // Only listen if user is available for instant jobs
+    if (!user.availableForInstantJobs) {
+      console.log('⚠️ Student not available for instant jobs, skipping socket listeners');
+      return;
+    }
+
+    console.log('🔌 Setting up instant job ping listeners for student:', user._id);
+
+    // Define handlers
+    const handleInstantJobPing = (data: any) => {
+      console.log('📨 ✅ Received instant job ping:', data);
+      setInstantJobPing({
+        _id: data.jobId,
+        jobTitle: data.jobTitle,
+        distance: data.distance,
+        pay: data.pay,
+        duration: data.duration,
+        companyName: data.location
+      });
+    };
+
+    const handleJobConfirmed = (data: any) => {
+      console.log('✅ Job confirmed:', data);
+      setPostAcceptState(prev => {
+        if (prev?.jobId === data.jobId) {
+          return { jobId: data.jobId, status: 'confirmed' };
+        }
+        return prev;
+      });
+    };
+
+    const handleJobRejected = (data: any) => {
+      console.log('❌ Job rejected:', data);
+      setPostAcceptState(prev => {
+        if (prev?.jobId === data.jobId) {
+          return { jobId: data.jobId, status: 'rejected' };
+        }
+        return prev;
+      });
+    };
+
+    // Get socket instance
+    const getSocket = () => {
+      return (socketService as any).socket;
+    };
+
+    // Setup listeners when socket connects
+    const setupListeners = (sock: any) => {
+      if (!sock) return;
+      
+      console.log('🔌 Socket connected, setting up listeners...');
+      sock.on('instant-job-ping', handleInstantJobPing);
+      sock.on('instant-job-confirmed', handleJobConfirmed);
+      sock.on('instant-job-rejected', handleJobRejected);
+      console.log('✅ Socket listeners registered');
+    };
+
+    // Try to setup immediately
+    const socket = getSocket();
+    if (socket && socket.connected) {
+      setupListeners(socket);
+    } else {
+      console.log('⚠️ Socket not connected yet, waiting for connection...');
+      // Listen for socket connection
+      const handleConnect = () => {
+        const sock = getSocket();
+        if (sock) {
+          setupListeners(sock);
+        }
+      };
+      
+      // Listen for custom socket connected event
+      window.addEventListener('socketConnected', handleConnect);
+      
+      // Also try periodically
+      const retryInterval = setInterval(() => {
+        const sock = getSocket();
+        if (sock && sock.connected) {
+          clearInterval(retryInterval);
+          setupListeners(sock);
+        }
+      }, 2000);
+
+      return () => {
+        clearInterval(retryInterval);
+        window.removeEventListener('socketConnected', handleConnect);
+        const sock = getSocket();
+        if (sock) {
+          sock.off('instant-job-ping', handleInstantJobPing);
+          sock.off('instant-job-confirmed', handleJobConfirmed);
+          sock.off('instant-job-rejected', handleJobRejected);
+        }
+      };
+    }
+
+    return () => {
+      const sock = getSocket();
+      if (sock) {
+        sock.off('instant-job-ping', handleInstantJobPing);
+        sock.off('instant-job-confirmed', handleJobConfirmed);
+        sock.off('instant-job-rejected', handleJobRejected);
+      }
+    };
+  }, [user, user?.availableForInstantJobs]);
 
   const filteredApplications = applications.filter(app => {
     const status = app.status?.toLowerCase();
@@ -570,10 +686,225 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: userProp }) =
     !userSkills.some((us: string) => us.toLowerCase().includes(skill.toLowerCase()))
   );
 
+  // Handle instant job ping actions
+  const handleAcceptInstantJob = async () => {
+    if (!instantJobPing) return;
+    
+    try {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(`${API_BASE_URL}/instant-jobs/accept`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ jobId: instantJobPing._id })
+      });
+
+      if (response.ok) {
+        setPostAcceptState({ jobId: instantJobPing._id, status: 'waiting' });
+        setInstantJobPing(null);
+      } else {
+        const error = await response.json();
+        alert(error.message || 'Failed to accept job');
+        setInstantJobPing(null);
+      }
+    } catch (error: any) {
+      console.error('Error accepting instant job:', error);
+      alert('Failed to accept job. Please try again.');
+      setInstantJobPing(null);
+    }
+  };
+
+  const handleSkipInstantJob = () => {
+    setInstantJobPing(null);
+  };
+
+  const handleCloseInstantJob = () => {
+    setInstantJobPing(null);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Instant Job Ping Modal */}
+      {instantJobPing && (
+        <InstantJobPing
+          job={instantJobPing}
+          onAccept={handleAcceptInstantJob}
+          onSkip={handleSkipInstantJob}
+          onClose={handleCloseInstantJob}
+        />
+      )}
+
+      {/* Post-Accept State Modal */}
+      {postAcceptState && (
+        <PostAcceptState
+          jobId={postAcceptState.jobId}
+          status={postAcceptState.status}
+          onConfirmed={() => setPostAcceptState(null)}
+        />
+      )}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
         
+        {/* Instant Job Availability Toggle - Top Priority */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="mb-6"
+        >
+          <div className="bg-gradient-to-r from-[#2A8A8C]/10 to-[#2A8A8C]/5 rounded-lg border border-[#2A8A8C]/20 p-4 sm:p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <Zap className="w-5 h-5 text-[#2A8A8C]" />
+                  <h3 className="text-base font-semibold text-gray-900">Available for instant jobs</h3>
+                </div>
+                <p className="text-xs text-gray-600">
+                  {user?.availableForInstantJobs 
+                    ? "You'll receive urgent job alerts nearby. Respond quickly to accept."
+                    : "Turn on to receive instant job alerts. You'll need to respond quickly when notified."}
+                </p>
+                {user?.availableForInstantJobs && user?.instantAvailabilityExpiresAt && (
+                  <p className="text-xs text-[#2A8A8C] mt-1">
+                    Auto-expires: {new Date(user.instantAvailabilityExpiresAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                )}
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={user?.availableForInstantJobs || false}
+                  onChange={async (e) => {
+                    const newValue = e.target.checked;
+                    console.log('🔄 Toggling instant availability to:', newValue);
+                    
+                    // Optimistically update UI
+                    const previousValue = user?.availableForInstantJobs;
+                    if (updateUser) {
+                      updateUser({
+                        ...user,
+                        availableForInstantJobs: newValue
+                      } as any);
+                    }
+
+                    try {
+                      const token = localStorage.getItem('token');
+                      if (!token) {
+                        alert('Please log in again');
+                        // Revert on error
+                        if (updateUser) {
+                          updateUser({
+                            ...user,
+                            availableForInstantJobs: previousValue
+                          } as any);
+                        }
+                        return;
+                      }
+
+                      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+                      
+                      // Get location if available
+                      let locationLat: number | undefined;
+                      let locationLon: number | undefined;
+                      
+                      if (newValue && navigator.geolocation) {
+                        try {
+                          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+                            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+                          });
+                          locationLat = position.coords.latitude;
+                          locationLon = position.coords.longitude;
+                          console.log('📍 Got location:', locationLat, locationLon);
+                        } catch (geoError) {
+                          console.warn('⚠️ Could not get location:', geoError);
+                          // Continue without location - user can update later
+                        }
+                      }
+
+                      console.log('📤 Sending request:', { available: newValue, locationLat, locationLon });
+                      const response = await fetch(`${API_BASE_URL}/users/toggle-instant-availability`, {
+                        method: 'PUT',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                          available: newValue,
+                          locationLat,
+                          locationLon
+                        })
+                      });
+
+                      console.log('📥 Response status:', response.status);
+
+                      if (!response.ok) {
+                        const error = await response.json();
+                        console.error('❌ Error response:', error);
+                        throw new Error(error.message || error.error || 'Failed to update availability');
+                      }
+
+                      const data = await response.json();
+                      console.log('✅ Success response:', data);
+                      
+                      // Update user context with server response
+                      if (updateUser) {
+                        updateUser({
+                          ...user,
+                          availableForInstantJobs: data.data?.availableForInstantJobs ?? newValue,
+                          instantAvailabilityExpiresAt: data.data?.expiresAt,
+                          onlineStatus: newValue ? 'online' : 'offline',
+                          lastSeen: new Date(),
+                          locationCoordinates: locationLat && locationLon ? {
+                            latitude: locationLat,
+                            longitude: locationLon
+                          } : user?.locationCoordinates
+                        } as any);
+                      }
+
+                      // Update localStorage
+                      try {
+                        const storedUser = localStorage.getItem('user');
+                        if (storedUser) {
+                          const userObj = JSON.parse(storedUser);
+                          userObj.availableForInstantJobs = data.data?.availableForInstantJobs ?? newValue;
+                          userObj.instantAvailabilityExpiresAt = data.data?.expiresAt;
+                          userObj.onlineStatus = newValue ? 'online' : 'offline';
+                          if (locationLat && locationLon) {
+                            userObj.locationCoordinates = {
+                              latitude: locationLat,
+                              longitude: locationLon
+                            };
+                          }
+                          localStorage.setItem('user', JSON.stringify(userObj));
+                          console.log('💾 Updated localStorage');
+                        }
+                      } catch (e) {
+                        console.warn('⚠️ Could not update localStorage:', e);
+                      }
+                    } catch (error: any) {
+                      console.error('❌ Error toggling availability:', error);
+                      alert(error.message || 'Failed to update availability. Please try again.');
+                      // Revert on error
+                      if (updateUser) {
+                        updateUser({
+                          ...user,
+                          availableForInstantJobs: previousValue
+                        } as any);
+                      }
+                    }
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#2A8A8C]/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2A8A8C]"></div>
+              </label>
+            </div>
+          </div>
+        </motion.div>
+
         {/* Profile Header - Clean & Subtle */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}

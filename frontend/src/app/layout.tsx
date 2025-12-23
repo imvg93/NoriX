@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "../contexts/AuthContext";
 import { NotificationProvider } from "../contexts/NotificationContext";
+import { InstantJobPingProvider } from "../contexts/InstantJobPingContext";
 import ErrorBoundary from "../components/ErrorBoundary";
 import Layout from "../components/Layout";
 import ChunkErrorHandlerSetup from "../components/ChunkErrorHandler";
@@ -56,9 +57,11 @@ export default function RootLayout({
         <ErrorBoundary>
           <AuthProvider>
             <NotificationProvider>
-              <Layout>
-                {children}
-              </Layout>
+              <InstantJobPingProvider>
+                <Layout>
+                  {children}
+                </Layout>
+              </InstantJobPingProvider>
             </NotificationProvider>
           </AuthProvider>
         </ErrorBoundary>

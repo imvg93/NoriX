@@ -269,15 +269,29 @@ function HeroSection() {
             className="flex flex-wrap gap-5"
           >
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-          <Link
-            href="/employer/post-job"
+              <Link
+                href="/employer/instant-job"
+                className="inline-flex items-center gap-2 px-8 py-4 text-base font-semibold text-white transition-all duration-300 shadow-lg"
+                style={{ backgroundColor: '#1a1a1a' }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2a2a2a'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#1a1a1a'}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Find Worker Now
+              </Link>
+            </motion.div>
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <Link
+                href="/employer/post-job"
                 className="inline-flex items-center px-8 py-4 text-base font-semibold text-white transition-all duration-300"
                 style={{ backgroundColor: ACCENT }}
                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#238085'}
                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = ACCENT}
-          >
-            Post a Job
-          </Link>
+              >
+                Post a Job
+              </Link>
             </motion.div>
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <Link
@@ -791,7 +805,22 @@ function EmployerCTA() {
           initial={{ opacity: 0, y: 20 }}
           animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
           transition={{ duration: 0.6, delay: 0.3 }}
+          className="flex flex-wrap gap-4 justify-center"
         >
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Link
+              href="/employer/instant-job"
+              className="inline-flex items-center gap-2 px-10 py-5 text-lg font-semibold bg-white transition-all duration-300 mb-6 shadow-lg"
+              style={{ color: '#1a1a1a', backgroundColor: '#ffffff' }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Find Worker Now
+            </Link>
+          </motion.div>
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             <Link
               href="/employer/post-job"

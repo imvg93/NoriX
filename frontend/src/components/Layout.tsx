@@ -18,7 +18,9 @@ import {
   HelpCircle,
   Shield,
   Menu,
-  X
+  X,
+  Zap,
+  Navigation2
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import NotificationDropdown from './NotificationDropdown';
@@ -31,6 +33,8 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [loadingJob, setLoadingJob] = useState(false);
   const { user, logout, isAuthenticated } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -58,6 +62,44 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [profileDropdownOpen]);
+
+  // Fetch current instant job for employer
+  useEffect(() => {
+    if (user?.userType === 'employer') {
+      const fetchCurrentJob = async () => {
+        try {
+          setLoadingJob(true);
+          const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+          const token = localStorage.getItem('token');
+          
+          if (!token) return;
+
+          const response = await fetch(`${API_BASE_URL}/instant-jobs/current`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.data?.jobId) {
+              setCurrentJobId(data.data.jobId);
+            } else {
+              setCurrentJobId(null);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching current job:', error);
+        } finally {
+          setLoadingJob(false);
+        }
+      };
+
+      fetchCurrentJob();
+      const interval = setInterval(fetchCurrentJob, 30000); // Refresh every 30 seconds
+      return () => clearInterval(interval);
+    }
+  }, [user]);
 
   // Don't show layout for login/signup pages, admin pages, KYC management pages, and profile page
   if (pathname.startsWith('/login') || pathname.startsWith('/signup') || pathname.startsWith('/admin') || pathname.startsWith('/kyc-') || pathname.startsWith('/student/profile')) {
@@ -185,6 +227,24 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                         
                         {user?.userType === 'employer' && (
                           <>
+                            <Link
+                              href="/employer"
+                              className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
+                              onClick={() => setProfileDropdownOpen(false)}
+                            >
+                              <BarChart3 className="w-5 h-5" />
+                              <span>Dashboard</span>
+                            </Link>
+                            {currentJobId && (
+                              <Link
+                                href={`/employer/instant-job/${currentJobId}/manage`}
+                                className="flex items-center gap-3 px-4 py-2 text-[#2A8A8C] hover:bg-[#2A8A8C]/10 transition-colors font-semibold"
+                                onClick={() => setProfileDropdownOpen(false)}
+                              >
+                                <Zap className="w-5 h-5" />
+                                <span>Quick Find</span>
+                              </Link>
+                            )}
                             <Link
                               href="/employer/post-job"
                               className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"

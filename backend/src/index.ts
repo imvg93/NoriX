@@ -28,6 +28,7 @@ import studentsRoutes from './routes/students';
 import verificationRoutesNew from './routes/verificationRoutes';
 import verificationRoutes from './routes/verification';
 import adminVerificationRoutes from './routes/admin-verification';
+import instantJobsRoutes from './routes/instantJobs';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -57,6 +58,10 @@ notificationService.setSocketManager(socketManager);
 setJobServices(socketManager, emailService);
 setApplicationServices(socketManager, emailService);
 setNotificationRouteService(notificationService);
+
+// Initialize instant job services
+import { setNotificationService as setInstantJobNotifier } from './services/instantJob/notifier';
+setInstantJobNotifier(notificationService);
 
 // Make notification service available globally
 (global as any).notificationService = notificationService;
@@ -181,6 +186,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/saved-jobs', savedJobsRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/students', studentsRoutes);
+app.use('/api/instant-jobs', instantJobsRoutes);
+console.log('✅ Instant jobs routes registered at /api/instant-jobs');
 
 // Register verification routes - IMPORTANT: Register new route FIRST so it matches /status before the old route
 console.log('🔧 Registering verification routes...');
@@ -219,6 +226,12 @@ app.use(errorHandler);
 const startServer = async (): Promise<void> => {
   try {
     await connectDB();
+    
+    // Start instant job background workers (temporarily disabled - node-cron not installed)
+    // TODO: Install node-cron: npm install node-cron
+    // const { startWorkers } = await import('./services/instantJob/workers');
+    // startWorkers();
+    console.log('⚠️ Instant job workers disabled - node-cron not installed');
     
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server running on port ${PORT}`);
