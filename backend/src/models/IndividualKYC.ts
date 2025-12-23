@@ -64,8 +64,7 @@ const individualKYCSchema = new Schema<IIndividualKYCDocument>(
           return /^[0-9]{12}$/.test(v);
         },
         message: 'Aadhaar number must be exactly 12 digits'
-      },
-      index: true
+      }
     },
     address: {
       type: String,
@@ -184,7 +183,7 @@ const individualKYCSchema = new Schema<IIndividualKYCDocument>(
 
 // Indexes for better query performance
 individualKYCSchema.index({ employerId: 1, status: 1 });
-individualKYCSchema.index({ aadhaarNumber: 1 });
+// Note: aadhaarNumber index is created programmatically in database.ts to avoid duplicate warnings
 individualKYCSchema.index({ status: 1, createdAt: -1 });
 individualKYCSchema.index({ submittedAt: -1 });
 

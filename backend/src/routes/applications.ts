@@ -4,6 +4,7 @@ import Application from '../models/Application';
 import Job from '../models/Job';
 import User from '../models/User';
 import KYC from '../models/KYC';
+import Student from '../models/Student';
 import { authenticateToken, requireStudent, requireEmployer, AuthRequest } from '../middleware/auth';
 
 import { asyncHandler, sendSuccessResponse, sendErrorResponse, ValidationError } from '../middleware/errorHandler';
@@ -49,18 +50,48 @@ router.post('/', authenticateToken, requireStudent, asyncHandler(async (req: Aut
     }
 
     // Check if student exists in database
-    const studentExists = await User.findById(req.user._id).select('_id name email availability kycStatus isVerified');
+    const studentExists = await User.findById(req.user._id).select('_id name email availability kycStatus isVerified phone');
     if (!studentExists) {
       return sendErrorResponse(res, 404, 'Student account not found');
     }
 
-    // Check if student's KYC is approved
+    // Check KYC status from multiple sources for comprehensive verification
     const kyc = await KYC.findOne({ userId: req.user._id, isActive: true });
     const kycStatus = kyc?.verificationStatus || studentExists.kycStatus || 'not_submitted';
-    const isKYCApproved = kycStatus === 'approved' || studentExists.isVerified;
+    
+    // Also check Student collection's verified field
+    const userEmail = (studentExists.email || '').toLowerCase();
+    const userPhone = String(studentExists.phone || '').trim();
+    let studentProfile = null;
+    if (userEmail) {
+      studentProfile = await Student.findOne({ college_email: userEmail });
+    }
+    if (!studentProfile && userPhone) {
+      studentProfile = await Student.findOne({ phone: userPhone });
+    }
+    
+    // Comprehensive KYC approval check
+    const isKYCApproved = 
+      kycStatus === 'approved' || 
+      studentExists.isVerified === true ||
+      (studentProfile && studentProfile.verified === true);
+    
+    console.log('🔍 KYC Approval Check for Job Application:', {
+      userId: req.user._id,
+      kycStatus,
+      userKycStatus: studentExists.kycStatus,
+      userIsVerified: studentExists.isVerified,
+      studentProfileVerified: studentProfile?.verified,
+      isKYCApproved
+    });
     
     if (!isKYCApproved) {
-      console.log(`⚠️ Student ${req.user._id} attempted to apply without KYC approval`);
+      console.log(`⚠️ Student ${req.user._id} attempted to apply without KYC approval`, {
+        kycStatus,
+        userKycStatus: studentExists.kycStatus,
+        userIsVerified: studentExists.isVerified,
+        studentVerified: studentProfile?.verified
+      });
       return sendErrorResponse(res, 403, 'Please complete and get your KYC approved before applying to jobs');
     }
 
@@ -461,12 +492,44 @@ router.put('/:id/status', authenticateToken, requireEmployer, asyncHandler(async
 
   // Populate for response
   await application.populate([
-    { path: 'jobId', select: 'title company location' },
+    { path: 'jobId', select: 'title company location employerId' },
     { path: 'studentId', select: 'name college skills' }
   ]);
 
   // Get job details for notifications
-  const jobDetails = await Job.findById(application.jobId).select('jobTitle companyName location workType');
+  const jobDetails = await Job.findById(application.jobId).select('jobTitle companyName location workType employerId');
+  const employerId = jobDetails?.employerId || job?.employerId;
+
+  // Get notification service
+  const notificationService = (global as any).notificationService as any;
+
+  // If employer approves/accepts application, notify student
+  if ((status === 'approved' || status === 'accepted' || status === 'shortlisted') && notificationService) {
+    const studentId = typeof application.studentId === 'object' 
+      ? (application.studentId as any)._id 
+      : application.studentId;
+    
+    const employerIdForNotification = typeof employerId === 'object' 
+      ? (employerId as any)._id || (employerId as any).toString()
+      : employerId || req.user!._id;
+    
+    const jobTitle = jobDetails?.jobTitle || 'Unknown Job';
+    const companyName = jobDetails?.companyName || 'Unknown Company';
+
+    try {
+      await notificationService.notifyApplicationAccepted(
+        studentId,
+        employerIdForNotification,
+        application._id,
+        jobTitle,
+        companyName
+      );
+      console.log(`✅ Notification sent to student ${studentId} for approved application`);
+    } catch (error) {
+      console.error('❌ Failed to send notification:', error);
+      // Don't fail the approval if notification fails
+    }
+  }
 
   // Real-time notification to student
   if (socketManager) {
@@ -506,6 +569,86 @@ router.put('/:id/status', authenticateToken, requireEmployer, asyncHandler(async
   console.log(`📋 Application status updated: ${status} for job ${jobDetails?.jobTitle} - Notifications sent to student`);
 
   sendSuccessResponse(res, { application }, 'Application status updated successfully');
+}));
+
+// @route   POST /api/applications/:id/accept
+// @desc    Student accepts/approves a job offer
+// @access  Private (Student only - Application owner)
+router.post('/:id/accept', authenticateToken, requireStudent, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const application = await Application.findById(req.params.id)
+    .populate('jobId', 'jobTitle companyName location employerId');
+  
+  if (!application) {
+    throw new ValidationError('Application not found');
+  }
+
+  // Check if student owns this application
+  if (application.studentId.toString() !== req.user!._id.toString()) {
+    throw new ValidationError('Access denied. You can only accept your own applications.');
+  }
+
+  // Check if application is already approved/accepted by employer
+  if (application.status !== 'approved' && application.status !== 'accepted') {
+    throw new ValidationError('You can only accept applications that have been approved by the employer.');
+  }
+
+  // Update application status to 'hired' or 'accepted' (depending on your workflow)
+  await application.updateStatus('hired', 'Job offer accepted by student');
+
+  // Get job and employer details
+  const job = await Job.findById(application.jobId).select('jobTitle companyName employerId');
+  const employerId = job?.employerId || (application.jobId as any)?.employerId;
+  const student = await User.findById(req.user._id).select('name email');
+  const studentName = student?.name || student?.email || 'Student';
+
+  // Get notification service
+  const notificationService = (global as any).notificationService as any;
+
+  // Send notification to employer
+  if (notificationService && employerId && job) {
+    try {
+      await notificationService.notifyStudentAcceptedJob(
+        employerId,
+        req.user._id,
+        application._id,
+        job.jobTitle || 'Unknown Job',
+        studentName
+      );
+      console.log(`✅ Notification sent to employer ${employerId} for student acceptance`);
+    } catch (error) {
+      console.error('❌ Failed to send notification:', error);
+      // Don't fail the acceptance if notification fails
+    }
+  }
+
+  // Also send via socket for real-time updates
+  if (socketManager && employerId) {
+    const employerIdStr = typeof employerId === 'object' 
+      ? (employerId as any)._id?.toString() || employerId.toString()
+      : employerId.toString();
+    
+    socketManager.notifyApplicationStatusUpdate({
+      _id: application._id,
+      status: 'hired',
+      jobId: application.jobId,
+      jobTitle: job?.jobTitle || 'Unknown Job',
+      companyName: job?.companyName || 'Unknown Company',
+      studentId: application.studentId,
+      studentName: studentName,
+      message: `${studentName} accepted your job offer for ${job?.jobTitle || 'the job'}! 🎉`,
+      updatedAt: new Date()
+    }, employerIdStr);
+  }
+
+  // Populate for response
+  await application.populate([
+    { path: 'jobId', select: 'title company location' },
+    { path: 'studentId', select: 'name college skills' }
+  ]);
+
+  console.log(`📋 Student ${studentName} accepted job offer for ${job?.jobTitle} - Notification sent to employer`);
+
+  sendSuccessResponse(res, { application }, 'Job offer accepted successfully');
 }));
 
 // @route   POST /api/applications/:id/withdraw

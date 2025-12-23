@@ -43,20 +43,59 @@ router.put(
 			phone: String(body.phone || req.user?.phone || '').trim(),
 			college: String(body.college || '').trim(),
 			college_email: String(body.college_email || email).toLowerCase().trim(),
-			id_doc_url: String(body.id_doc_url || '').trim(),
-			skills: Array.isArray(body.skills) ? body.skills.map((s: any) => String(s).trim()).filter(Boolean) : [],
-			availability: Array.isArray(body.availability) ? body.availability.map((a: any) => String(a).toLowerCase().trim()).filter(Boolean) : [],
+			id_doc_url: String(body.id_doc_url || '').trim(), // College ID only
+			skills: Array.isArray(body.skills) ? body.skills.map((s: any) => String(s).trim()).filter(Boolean).filter((s: string) => s.length <= 50) : [],
 		};
+
+		// Validate and filter availability values against enum
+		const validAvailabilityValues = ['weekdays', 'weekends', 'both', 'flexible', 'morning', 'evening', 'night'];
+		payload.availability = Array.isArray(body.availability) 
+			? body.availability
+				.map((a: any) => String(a).toLowerCase().trim())
+				.filter((a: string) => validAvailabilityValues.includes(a))
+			: [];
 
 		if (!payload.name || !payload.phone || !payload.college || !payload.college_email) {
 			throw new ValidationError('name, phone, college and college_email are required');
 		}
 
+		// Validate email format
+		const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
+		if (!emailRegex.test(payload.college_email)) {
+			throw new ValidationError('Please enter a valid college email address');
+		}
+
+		// Ensure all required fields are present (for MongoDB JSON Schema validator)
+		// Check if document exists first
+		const existingStudent = await Student.findOne({ college_email: payload.college_email });
+		
+		// Prepare update object
+		const updateData: any = {
+			$set: {
+				...payload,
+				// Ensure required fields are always set
+				verified: existingStudent?.verified ?? false,
+				reliability_score: existingStudent?.reliability_score ?? 0,
+				total_shifts: existingStudent?.total_shifts ?? 0,
+				no_shows: existingStudent?.no_shows ?? 0,
+				trial_shift_status: existingStudent?.trial_shift_status ?? 'not_requested'
+			}
+		};
+
+		// For new documents, ensure defaults are set in $set (not $setOnInsert to avoid conflicts)
+		if (!existingStudent) {
+			updateData.$set.verified = false;
+			updateData.$set.reliability_score = 0;
+			updateData.$set.total_shifts = 0;
+			updateData.$set.no_shows = 0;
+			updateData.$set.trial_shift_status = 'not_requested';
+		}
+
 		// Upsert by unique college_email
 		const student = await Student.findOneAndUpdate(
 			{ college_email: payload.college_email },
-			{ $set: payload, $setOnInsert: { verified: false, reliability_score: 0, total_shifts: 0, no_shows: 0 } },
-			{ upsert: true, new: true }
+			updateData,
+			{ upsert: true, new: true, runValidators: false } // MongoDB JSON Schema handles validation
 		);
 
 		// Notify admins that a student submitted/updated their profile
@@ -98,19 +137,58 @@ router.post(
 			phone: String(body.phone || req.user?.phone || '').trim(),
 			college: String(body.college || '').trim(),
 			college_email: String(body.college_email || email).toLowerCase().trim(),
-			id_doc_url: String(body.id_doc_url || '').trim(),
-			skills: Array.isArray(body.skills) ? body.skills.map((s: any) => String(s).trim()).filter(Boolean) : [],
-			availability: Array.isArray(body.availability) ? body.availability.map((a: any) => String(a).toLowerCase().trim()).filter(Boolean) : [],
+			id_doc_url: String(body.id_doc_url || '').trim(), // College ID only
+			skills: Array.isArray(body.skills) ? body.skills.map((s: any) => String(s).trim()).filter(Boolean).filter((s: string) => s.length <= 50) : [],
 		};
+
+		// Validate and filter availability values against enum
+		const validAvailabilityValues = ['weekdays', 'weekends', 'both', 'flexible', 'morning', 'evening', 'night'];
+		payload.availability = Array.isArray(body.availability) 
+			? body.availability
+				.map((a: any) => String(a).toLowerCase().trim())
+				.filter((a: string) => validAvailabilityValues.includes(a))
+			: [];
 
 		if (!payload.name || !payload.phone || !payload.college || !payload.college_email) {
 			throw new ValidationError('name, phone, college and college_email are required');
 		}
 
+		// Validate email format
+		const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
+		if (!emailRegex.test(payload.college_email)) {
+			throw new ValidationError('Please enter a valid college email address');
+		}
+
+		// Ensure all required fields are present (for MongoDB JSON Schema validator)
+		// Check if document exists first
+		const existingStudent = await Student.findOne({ college_email: payload.college_email });
+		
+		// Prepare update object
+		const updateData: any = {
+			$set: {
+				...payload,
+				// Ensure required fields are always set
+				verified: existingStudent?.verified ?? false,
+				reliability_score: existingStudent?.reliability_score ?? 0,
+				total_shifts: existingStudent?.total_shifts ?? 0,
+				no_shows: existingStudent?.no_shows ?? 0,
+				trial_shift_status: existingStudent?.trial_shift_status ?? 'not_requested'
+			}
+		};
+
+		// For new documents, ensure defaults are set in $set (not $setOnInsert to avoid conflicts)
+		if (!existingStudent) {
+			updateData.$set.verified = false;
+			updateData.$set.reliability_score = 0;
+			updateData.$set.total_shifts = 0;
+			updateData.$set.no_shows = 0;
+			updateData.$set.trial_shift_status = 'not_requested';
+		}
+
 		const student = await Student.findOneAndUpdate(
 			{ college_email: payload.college_email },
-			{ $set: payload, $setOnInsert: { verified: false, reliability_score: 0, total_shifts: 0, no_shows: 0 } },
-			{ upsert: true, new: true }
+			updateData,
+			{ upsert: true, new: true, runValidators: false } // MongoDB JSON Schema handles validation
 		);
 
 		try {

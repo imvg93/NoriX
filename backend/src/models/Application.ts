@@ -4,7 +4,7 @@ export interface IApplication extends Document {
   applicationId: mongoose.Types.ObjectId; // Auto-generated ID
   jobId: mongoose.Types.ObjectId; // Reference to job
   studentId: mongoose.Types.ObjectId; // Reference to student
-  status: 'applied' | 'accepted' | 'rejected' | 'pending' | 'approved' | 'closed'; // Enhanced status options
+  status: 'applied' | 'accepted' | 'rejected' | 'pending' | 'approved' | 'closed' | 'shortlisted' | 'hired'; // Enhanced status options
   appliedAt: Date; // When student applied
   
   // Additional fields for enhanced functionality
@@ -66,7 +66,7 @@ const applicationSchema = new Schema<IApplication>({
   },
   status: {
     type: String,
-    enum: ['applied', 'accepted', 'rejected', 'pending', 'approved', 'closed'],
+    enum: ['applied', 'accepted', 'rejected', 'pending', 'approved', 'closed', 'shortlisted', 'hired'],
     default: 'applied'
   },
   appliedAt: {
@@ -192,11 +192,13 @@ applicationSchema.virtual('duration').get(function() {
 
 // Virtual for status color (for frontend)
 applicationSchema.virtual('statusColor').get(function() {
-  const statusColors = {
+  const statusColors: Record<string, string> = {
     applied: 'blue',
     pending: 'yellow',
     approved: 'green',
     accepted: 'green',
+    shortlisted: 'green',
+    hired: 'green',
     rejected: 'red',
     closed: 'gray'
   };

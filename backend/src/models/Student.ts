@@ -5,7 +5,9 @@ export interface IStudent extends Document {
 	phone: string;
 	college: string;
 	college_email: string;
-	id_doc_url: string;
+	id_doc_url: string; // Legacy field - kept for backward compatibility
+	id_doc_front_url?: string; // Front side of ID document
+	id_doc_back_url?: string; // Back side of ID document
 	id_doc_hash?: string;
 	id_submitted_at?: Date;
 	video_url?: string;
@@ -65,6 +67,14 @@ const studentSchema = new Schema<IStudent>(
 			match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
 		},
 		id_doc_url: {
+			type: String,
+			default: ''
+		},
+		id_doc_front_url: {
+			type: String,
+			default: ''
+		},
+		id_doc_back_url: {
 			type: String,
 			default: ''
 		},

@@ -161,17 +161,8 @@ export default function Signup() {
           if (!user.employerCategory) {
             redirectPath = '/employer/select-role';
           } else {
-            // If already has category, redirect to their type-specific KYC page
-            const category = user.employerCategory;
-            if (category === 'corporate') {
-              redirectPath = '/employer/kyc/corporate';
-            } else if (category === 'local_business') {
-              redirectPath = '/employer/kyc/local';
-            } else if (category === 'individual') {
-              redirectPath = '/employer/kyc/individual';
-            } else {
-              redirectPath = '/employer/select-role';
-            }
+            // If already has category, redirect to employer dashboard
+            redirectPath = '/employer';
           }
         } else if (user.userType === 'student') {
           redirectPath = '/student/dashboard';

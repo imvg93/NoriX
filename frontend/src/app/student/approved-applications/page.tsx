@@ -51,6 +51,7 @@ const ApprovedApplicationsPage = () => {
   const [applications, setApplications] = useState<ApprovedApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchApprovedApplications = async () => {
@@ -218,9 +219,49 @@ const ApprovedApplicationsPage = () => {
 
                 {/* Action Buttons */}
                 <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
+                  {application.status !== 'hired' && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          setAcceptingId(application._id);
+                          await apiService.acceptJobOffer(application._id);
+                          alert('Job offer accepted successfully!');
+                          // Navigate to applications page in dashboard
+                          router.push('/student/dashboard#applications');
+                        } catch (err: any) {
+                          console.error('Error accepting job:', err);
+                          alert(err.message || 'Failed to accept job offer');
+                        } finally {
+                          setAcceptingId(null);
+                        }
+                      }}
+                      disabled={acceptingId === application._id}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {acceptingId === application._id ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Accepting...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          Accept Job
+                        </>
+                      )}
+                    </button>
+                  )}
+                  
+                  {application.status === 'hired' && (
+                    <div className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg text-xs font-medium">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      Accepted
+                    </div>
+                  )}
+                  
                   <button
                     onClick={() => router.push(`/jobs/${application.jobId}`)}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#2A8A8C] text-white rounded-lg hover:bg-[#1f6a6c] transition-colors text-xs font-medium"
+                    className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#2A8A8C] text-white rounded-lg hover:bg-[#1f6a6c] transition-colors text-xs font-medium"
                   >
                     <Eye className="w-3.5 h-3.5" />
                     View Job

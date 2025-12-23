@@ -1,14 +1,14 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Student",
-  "description": "NORIX students collection schema. college_email is optional; verification is based on id_doc_url and admin approval.",
+  "description": "NORIX students collection schema. Verification is based on ID documents and admin approval.",
   "bsonType": "object",
-  "additionalProperties": false,
+  "additionalProperties": true,
   "required": [
     "name",
     "phone",
     "college",
-    "id_doc_url",
+    "college_email",
     "skills",
     "availability",
     "verified",
@@ -34,11 +34,48 @@
       "bsonType": "string"
     },
     "college_email": {
-      "description": "Optional college email; stored as plain string without validation",
+      "description": "College email address (required)",
       "bsonType": "string"
     },
     "id_doc_url": {
-      "description": "URL to an ID document used for verification (presence required; can be empty until uploaded)",
+      "description": "URL to an ID document used for verification (legacy field, can be empty)",
+      "bsonType": "string"
+    },
+    "id_doc_front_url": {
+      "description": "URL to the front side of ID document",
+      "bsonType": "string"
+    },
+    "id_doc_back_url": {
+      "description": "URL to the back side of ID document",
+      "bsonType": "string"
+    },
+    "id_doc_hash": {
+      "description": "Hash of the ID document for duplicate detection",
+      "bsonType": "string"
+    },
+    "id_submitted_at": {
+      "description": "Date when ID document was submitted",
+      "bsonType": ["date", "null"]
+    },
+    "video_url": {
+      "description": "URL to video verification",
+      "bsonType": "string"
+    },
+    "video_submitted_at": {
+      "description": "Date when video was submitted",
+      "bsonType": ["date", "null"]
+    },
+    "trial_shift_status": {
+      "description": "Status of trial shift",
+      "bsonType": "string",
+      "enum": ["not_requested", "pending", "assigned", "completed", "failed"]
+    },
+    "rejection_code": {
+      "description": "Code for rejection reason",
+      "bsonType": "string"
+    },
+    "admin_notes": {
+      "description": "Admin notes about the student",
       "bsonType": "string"
     },
     "skills": {
@@ -57,8 +94,7 @@
     },
     "verified": {
       "description": "Admin-controlled verification state (not tied to college_email)",
-      "bsonType": "bool",
-      "default": false
+      "bsonType": "bool"
     },
     "reliability_score": {
       "description": "0–100 score computed from attendance history",
@@ -67,8 +103,7 @@
         "long",
         "double",
         "decimal"
-      ],
-      "default": 0
+      ]
     },
     "total_shifts": {
       "description": "Total number of shifts assigned",
@@ -77,8 +112,7 @@
         "long",
         "double",
         "decimal"
-      ],
-      "default": 0
+      ]
     },
     "no_shows": {
       "description": "Number of missed (no-show) shifts",
@@ -87,8 +121,7 @@
         "long",
         "double",
         "decimal"
-      ],
-      "default": 0
+      ]
     }
   }
 }

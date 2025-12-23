@@ -1,6 +1,6 @@
 "use client";
 
-import StudentHome from '../../../components/StudentHome';
+import StudentDashboard from '../../../components/StudentDashboard';
 import { useAuth } from '../../../contexts/AuthContext';
 import RoleProtectedRoute from '../../../components/auth/RoleProtectedRoute';
 
@@ -9,7 +9,7 @@ export default function StudentDashboardPage() {
 
   return (
     <RoleProtectedRoute allowedRoles={['student']}>
-      <StudentHome user={user} />
+      <StudentDashboard user={user} />
     </RoleProtectedRoute>
   );
 }

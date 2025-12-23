@@ -168,22 +168,64 @@ router.post('/kyc-document', authenticateToken, upload.single('document'), async
     throw new ValidationError('No file uploaded');
   }
 
-  const { documentType } = req.body;
-  if (!documentType || !['aadhar', 'pan', 'passport', 'driving_license'].includes(documentType)) {
-    throw new ValidationError('Valid document type is required');
+  // Log request body to debug
+  console.log('📤 KYC Document Upload Request:', {
+    body: req.body,
+    bodyKeys: Object.keys(req.body || {}),
+    documentTypeFromBody: req.body?.documentType,
+    file: req.file ? { originalname: req.file.originalname, mimetype: req.file.mimetype, size: req.file.size } : null
+  });
+
+  // Get documentType from body - multer parses FormData and puts text fields in req.body
+  const documentType = req.body?.documentType ? String(req.body.documentType).trim() : null;
+  
+  // Accept various document types for KYC
+  const validDocumentTypes = [
+    'aadhar', 'aadhaar', // Accept both spellings
+    'pan', 
+    'passport', 
+    'driving_license',
+    'college_id', 'college_id_card', // Accept both variations
+    'bonafide', 'bonafide_certificate', // Accept both variations
+    'fee_receipt',
+    'selfie', 'photo', // Accept both variations
+    'kyc_document' // Generic fallback
+  ];
+  
+  console.log('📋 Document type validation:', {
+    received: documentType,
+    type: typeof documentType,
+    isValid: documentType && validDocumentTypes.includes(documentType),
+    validTypes: validDocumentTypes,
+    fileName: req.file?.originalname
+  });
+  
+  // If documentType is missing, try to infer from filename or default to 'selfie' if filename contains 'selfie'
+  let finalDocumentType = documentType;
+  if (!finalDocumentType && req.file?.originalname?.toLowerCase().includes('selfie')) {
+    finalDocumentType = 'selfie';
+    console.log('🔧 Inferred documentType from filename:', finalDocumentType);
   }
+  
+  if (!finalDocumentType || !validDocumentTypes.includes(finalDocumentType)) {
+    throw new ValidationError(`Valid document type is required. Received: ${documentType || 'undefined'}. Accepted types: ${validDocumentTypes.join(', ')}`);
+  }
+  
+  // Normalize 'aadhaar' to 'aadhar' for backend consistency
+  const normalizedDocType = finalDocumentType === 'aadhaar' ? 'aadhar' : finalDocumentType;
 
   try {
-    // Upload KYC document
-    const result = await uploadKYCDocument(req.file, req.user!._id.toString(), documentType);
+    // Upload KYC document (use normalized type)
+    const result = await uploadKYCDocument(req.file, req.user!._id.toString(), normalizedDocType);
     
     // Here you would typically update a KYC model or user's KYC status
     // For this example, we'll just return the upload result
     
     sendSuccessResponse(res, { 
+      url: result.secure_url, // Also return as 'url' for compatibility
       documentUrl: result.secure_url,
       publicId: result.public_id,
-      documentType
+      documentType: normalizedDocType
     }, 'KYC document uploaded successfully');
   } catch (error) {
     console.error('KYC document upload error:', error);

@@ -168,6 +168,30 @@ class NotificationService {
   }
 
   /**
+   * Notify employer when student accepts/approves a job offer
+   */
+  public async notifyStudentAcceptedJob(
+    employerId: string | mongoose.Types.ObjectId,
+    studentId: string | mongoose.Types.ObjectId,
+    applicationId: string | mongoose.Types.ObjectId,
+    jobTitle: string,
+    studentName: string
+  ): Promise<INotification> {
+    return this.createNotification({
+      receiverId: employerId,
+      senderId: studentId,
+      message: `${studentName} accepted your job offer for ${jobTitle}! 🎉`,
+      type: 'application',
+      metadata: {
+        applicationId,
+        studentId,
+        jobTitle,
+        studentName
+      }
+    });
+  }
+
+  /**
    * Notify employer about suspicious activity
    */
   public async notifySuspiciousActivityToEmployer(

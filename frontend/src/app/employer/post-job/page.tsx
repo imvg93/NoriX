@@ -175,6 +175,12 @@ const PostJobPage = () => {
       await apiService.createJob(jobData);
       
       alert('Job posted successfully!');
+      
+      // Trigger refresh event for employer stats
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('employer-stats-refresh'));
+      }
+      
       router.push('/employer');
     } catch (error) {
       console.error('Error posting job:', error);

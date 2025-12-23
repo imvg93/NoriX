@@ -1467,12 +1467,24 @@ router.post('/', authenticateToken, asyncHandler(async (req: AuthRequest, res: e
   // SECURITY: Always use authenticated user's email and phone - never trust form input
   kycData.userId = userId;
   kycData.email = user.email;
-  kycData.phone = user.phone;
+  kycData.phone = user.phone || '';
+  
+  // Ensure emergencyContact.phone is set - use user's phone if not provided
+  if (!kycData.emergencyContact) {
+    kycData.emergencyContact = {};
+  }
+  if (!kycData.emergencyContact.phone || kycData.emergencyContact.phone.trim().length < 6) {
+    kycData.emergencyContact.phone = user.phone || '0000000000'; // Default fallback
+  }
+  if (!kycData.emergencyContact.name) {
+    kycData.emergencyContact.name = kycData.fullName || 'Emergency Contact';
+  }
   
   console.log('🔒 SECURITY: Using authenticated user details:', {
     email: user.email,
     phone: user.phone,
-    userId: user._id
+    userId: user._id,
+    emergencyContact: kycData.emergencyContact
   });
   
   // Validate required fields
