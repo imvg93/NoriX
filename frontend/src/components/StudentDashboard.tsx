@@ -508,6 +508,62 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: userProp }) =
            status === 'accepted' || status === 'approved' || status === 'shortlisted';
   }).length;
 
+  // Determine next best action
+  const getNextBestAction = (): { message: string; action: string; href: string; icon: any } | null => {
+    // Priority order: Profile Photo > Availability > Skills > Location > Verification > Apply to jobs
+    if (!user?.profilePicture) {
+      return {
+        message: 'Upload your profile photo',
+        action: 'Add Photo',
+        href: '/student/profile?edit=true#photo',
+        icon: Camera
+      };
+    }
+    if (!user?.availability) {
+      return {
+        message: 'Set your availability',
+        action: 'Add Availability',
+        href: '/student/profile?edit=true#availability',
+        icon: Calendar
+      };
+    }
+    if (!user?.skills || user.skills.length === 0) {
+      return {
+        message: 'Add your skills',
+        action: 'Add Skills',
+        href: '/student/profile?edit=true#skills',
+        icon: Briefcase
+      };
+    }
+    if (!user?.address && !user?.college) {
+      return {
+        message: 'Add your location',
+        action: 'Add Location',
+        href: '/student/profile?edit=true#location',
+        icon: MapPin
+      };
+    }
+    if (user?.kycStatus !== 'approved' && !user?.isVerified) {
+      return {
+        message: 'Complete verification',
+        action: 'Verify Now',
+        href: '/kyc-profile',
+        icon: Shield
+      };
+    }
+    if (applications.length < 3) {
+      return {
+        message: 'Apply to more jobs',
+        action: 'Browse Jobs',
+        href: '/jobs',
+        icon: ArrowRight
+      };
+    }
+    return null;
+  };
+
+  const nextBestAction = getNextBestAction();
+
   // Get user skills for skill demand comparison
   const userSkills = user?.skills || [];
   const missingSkills = HIGH_DEMAND_SKILLS.filter(skill => 
@@ -749,7 +805,93 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: userProp }) =
           </motion.div>
         )}
 
-        {/* Top Stats - Clean Grid */}
+        {/* Visual Hero Metric - Job Match Strength */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="mb-6"
+        >
+          <div className="bg-white rounded-xl border border-gray-200 p-6 sm:p-8 shadow-sm">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1">Job Match Strength</h2>
+                <p className="text-xs text-gray-500">Your profile completeness score</p>
+              </div>
+              <div className="text-right">
+                <div className="text-4xl sm:text-5xl font-bold text-[#2A8A8C] mb-1">{matchStrength.score}%</div>
+                <div className="text-xs text-gray-500">
+                  {matchStrength.score === 100 ? 'Perfect match!' : `${100 - matchStrength.score}% to go`}
+                </div>
+              </div>
+            </div>
+            
+            {/* Progress bar */}
+            <div className="mb-6">
+              <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${matchStrength.score}%` }}
+                  transition={{ duration: 1, delay: 0.3 }}
+                  className="h-full bg-gradient-to-r from-[#2A8A8C] to-[#238085] rounded-full"
+                />
+              </div>
+            </div>
+
+            {/* Quick breakdown */}
+            <div className="grid grid-cols-3 gap-3">
+              {matchStrength.breakdown.map((item, index) => {
+                const Icon = item.icon;
+                return (
+                  <div key={index} className="flex items-center gap-2">
+                    {item.status === 'strong' ? (
+                      <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                    )}
+                    <span className="text-sm text-gray-700 truncate">{item.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Next Best Action Card */}
+        {nextBestAction && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            className="mb-6"
+          >
+            <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-start gap-3 flex-1">
+                  <div className="w-10 h-10 bg-[#2A8A8C]/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                    {(() => {
+                      const Icon = nextBestAction.icon;
+                      return <Icon className="w-5 h-5 text-[#2A8A8C]" />;
+                    })()}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500 mb-1">To increase your chances today, do this →</p>
+                    <p className="text-base font-semibold text-gray-900">{nextBestAction.message}</p>
+                  </div>
+                </div>
+                <Link
+                  href={nextBestAction.href}
+                  className="px-4 py-2 bg-[#2A8A8C] hover:bg-[#238085] text-white rounded-lg transition-colors text-sm font-medium whitespace-nowrap flex items-center gap-1.5"
+                >
+                  {nextBestAction.action}
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Secondary Stats - Clean Grid */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -757,23 +899,23 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: userProp }) =
           className="mb-6"
         >
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-            <div className="bg-white rounded-lg border border-gray-200/60 p-4">
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
               <div className="text-xs text-gray-500 mb-1">Active Applications</div>
               <div className="text-xl sm:text-2xl font-semibold text-gray-900">{activeApplicationsCount}</div>
             </div>
-            <div className="bg-white rounded-lg border border-gray-200/60 p-4">
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
               <div className="text-xs text-gray-500 mb-1">Total Earnings</div>
               <div className="text-xl sm:text-2xl font-semibold text-[#2A8A8C]">
                 {formatCurrency(earnings.totalEarnings)}
               </div>
             </div>
-            <div className="bg-white rounded-lg border border-gray-200/60 p-4">
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
               <div className="text-xs text-gray-500 mb-1">This Month</div>
               <div className="text-xl sm:text-2xl font-semibold text-gray-900">
                 {formatCurrency(earnings.thisMonthEarnings)}
               </div>
             </div>
-            <div className="bg-white rounded-lg border border-gray-200/60 p-4">
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
               <div className="text-xs text-gray-500 mb-1">Pending</div>
               <div className="text-xl sm:text-2xl font-semibold text-gray-900">
                 {formatCurrency(earnings.pendingAmount)}
@@ -782,73 +924,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: userProp }) =
           </div>
         </motion.div>
 
-        {/* Job Match Strength */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.3 }}
-          className="mb-6"
-        >
-          <div className="bg-white rounded-lg border border-gray-200/60 p-4 sm:p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-gray-900">Job Match Strength</h2>
-              <span className="text-2xl font-semibold text-[#2A8A8C]">{matchStrength.score}%</span>
-            </div>
-            
-            <div className="space-y-2 mb-4">
-              {matchStrength.breakdown.map((item, index) => {
-                const Icon = item.icon;
-                const isMissing = item.status === 'missing';
-                const content = (
-                  <div className={`flex items-center gap-2 text-sm ${isMissing && item.href ? 'cursor-pointer hover:bg-gray-50 -mx-2 px-2 py-1 rounded transition-colors' : ''}`}>
-                    <Icon className={`w-4 h-4 ${isMissing ? 'text-gray-400' : 'text-gray-400'}`} />
-                    <span className="text-gray-700 flex-1">{item.label}:</span>
-                    {item.status === 'strong' && (
-                      <span className="text-green-600 flex items-center gap-1">
-                        <CheckCircle className="w-3.5 h-3.5" />
-                        Strong
-                      </span>
-                    )}
-                    {item.status === 'partial' && (
-                      <span className="text-yellow-600 flex items-center gap-1">
-                        <AlertCircle className="w-3.5 h-3.5" />
-                        Partial
-                      </span>
-                    )}
-                    {item.status === 'missing' && (
-                      <span className="text-gray-400 flex items-center gap-1">
-                        <XCircle className="w-3.5 h-3.5" />
-                        Missing
-                        {item.href && (
-                          <span className="text-[#2A8A8C] text-xs ml-1">(Upload)</span>
-                        )}
-                      </span>
-                    )}
-                  </div>
-                );
-                
-                if (isMissing && item.href) {
-                  return (
-                    <Link key={index} href={item.href}>
-                      {content}
-                    </Link>
-                  );
-                }
-                
-                return <div key={index}>{content}</div>;
-              })}
-            </div>
-
-            {matchStrength.score < 100 && (
-              <Link
-                href="/student/profile?edit=true"
-                className="inline-flex items-center gap-1.5 text-sm text-[#2A8A8C] hover:underline"
-              >
-                Improve match →
-              </Link>
-            )}
-          </div>
-        </motion.div>
 
         {/* Response Rate Indicator */}
         {applications.length > 0 && (
@@ -858,7 +933,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: userProp }) =
             transition={{ duration: 0.4, delay: 0.4 }}
             className="mb-6"
           >
-            <div className="bg-white rounded-lg border border-gray-200/60 p-4 sm:p-5">
+            <div className="bg-gray-50 rounded-lg border border-gray-200/60 p-4 sm:p-5">
               <h3 className="text-base font-semibold text-gray-900 mb-3">Application Performance</h3>
               <div className="grid grid-cols-3 gap-4">
                 <div>
@@ -888,10 +963,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: userProp }) =
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.5 }}
+            transition={{ duration: 0.4, delay: 0.4 }}
             className="mb-6"
           >
-            <div className="bg-white rounded-lg border border-gray-200/60 p-4 sm:p-5">
+            <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-5">
               <h3 className="text-base font-semibold text-gray-900 mb-3">Skill Demand Insights</h3>
               <div className="space-y-3">
                 <div>
@@ -921,10 +996,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: userProp }) =
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.6 }}
+            transition={{ duration: 0.4, delay: 0.5 }}
             className="mb-6"
           >
-            <div className="bg-gradient-to-br from-[#2A8A8C]/5 to-[#2A8A8C]/10 rounded-lg border border-[#2A8A8C]/20 p-4 sm:p-5">
+            <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 sm:p-5">
               <div className="flex items-start gap-3">
                 <Shield className="w-5 h-5 text-[#2A8A8C] flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
@@ -950,10 +1025,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: userProp }) =
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.7 }}
+            transition={{ duration: 0.4, delay: 0.6 }}
             className="mb-6"
           >
-            <div className="bg-white rounded-lg border border-gray-200/60 p-4 sm:p-5">
+            <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 sm:p-5">
               <h3 className="text-base font-semibold text-gray-900 mb-3">Weekly Availability</h3>
               <div className="space-y-2">
                 <div className="grid grid-cols-7 gap-1.5">
@@ -988,10 +1063,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: userProp }) =
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.8 }}
+          transition={{ duration: 0.4, delay: 0.7 }}
           className="mb-6"
         >
-          <div className="bg-white rounded-lg border border-gray-200/60 p-4 sm:p-5">
+          <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-5">
             <h3 className="text-base font-semibold text-gray-900 mb-3">Activity</h3>
             <div className="space-y-2 text-sm text-gray-600">
               <div className="flex items-center gap-2">
@@ -1011,10 +1086,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: userProp }) =
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.9 }}
+            transition={{ duration: 0.4, delay: 0.8 }}
             className="mb-6"
           >
-            <div className="bg-white rounded-lg border border-gray-200/60 p-4 sm:p-5">
+            <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 sm:p-5">
               <h3 className="text-base font-semibold text-gray-900 mb-3">Quick Learning</h3>
               <div className="space-y-2">
                 {LEARNING_RESOURCES.map((resource, index) => {
@@ -1039,10 +1114,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: userProp }) =
           id="applications"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 1 }}
+          transition={{ duration: 0.4, delay: 0.9 }}
           className="mb-6"
         >
-          <div className="bg-white rounded-lg border border-gray-200/60 p-4 sm:p-5">
+          <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-gray-900">Applications</h2>
               {applications.length > 0 && (
@@ -1173,9 +1248,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: userProp }) =
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 1.1 }}
+          transition={{ duration: 0.4, delay: 1 }}
         >
-          <div className="bg-white rounded-lg border border-gray-200/60 p-4 sm:p-5">
+          <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 sm:p-5">
             <h2 className="text-base font-semibold text-gray-900 mb-4">Earnings Summary</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
               <div>

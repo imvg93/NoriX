@@ -19,6 +19,18 @@ export interface IJob extends Document {
   taskBudget?: string; // Budget for the task
   autoExpireDays?: number; // Auto-expire after X days (default 7 for tasks)
   
+  // Instant job fields
+  urgencyMode?: 'instant' | 'scheduled'; // How fast worker is needed
+  startTime?: Date; // When job starts (for instant jobs)
+  duration?: number; // Duration in hours
+  durationUnit?: 'hours' | 'days';
+  lockedBy?: mongoose.Types.ObjectId; // Student who accepted (temporary lock)
+  lockedAt?: Date; // When job was locked
+  lockExpiresAt?: Date; // When lock expires (90 seconds after accept)
+  acceptedBy?: mongoose.Types.ObjectId; // Student who finally accepted
+  acceptedAt?: Date;
+  instantAttempts?: number; // Number of notification waves sent (max 3)
+  
   // Auto-filled employer info
   companyName: string;
   email: string;
@@ -141,6 +153,48 @@ const jobSchema = new Schema<IJob>({
     min: [1, 'Auto-expire days must be at least 1']
   },
   
+  // Instant job fields
+  urgencyMode: {
+    type: String,
+    enum: ['instant', 'scheduled'],
+    default: 'scheduled'
+  },
+  startTime: {
+    type: Date
+  },
+  duration: {
+    type: Number,
+    min: [0.5, 'Duration must be at least 0.5 hours']
+  },
+  durationUnit: {
+    type: String,
+    enum: ['hours', 'days'],
+    default: 'hours'
+  },
+  lockedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  lockedAt: {
+    type: Date
+  },
+  lockExpiresAt: {
+    type: Date
+  },
+  acceptedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  acceptedAt: {
+    type: Date
+  },
+  instantAttempts: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 3 // Max 3 waves of notifications
+  },
+  
   // Auto-filled employer info
   companyName: {
     type: String,
@@ -237,6 +291,9 @@ jobSchema.index({ applicationDeadline: 1 });
 jobSchema.index({ workType: 1 });
 jobSchema.index({ location: 1 });
 jobSchema.index({ approvalStatus: 1 });
+jobSchema.index({ urgencyMode: 1, status: 1 });
+jobSchema.index({ lockedBy: 1 });
+jobSchema.index({ acceptedBy: 1 });
 
 // Virtual for job duration
 jobSchema.virtual('duration').get(function(this: IJob) {
