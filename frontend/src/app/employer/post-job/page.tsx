@@ -21,7 +21,8 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
-  Check
+  Check,
+  Zap
 } from 'lucide-react';
 import { apiService } from '../../../services/api';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -51,7 +52,10 @@ const PostJobPage = () => {
     reason: '',
     allowedApplicantCategory: '',
     paymentType: 'Fixed',
-    amount: ''
+    amount: '',
+    urgencyMode: 'scheduled' as 'instant' | 'scheduled', // Job urgency mode
+    startTime: '', // For instant jobs
+    duration: '' // For instant jobs
   });
 
   const jobCategories = [
@@ -155,7 +159,7 @@ const PostJobPage = () => {
 
     try {
       // Map to backend format
-      const jobData = {
+      const jobData: any = {
         jobTitle: formData.jobTitle,
         jobCategory: formData.jobCategory,
         description: formData.taskSummary,
@@ -164,8 +168,21 @@ const PostJobPage = () => {
         workType: formData.workType,
         skillsRequired: formData.skillsRequired,
         applicationDeadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        genderPreference: formData.allowedApplicantCategory || 'any'
+        genderPreference: formData.allowedApplicantCategory || 'any',
+        urgencyMode: formData.urgencyMode
       };
+
+      // Add instant job specific fields
+      if (formData.urgencyMode === 'instant') {
+        if (!formData.startTime || !formData.duration) {
+          alert('Please fill in start time and duration for instant jobs');
+          setLoading(false);
+          return;
+        }
+        jobData.startTime = new Date(formData.startTime).toISOString();
+        jobData.duration = parseFloat(formData.duration);
+        jobData.durationUnit = 'hours';
+      }
 
       if (!kycOK) {
         alert('Complete and get your KYC approved before posting jobs');
@@ -445,6 +462,106 @@ const PostJobPage = () => {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Job Urgency Mode Selector */}
+              <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <label className="block text-sm font-semibold text-gray-900 mb-3">
+                  ⏱ Job Urgency
+                </label>
+                <p className="text-xs text-gray-600 mb-3">
+                  How fast do you need the worker?
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className={`relative flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                    formData.urgencyMode === 'instant' 
+                      ? 'border-[#2A8A8D] bg-[#2A8A8D]/5' 
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="urgencyMode"
+                      value="instant"
+                      checked={formData.urgencyMode === 'instant'}
+                      onChange={handleInputChange}
+                      className="sr-only"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Zap className="w-4 h-4 text-[#2A8A8D]" />
+                        <span className="font-semibold text-sm text-gray-900">⏱ Instant</span>
+                      </div>
+                      <p className="text-xs text-gray-600">Available now</p>
+                    </div>
+                    {formData.urgencyMode === 'instant' && (
+                      <CheckCircle className="w-5 h-5 text-[#2A8A8D]" />
+                    )}
+                  </label>
+                  <label className={`relative flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                    formData.urgencyMode === 'scheduled' 
+                      ? 'border-[#2A8A8D] bg-[#2A8A8D]/5' 
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="urgencyMode"
+                      value="scheduled"
+                      checked={formData.urgencyMode === 'scheduled'}
+                      onChange={handleInputChange}
+                      className="sr-only"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Calendar className="w-4 h-4 text-gray-600" />
+                        <span className="font-semibold text-sm text-gray-900">📅 Scheduled</span>
+                      </div>
+                      <p className="text-xs text-gray-600">Normal hiring</p>
+                    </div>
+                    {formData.urgencyMode === 'scheduled' && (
+                      <CheckCircle className="w-5 h-5 text-[#2A8A8D]" />
+                    )}
+                  </label>
+                </div>
+                {formData.urgencyMode === 'instant' && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <p className="text-xs text-gray-600 mb-2">
+                      ⚠️ Instant jobs are sent to available students nearby. If no one accepts, you can retry, increase pay, or schedule.
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Start Time *
+                        </label>
+                        <input
+                          type="datetime-local"
+                          name="startTime"
+                          value={formData.startTime}
+                          onChange={handleInputChange}
+                          min={new Date().toISOString().slice(0, 16)}
+                          required={formData.urgencyMode === 'instant'}
+                          className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-[#2A8A8D] focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Duration (hours) *
+                        </label>
+                        <input
+                          type="number"
+                          name="duration"
+                          value={formData.duration}
+                          onChange={handleInputChange}
+                          min="0.5"
+                          max="8"
+                          step="0.5"
+                          required={formData.urgencyMode === 'instant'}
+                          placeholder="e.g., 4"
+                          className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-[#2A8A8D] focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Row 2: Work Type & Location */}

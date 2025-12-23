@@ -52,8 +52,7 @@ export interface IJob extends Document {
   highlighted: boolean;
   createdAt: Date;
   
-  // Virtual fields
-  duration: string;
+  // Virtual fields (not in schema, computed at runtime)
   isExpired: boolean;
   
   // Methods
@@ -295,8 +294,8 @@ jobSchema.index({ urgencyMode: 1, status: 1 });
 jobSchema.index({ lockedBy: 1 });
 jobSchema.index({ acceptedBy: 1 });
 
-// Virtual for job duration
-jobSchema.virtual('duration').get(function(this: IJob) {
+// Virtual for time since job creation (renamed from 'duration' to avoid conflict)
+jobSchema.virtual('timeSinceCreated').get(function(this: IJob) {
   const now = new Date();
   const created = this.createdAt;
   
