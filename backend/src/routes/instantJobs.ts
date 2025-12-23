@@ -41,7 +41,6 @@ router.post('/confirm', authenticateToken, requireEmployer, asyncHandler(async (
  * @access  Private (Employers only)
  */
 router.get('/current', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
-  const { getCurrentInstantJob } = await import('../controllers/instantJobController');
   await getCurrentInstantJob(req, res);
 }));
 
