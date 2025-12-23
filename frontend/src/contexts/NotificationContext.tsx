@@ -47,6 +47,50 @@ interface NotificationProviderProps {
 export const NotificationProvider: React.FC<NotificationProviderProps> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  
+  // Fetch notifications from API on mount
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        
+        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+        const response = await fetch(`${API_BASE_URL}/notifications/my-notifications?limit=50`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data?.notifications) {
+            const apiNotifications = data.data.notifications.map((notif: any) => ({
+              id: notif._id || notif.id,
+              type: notif.type || 'system',
+              title: notif.message?.includes('accepted') || notif.message?.includes('approved') 
+                ? 'Application Accepted! 🎉' 
+                : notif.message?.includes('rejected')
+                ? 'Application Update'
+                : notif.message?.includes('applied')
+                ? 'New Application Received 📝'
+                : 'Notification',
+              message: notif.message || 'You have a new notification',
+              timestamp: notif.createdAt ? new Date(notif.createdAt).toISOString() : new Date().toISOString(),
+              read: notif.isRead || notif.read || false,
+              data: notif.metadata || {}
+            }));
+            setNotifications(apiNotifications);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching notifications:', error);
+      }
+    };
+    
+    fetchNotifications();
+  }, []);
 
   // Load notifications from localStorage on mount
   useEffect(() => {

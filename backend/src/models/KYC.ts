@@ -211,12 +211,12 @@ const kycSchema = new Schema<IKYCDocument>({
     },
     phone: {
       type: String,
-      required: [true, 'Emergency contact phone is required'],
+      required: false, // Made optional - will use user's phone if not provided
       trim: true,
       validate: {
         validator: function(v: string) {
-          // Accept any phone number - just need at least 6 characters
-          return !!(v && v.length >= 6);
+          // If provided, must be at least 6 characters
+          return !v || v.length >= 6;
         },
         message: 'Phone number must be at least 6 characters'
       }
@@ -231,7 +231,21 @@ const kycSchema = new Schema<IKYCDocument>({
   // Work Preferences
   preferredJobTypes: [{
     type: String,
-    enum: ['warehouse', 'delivery', 'housekeeping', 'construction', 'kitchen', 'retail', 'security', 'data-entry']
+    enum: [
+      // New form values
+      'Online work', 
+      'On-site/local work', 
+      'Corporate/part-time',
+      // Legacy values (for backward compatibility)
+      'warehouse', 
+      'delivery', 
+      'housekeeping', 
+      'construction', 
+      'kitchen', 
+      'retail', 
+      'security', 
+      'data-entry'
+    ]
   }],
   experienceSkills: {
     type: String,

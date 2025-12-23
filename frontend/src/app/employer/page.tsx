@@ -78,6 +78,7 @@ function HeroSection() {
   });
   const [loading, setLoading] = useState(true);
   const [recentActivityCount, setRecentActivityCount] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const fetchEmployerData = async () => {
@@ -161,17 +162,51 @@ function HeroSection() {
       setLoading(false);
     }
 
-    // Set up interval to refresh data every 30 seconds
+    // Set up interval to refresh data every 15 seconds (more frequent for real-time updates)
     const refreshInterval = setInterval(() => {
       if (isAuthenticated && user && user.userType === 'employer') {
         fetchEmployerData();
       }
-    }, 30000);
+    }, 15000);
+
+    // Refresh when page becomes visible (user switches back to tab/window)
+    const handleVisibilityChange = () => {
+      if (!document.hidden && isAuthenticated && user && user.userType === 'employer') {
+        console.log('👁️ Page became visible, refreshing stats...');
+        fetchEmployerData();
+      }
+    };
+
+    // Refresh when window gains focus
+    const handleFocus = () => {
+      if (isAuthenticated && user && user.userType === 'employer') {
+        console.log('🎯 Window gained focus, refreshing stats...');
+        fetchEmployerData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
 
     return () => {
       clearInterval(refreshInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
     };
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, refreshKey]);
+
+  // Listen for custom refresh events (triggered when job is posted or application received)
+  useEffect(() => {
+    const handleRefresh = () => {
+      console.log('🔄 Manual refresh triggered');
+      setRefreshKey(prev => prev + 1);
+    };
+
+    window.addEventListener('employer-stats-refresh', handleRefresh);
+    return () => {
+      window.removeEventListener('employer-stats-refresh', handleRefresh);
+    };
+  }, []);
 
   const dashboardStats = [
     { 
@@ -274,13 +309,26 @@ function HeroSection() {
           <div className="bg-white border border-gray-200 p-6 lg:p-8 space-y-6">
             <div className="flex items-center justify-between pb-4 border-b border-gray-200">
               <h3 className="text-lg font-bold text-gray-900">Quick Overview</h3>
-              <Link 
-                href="/employer/applications"
-                className="text-sm font-semibold transition-colors hover:opacity-80"
-                style={{ color: ACCENT }}
-              >
-                View All →
-              </Link>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    // Trigger refresh by dispatching focus event
+                    window.dispatchEvent(new Event('focus'));
+                  }}
+                  className="text-sm font-semibold transition-colors hover:opacity-80 px-2 py-1 rounded hover:bg-gray-100"
+                  style={{ color: ACCENT }}
+                  title="Refresh stats"
+                >
+                  ↻ Refresh
+                </button>
+                <Link 
+                  href="/employer/applications"
+                  className="text-sm font-semibold transition-colors hover:opacity-80"
+                  style={{ color: ACCENT }}
+                >
+                  View All →
+                </Link>
+              </div>
             </div>
             
             <div className="grid grid-cols-2 gap-4">
@@ -317,8 +365,17 @@ function HeroSection() {
             <div className="pt-4 border-t border-gray-200">
           <Link
             href="/employer/applications"
-                className="flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors group"
+                className="flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors group relative"
               >
+                {recentActivityCount > 0 && (
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center z-10"
+                  >
+                    {recentActivityCount > 9 ? '9+' : recentActivityCount}
+                  </motion.div>
+                )}
                 <div>
                   <p className="text-sm font-semibold text-gray-900">Recent Activity</p>
                   <p className="text-xs text-gray-600 mt-1">

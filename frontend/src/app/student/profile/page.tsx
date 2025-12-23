@@ -78,7 +78,7 @@ const formatDate = (dateString: string): string => {
 };
 
 export default function StudentProfilePage() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, updateUser } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
@@ -106,6 +106,28 @@ export default function StudentProfilePage() {
       fetchProfileData();
     }
   }, [user?._id, isAuthenticated]);
+
+  // Handle query params for auto-editing
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const hash = window.location.hash;
+      
+      if (params.get('edit') === 'true') {
+        setEditing(true);
+        
+        // Scroll to specific section if hash is provided
+        if (hash) {
+          setTimeout(() => {
+            const element = document.querySelector(hash);
+            if (element) {
+              element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }, 300);
+        }
+      }
+    }
+  }, []);
 
   const fetchProfileData = async () => {
     if (!user?._id) return;
@@ -195,6 +217,23 @@ export default function StudentProfilePage() {
         throw new Error(errorData.error || 'Failed to update profile');
       }
 
+      const responseData = await response.json();
+      
+      // Extract user data from response (handle different response formats)
+      const updatedUserData = responseData.data?.user || responseData.user || responseData;
+      
+      // Update user context with new data immediately
+      if (updateUser) {
+        updateUser({
+          name: updatedUserData.name || formData.name,
+          phone: updatedUserData.phone || formData.phone,
+          address: updatedUserData.address || formData.address,
+          college: updatedUserData.college || formData.college,
+          skills: updatedUserData.skills || formData.skills,
+          availability: updatedUserData.availability || formData.availability,
+        });
+      }
+      
       await fetchProfileData();
       setEditing(false);
       alert('Profile updated successfully!');
@@ -462,7 +501,7 @@ export default function StudentProfilePage() {
                         className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2A8A8C] focus:border-transparent"
                       />
                     </div>
-                    <div>
+                    <div id="location">
                       <label className="block text-xs font-medium text-gray-700 mb-1">College</label>
                       <input
                         type="text"
@@ -471,7 +510,7 @@ export default function StudentProfilePage() {
                         className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2A8A8C] focus:border-transparent"
                       />
                     </div>
-                    <div>
+                    <div id="availability">
                       <label className="block text-xs font-medium text-gray-700 mb-1">Availability</label>
                       <select
                         value={formData.availability}
@@ -495,7 +534,7 @@ export default function StudentProfilePage() {
                       className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2A8A8C] focus:border-transparent resize-none"
                     />
                   </div>
-                  <div>
+                  <div id="skills">
                     <label className="block text-xs font-medium text-gray-700 mb-1">Skills (comma separated)</label>
                     <input
                       type="text"

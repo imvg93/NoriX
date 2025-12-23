@@ -17,13 +17,18 @@ export const useSafeNavigation = () => {
 
     switch (user.userType) {
       case 'student':
-        router.push('/');
+        router.push('/student/dashboard');
         break;
       case 'employer':
-        router.push('/');
+        // Check if employer has category, if not redirect to select role
+        if (!user.employerCategory) {
+          router.push('/employer/select-role');
+        } else {
+          router.push('/employer');
+        }
         break;
       case 'admin':
-        router.push('/admin');
+        router.push('/admin/dashboard');
         break;
       default:
         router.push('/');

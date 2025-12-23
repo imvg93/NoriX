@@ -24,6 +24,7 @@ interface User {
   availability?: string;
   businessType?: string;
   address?: string;
+  profilePicture?: string; // Add profile picture field
   onboardingCompleted?: boolean;
 }
 
@@ -124,16 +125,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const isValid = await validateToken(savedToken);
             
             if (isValid) {
-              setUser(normalizedUser as User);
+              // Fetch fresh user data to get latest profile picture and other updates
+              try {
+                const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+                const userResponse = await fetch(`${API_URL}/users/profile`, {
+                  headers: {
+                    'Authorization': `Bearer ${savedToken}`,
+                    'Content-Type': 'application/json',
+                  },
+                });
+                
+                if (userResponse.ok) {
+                  const userData = await userResponse.json();
+                  const freshUser = userData.data?.user || userData.user || userData.data;
+                  if (freshUser) {
+                    // Merge fresh data with normalized user
+                    const updatedUser = normalizeUserWithRole({
+                      ...normalizedUser,
+                      ...freshUser,
+                      profilePicture: freshUser.profilePicture || normalizedUser.profilePicture,
+                      skills: freshUser.skills || normalizedUser.skills,
+                      availability: freshUser.availability || normalizedUser.availability,
+                      address: freshUser.address || normalizedUser.address,
+                      college: freshUser.college || normalizedUser.college,
+                      kycStatus: freshUser.kycStatus || normalizedUser.kycStatus,
+                    });
+                    setUser(updatedUser as User);
+                    localStorage.setItem('user', JSON.stringify(updatedUser));
+                    console.log('✅ User data refreshed with latest profile information');
+                  } else {
+                    setUser(normalizedUser as User);
+                  }
+                } else {
+                  setUser(normalizedUser as User);
+                }
+              } catch (refreshError) {
+                console.warn('Could not refresh user data, using cached:', refreshError);
+                setUser(normalizedUser as User);
+              }
+              
               setToken(savedToken);
               console.log('✅ Authentication restored successfully');
               
               // Start authentication backup for future reloads
               AuthPreservation.startAuthBackup();
-
-              if (parsedUser.role !== normalizedUser.role) {
-                localStorage.setItem('user', JSON.stringify(normalizedUser));
-              }
             } else {
               console.log('❌ Invalid token, clearing storage');
               localStorage.removeItem('user');
@@ -178,14 +213,64 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (userData: User, authToken: string) => {
     const normalizedUser = normalizeUserWithRole(userData);
     console.log('✅ User logged in:', normalizedUser.name);
-    setUser(normalizedUser);
-    setToken(authToken);
     
-    // Save to localStorage
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('user', JSON.stringify(normalizedUser));
-      localStorage.setItem('token', authToken);
+    // Fetch fresh user data to ensure profile picture is included
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const userResponse = await fetch(`${API_URL}/users/profile`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (userResponse.ok) {
+        const responseData = await userResponse.json();
+        const freshUser = responseData.data?.user || responseData.user || responseData.data;
+        if (freshUser) {
+          // Merge fresh data with login user data
+          const updatedUser = normalizeUserWithRole({
+            ...normalizedUser,
+            ...freshUser,
+            profilePicture: freshUser.profilePicture || normalizedUser.profilePicture,
+            skills: freshUser.skills || normalizedUser.skills,
+            availability: freshUser.availability || normalizedUser.availability,
+            address: freshUser.address || normalizedUser.address,
+            college: freshUser.college || normalizedUser.college,
+            kycStatus: freshUser.kycStatus || normalizedUser.kycStatus,
+          });
+          setUser(updatedUser);
+          
+          // Save to localStorage
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('user', JSON.stringify(updatedUser));
+            localStorage.setItem('token', authToken);
+          }
+          console.log('✅ User data refreshed with profile picture on login');
+        } else {
+          setUser(normalizedUser);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('user', JSON.stringify(normalizedUser));
+            localStorage.setItem('token', authToken);
+          }
+        }
+      } else {
+        setUser(normalizedUser);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('user', JSON.stringify(normalizedUser));
+          localStorage.setItem('token', authToken);
+        }
+      }
+    } catch (refreshError) {
+      console.warn('Could not refresh user data on login, using login response:', refreshError);
+      setUser(normalizedUser);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('user', JSON.stringify(normalizedUser));
+        localStorage.setItem('token', authToken);
+      }
     }
+    
+    setToken(authToken);
 
     // Connect to socket with new token
     socketService.reconnectWithToken(authToken);

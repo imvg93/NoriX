@@ -554,10 +554,21 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                     whileInView={{ opacity: 1 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.6, duration: 0.4 }}
-                    className={`inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border text-xs sm:text-sm font-medium ${verificationBadge.color}`}
+                    className="flex flex-col items-center gap-3 sm:gap-4"
                   >
-                    <BadgeIcon className="w-4 h-4" />
-                    {verificationBadge.text}
+                    <div className={`inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border text-xs sm:text-sm font-medium ${verificationBadge.color}`}>
+                      <BadgeIcon className="w-4 h-4" />
+                      {verificationBadge.text}
+                    </div>
+                    {kycStatus !== 'approved' && (
+                      <Link
+                        href="/kyc-profile"
+                        className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 bg-[#2A8A8C] text-white rounded-lg hover:bg-[#1f6a6c] transition-colors font-medium text-xs sm:text-sm shadow-md hover:shadow-lg group"
+                      >
+                        Complete KYC Now
+                        <ArrowRight className="w-3 h-3 sm:w-4 sm:h-4 group-hover:translate-x-1 transition-transform" />
+                      </Link>
+                    )}
           </motion.div>
       </motion.div>
               </div>

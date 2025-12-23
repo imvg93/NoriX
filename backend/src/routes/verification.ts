@@ -13,6 +13,59 @@ import crypto from 'crypto';
 
 const router = express.Router();
 
+// Helper function to find student by user email or phone, auto-creating if needed
+const findStudentByUser = async (user: any, autoCreate: boolean = true): Promise<IStudent | null> => {
+  const userEmail = (user?.email || '').toLowerCase();
+  const userPhone = String(user?.phone || '').trim();
+  
+  let student = await Student.findOne({ college_email: userEmail });
+  if (!student && userPhone) {
+    student = await Student.findOne({ phone: userPhone });
+  }
+  
+  // Auto-create a minimal student profile if it doesn't exist and autoCreate is true
+  if (!student && autoCreate && userEmail && user) {
+    try {
+      // Ensure we have minimum required fields
+      const studentName = user.name || 'Student';
+      const studentPhone = userPhone || user.phone || '';
+      const studentCollege = user.college || 'Not Specified'; // Required field, use placeholder if missing
+      
+      // Only create if we have essential fields
+      if (studentName && studentPhone && userEmail) {
+        // Create a minimal student profile with defaults
+        student = await Student.create({
+          name: studentName,
+          phone: studentPhone,
+          college: studentCollege,
+          college_email: userEmail,
+          id_doc_url: '',
+          skills: Array.isArray(user.skills) ? user.skills : [],
+          availability: Array.isArray(user.availability) ? user.availability : [],
+          verified: false,
+          reliability_score: 0,
+          total_shifts: 0,
+          no_shows: 0,
+          trial_shift_status: 'not_requested',
+          verification_history: []
+        });
+        console.log(`✅ Auto-created student profile for ${userEmail}`);
+      } else {
+        console.warn(`⚠️ Cannot auto-create student profile: missing required fields (name: ${!!studentName}, phone: ${!!studentPhone}, email: ${!!userEmail})`);
+      }
+    } catch (createError: any) {
+      // If creation fails (e.g., duplicate key, validation error), try to find again
+      console.warn('⚠️ Failed to auto-create student profile, trying to find again:', createError.message);
+      student = await Student.findOne({ college_email: userEmail });
+      if (!student && userPhone) {
+        student = await Student.findOne({ phone: userPhone });
+      }
+    }
+  }
+  
+  return student;
+};
+
 // Test route to verify routing works
 router.get('/test', (req, res) => {
   res.json({ message: 'Verification routes are working', path: req.path });
@@ -77,9 +130,15 @@ router.post(
       contentType,
     });
 
+    // Find student by college_email or phone first
+    const existingStudent = await findStudentByUser(req.user);
+    if (!existingStudent) {
+      throw new ValidationError('Student profile not found. Please complete your KYC profile first.');
+    }
+
     // Update student meta optimistically
     const student = await Student.findOneAndUpdate(
-      { _id: req.user!._id },
+      { _id: existingStudent._id },
       {
         $set: {
           id_doc_url: key,
@@ -94,10 +153,14 @@ router.post(
       { new: true, upsert: false }
     );
 
+    if (!student) {
+      throw new ValidationError('Failed to update student profile');
+    }
+
     // Log
     try {
       await VerificationLog.create({
-        studentId: req.user!._id,
+        studentId: student._id,
         adminId: null,
         action: 'upload_id',
         code: 'ID_UPLOADED',
@@ -112,7 +175,7 @@ router.post(
     const socketManager = (global as any).socketManager;
     if (socketManager) {
       socketManager.emitToAdmins('verification:pending', {
-        studentId: req.user!._id,
+        studentId: student._id,
         type: 'id_upload',
         key,
       });
@@ -149,12 +212,18 @@ router.post(
     const buf = fs.readFileSync(file.path);
     const sha256 = crypto.createHash('sha256').update(buf).digest('hex');
 
+    // Find student by college_email or phone
+    const existingStudent = await findStudentByUser(req.user);
+    if (!existingStudent) {
+      throw new ValidationError('Student profile not found. Please complete your KYC profile first.');
+    }
+
     // Upload to Cloudinary
     const result = await uploadImage(file, 'norix/verification/id');
     const secureUrl = result.secure_url;
 
     await Student.findOneAndUpdate(
-      { _id: req.user!._id },
+      { _id: existingStudent._id },
       {
         $set: {
           id_doc_url: secureUrl,
@@ -170,7 +239,7 @@ router.post(
 
     try {
       await VerificationLog.create({
-        studentId: req.user!._id,
+        studentId: existingStudent._id,
         adminId: null,
         action: 'upload_id',
         code: 'ID_UPLOADED',
@@ -211,14 +280,20 @@ router.post(
       throw new ValidationError('Video too long. Max 5 minutes.');
     }
 
-    const key = `students/${req.user!._id}/video/${Date.now()}_${fileName}`;
+    // Find student by college_email or phone first
+    const existingStudent = await findStudentByUser(req.user);
+    if (!existingStudent) {
+      throw new ValidationError('Student profile not found. Please complete your KYC profile first.');
+    }
+
+    const key = `students/${existingStudent._id}/video/${Date.now()}_${fileName}`;
     const upload = await getPresignedUploadUrl({
       key,
       contentType,
     });
 
-    await Student.findOneAndUpdate(
-      { _id: req.user!._id },
+    const updatedStudent = await Student.findOneAndUpdate(
+      { _id: existingStudent._id },
       {
         $set: {
           video_url: key,
@@ -231,9 +306,13 @@ router.post(
       { new: true }
     );
 
+    if (!updatedStudent) {
+      throw new ValidationError('Failed to update student profile');
+    }
+
     try {
       await VerificationLog.create({
-        studentId: req.user!._id,
+        studentId: updatedStudent._id,
         adminId: null,
         action: 'upload_video',
         code: 'VIDEO_UPLOADED',
@@ -245,7 +324,7 @@ router.post(
     const socketManager = (global as any).socketManager;
     if (socketManager) {
       socketManager.emitToAdmins('verification:pending', {
-        studentId: req.user!._id,
+        studentId: updatedStudent._id,
         type: 'video_upload',
         key,
       });
@@ -277,8 +356,11 @@ router.post(
     if (!isAllowedVideoMime(file.mimetype)) throw new ValidationError('Unsupported video type');
     if (file.size > MAX_VIDEO_SIZE) throw new ValidationError(`Video exceeds max size of ${MAX_VIDEO_SIZE} bytes`);
 
-    // Get current student to check for existing video
-    const currentStudent = await Student.findOne({ _id: req.user!._id });
+    // Find student by college_email or phone
+    const currentStudent = await findStudentByUser(req.user);
+    if (!currentStudent) {
+      throw new ValidationError('Student profile not found. Please complete your KYC profile first.');
+    }
     
     // Delete old video from Cloudinary if exists
     if (currentStudent?.video_url) {
@@ -310,7 +392,7 @@ router.post(
     const secureUrl = result.secure_url;
 
     await Student.findOneAndUpdate(
-      { _id: req.user!._id },
+      { _id: currentStudent._id },
       {
         $set: {
           video_url: secureUrl,
@@ -325,7 +407,7 @@ router.post(
 
     try {
       await VerificationLog.create({
-        studentId: req.user!._id,
+        studentId: currentStudent._id,
         adminId: null,
         action: 'upload_video',
         code: 'VIDEO_UPLOADED',
@@ -346,9 +428,14 @@ router.delete(
   authenticateToken,
   requireStudent,
   asyncHandler(async (req: AuthRequest, res: express.Response) => {
-    const student = await Student.findOne({ _id: req.user!._id });
+    // Find student by college_email or phone
+    const student = await findStudentByUser(req.user);
     
-    if (!student || !student.video_url) {
+    if (!student) {
+      throw new ValidationError('Student profile not found. Please complete your KYC profile first.');
+    }
+    
+    if (!student.video_url) {
       throw new ValidationError('No video found to delete');
     }
 
@@ -375,7 +462,7 @@ router.delete(
 
     // Remove from MongoDB
     await Student.findOneAndUpdate(
-      { _id: req.user!._id },
+      { _id: student._id },
       {
         $set: {
           video_url: '',
@@ -421,8 +508,18 @@ router.post(
   authenticateToken,
   requireStudent,
   asyncHandler(async (req: AuthRequest, res: express.Response) => {
-    const student = await Student.findById(req.user!._id);
-    if (!student) throw new ValidationError('Student not found');
+    // Find student by college_email (from user email) or by phone
+    const userEmail = (req.user?.email || '').toLowerCase();
+    const userPhone = String(req.user?.phone || '').trim();
+    
+    let student = await Student.findOne({ college_email: userEmail });
+    if (!student && userPhone) {
+      student = await Student.findOne({ phone: userPhone });
+    }
+    
+    if (!student) {
+      throw new ValidationError('Student profile not found. Please complete your KYC profile first.');
+    }
 
     student.trial_shift_status = 'pending';
     student.verification_history = [
@@ -433,7 +530,7 @@ router.post(
 
     try {
       await VerificationLog.create({
-        studentId: req.user!._id,
+        studentId: student._id,
         adminId: null,
         action: 'request_trial',
         code: 'TRIAL_REQUESTED',
@@ -445,7 +542,7 @@ router.post(
     const socketManager = (global as any).socketManager;
     if (socketManager) {
       socketManager.emitToAdmins('verification:pending', {
-        studentId: req.user!._id,
+        studentId: student._id,
         type: 'trial_request',
       });
       socketManager.emitToUser(req.user!._id.toString(), 'verification:update', {

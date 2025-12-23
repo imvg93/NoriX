@@ -40,15 +40,22 @@ const LoginForm: React.FC<LoginFormProps> = ({ compact = false }) => {
 
         // Role-based redirect
         const userType = response.user?.userType;
-        const target =
-          userType === 'employer'
-            ? '/'
-            : userType === 'student'
-              ? '/'
-              : response.user?.role === 'admin'
-                ? '/admin'
-                : '/';
+        let target = '/';
+        
+        if (userType === 'student') {
+          target = '/student/dashboard';
+        } else if (userType === 'employer') {
+          // Check if employer has category, if not redirect to select role
+          if (!response.user?.employerCategory) {
+            target = '/employer/select-role';
+          } else {
+            target = '/employer';
+          }
+        } else if (response.user?.role === 'admin' || userType === 'admin') {
+          target = '/admin/dashboard';
+        }
 
+        console.log('🚀 Redirecting to:', target, 'for userType:', userType);
         router.replace(target);
       } else {
         setError('Login failed. Please check your credentials.');

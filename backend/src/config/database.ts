@@ -62,6 +62,9 @@ export const connectDB = async (): Promise<void> => {
 
     // Apply students validator and indexes
     await applyStudentValidatorAndIndexes();
+
+    // Ensure IndividualKYC indexes
+    await ensureIndividualKYCIndexes();
   } catch (error) {
     console.error('Failed to connect to MongoDB:', error);
     process.exit(1);
@@ -84,7 +87,8 @@ const cleanupDuplicateIndexes = async (): Promise<void> => {
       { collection: 'users', field: 'companyName' },
       { collection: 'users', field: 'city' },
       { collection: 'jobs', field: 'companyName' },
-      { collection: 'jobs', field: 'city' }
+      { collection: 'jobs', field: 'city' },
+      { collection: 'individual_kyc', field: 'aadhaarNumber' }
     ];
 
     // Drop specific problematic indexes
@@ -189,18 +193,38 @@ const applyStudentValidatorAndIndexes = async (): Promise<void> => {
 
     // Apply validator if schema is available
     if (jsonSchema) {
-      // MongoDB's $jsonSchema validator does not support the "$schema" meta keyword.
-      // Strip it to avoid "Parsing of collection validator failed" warnings.
+      // MongoDB's $jsonSchema validator does not support the "$schema" meta keyword or "default" keyword.
+      // Strip them to avoid "Parsing of collection validator failed" warnings.
       const mongoJsonSchema: any = { ...jsonSchema };
       if (mongoJsonSchema.$schema) {
         delete mongoJsonSchema.$schema;
       }
+      
+      // Recursively remove "default" keywords from the schema
+      const removeDefaults = (obj: any): any => {
+        if (Array.isArray(obj)) {
+          return obj.map(item => removeDefaults(item));
+        } else if (obj !== null && typeof obj === 'object') {
+          const cleaned: any = {};
+          for (const key in obj) {
+            if (key === 'default') {
+              // Skip default keyword
+              continue;
+            }
+            cleaned[key] = removeDefaults(obj[key]);
+          }
+          return cleaned;
+        }
+        return obj;
+      };
+      
+      const cleanedSchema = removeDefaults(mongoJsonSchema);
       const collections = await db.listCollections({ name: 'students' }).toArray();
       if (collections.length > 0) {
         try {
           await db.command({
             collMod: 'students',
-            validator: { $jsonSchema: mongoJsonSchema },
+            validator: { $jsonSchema: cleanedSchema },
             validationLevel: 'strict',
             validationAction: 'error'
           });
@@ -213,7 +237,7 @@ const applyStudentValidatorAndIndexes = async (): Promise<void> => {
           if (/namespace.*not.*found/i.test(msg) || /NamespaceNotFound/i.test(msg)) {
             try {
               await db.createCollection('students', {
-                validator: { $jsonSchema: mongoJsonSchema },
+                validator: { $jsonSchema: cleanedSchema },
                 validationLevel: 'strict',
                 validationAction: 'error'
               });
@@ -226,7 +250,7 @@ const applyStudentValidatorAndIndexes = async (): Promise<void> => {
       } else {
         try {
           await db.createCollection('students', {
-            validator: { $jsonSchema: mongoJsonSchema },
+            validator: { $jsonSchema: cleanedSchema },
             validationLevel: 'strict',
             validationAction: 'error'
           });
@@ -248,6 +272,22 @@ const applyStudentValidatorAndIndexes = async (): Promise<void> => {
     console.log('✅ Ensured students indexes (verified, reliability_score, skills, college)');
   } catch (error) {
     console.error('❌ Error applying students validator/indexes:', error);
+  }
+};
+
+// Ensure IndividualKYC indexes are created programmatically
+const ensureIndividualKYCIndexes = async (): Promise<void> => {
+  try {
+    const db = mongoose.connection.db;
+    if (!db) return;
+
+    const coll = db.collection('individual_kyc');
+    await Promise.allSettled([
+      coll.createIndex({ aadhaarNumber: 1 }, { name: 'aadhaarNumber_1', background: true })
+    ]);
+    console.log('✅ Ensured IndividualKYC indexes (aadhaarNumber)');
+  } catch (error) {
+    console.error('❌ Error ensuring IndividualKYC indexes:', error);
   }
 };
 

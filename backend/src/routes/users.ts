@@ -304,7 +304,16 @@ router.post('/upload-avatar', authenticateToken, upload.single('avatar'), asyncH
 
     sendSuccessResponse(res, { 
       profilePicture: result.secure_url,
-      publicId: result.public_id 
+      avatarUrls: {
+        original: result.secure_url,
+        medium: result.secure_url,
+        small: result.secure_url
+      },
+      publicId: result.public_id,
+      user: {
+        _id: user._id,
+        profilePicture: result.secure_url
+      }
     }, 'Profile picture uploaded successfully');
   } catch (error) {
     console.error('Upload error:', error);

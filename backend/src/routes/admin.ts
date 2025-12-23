@@ -9,6 +9,7 @@ import LocalBusinessKYC from '../models/LocalBusinessKYC';
 import IndividualKYC from '../models/IndividualKYC';
 import { KYCAudit } from '../models/KYCAudit';
 import { AdminLogin } from '../models/AdminLogin';
+import Student from '../models/Student';
 import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth';
 import { asyncHandler, sendSuccessResponse, sendErrorResponse, ValidationError } from '../middleware/errorHandler';
 import { computeKycStatus } from '../utils/kycStatusHelper';
@@ -1073,6 +1074,28 @@ router.put('/kyc/:id/approve', authenticateToken, requireRole(['admin']), asyncH
         $unset: { kycRejectedAt: 1, kycPendingAt: 1 }
       }, { session });
       
+      // Also update Student collection's verified field if student profile exists
+      const user = await User.findById(kyc.userId).session(session);
+      if (user) {
+        const userEmail = (user.email || '').toLowerCase();
+        const userPhone = String(user.phone || '').trim();
+        
+        // Find student by college_email or phone
+        let student = await Student.findOne({ college_email: userEmail }).session(session);
+        if (!student && userPhone) {
+          student = await Student.findOne({ phone: userPhone }).session(session);
+        }
+        
+        // Update Student collection's verified field
+        if (student) {
+          student.verified = true;
+          await student.save({ session });
+          console.log('✅ Admin KYC Approve - Updated Student collection verified field');
+        } else {
+          console.log('⚠️ Admin KYC Approve - Student profile not found in students collection');
+        }
+      }
+      
       // Create audit entry
       const auditEntry = new KYCAudit({
         userId: kyc.userId,
@@ -1196,6 +1219,26 @@ router.put('/kyc/:id/reject', authenticateToken, requireRole(['admin']), asyncHa
         kycRejectedAt: new Date(),
         $unset: { kycVerifiedAt: 1, kycPendingAt: 1 }
       }, { session });
+      
+      // Also update Student collection's verified field if student profile exists
+      const userForStudent = await User.findById(kyc.userId).session(session);
+      if (userForStudent) {
+        const userEmail = (userForStudent.email || '').toLowerCase();
+        const userPhone = String(userForStudent.phone || '').trim();
+        
+        // Find student by college_email or phone
+        let student = await Student.findOne({ college_email: userEmail }).session(session);
+        if (!student && userPhone) {
+          student = await Student.findOne({ phone: userPhone }).session(session);
+        }
+        
+        // Update Student collection's verified field to false
+        if (student) {
+          student.verified = false;
+          await student.save({ session });
+          console.log('✅ Admin KYC Reject - Updated Student collection verified field to false');
+        }
+      }
       
       // Create audit entry
       const auditEntry = new KYCAudit({

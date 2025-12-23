@@ -117,6 +117,7 @@ interface User {
   businessType?: string;
   address?: string;
   employerCategory?: 'corporate' | 'local_business' | 'individual';
+  profilePicture?: string; // Add profile picture field
   isVerified?: boolean;
   emailVerified?: boolean;
   kycStatus?: 'not-submitted' | 'pending' | 'approved' | 'rejected' | null;
@@ -951,6 +952,12 @@ class ApiService {
     return {
       applications: Array.isArray(payload?.applications) ? payload.applications : [],
     };
+  }
+
+  async acceptJobOffer(applicationId: string): Promise<any> {
+    return this.request(`/applications/${applicationId}/accept`, {
+      method: 'POST',
+    });
   }
 
   async getEmployerApplications(status?: string, jobId?: string, page = 1, limit = 1000): Promise<ApplicationsResponse> {

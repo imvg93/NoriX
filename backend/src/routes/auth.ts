@@ -33,13 +33,22 @@ router.get('/verify-token', authenticateToken, asyncHandler(async (req: AuthRequ
       name: user.name,
       email: user.email,
       role,
+      userType: user.userType,
       companyName: user.companyName,
       isActive: user.isActive,
       emailVerified: user.emailVerified,
+      profilePicture: user.profilePicture, // Include profile picture
+      kycStatus: user.kycStatus, // Include KYC status
+      college: user.college,
+      skills: user.skills,
+      availability: user.availability,
+      address: user.address,
       createdAt: user.createdAt
     };
 
-    res.setHeader('X-User-Role', role);
+    if (role) {
+      res.setHeader('X-User-Role', role);
+    }
 
     return res.json({
       success: true,
@@ -74,7 +83,9 @@ router.post('/refresh-token', authenticateToken, asyncHandler(async (req: AuthRe
 
     const token = generateToken(user as IUser);
     setAuthCookie(res, token);
-    res.setHeader('X-User-Role', role);
+    if (role) {
+      res.setHeader('X-User-Role', role);
+    }
 
     return res.json({
       success: true,
@@ -85,6 +96,8 @@ router.post('/refresh-token', authenticateToken, asyncHandler(async (req: AuthRe
         name: user.name,
         email: user.email,
         role,
+        userType: user.userType, // Important: Frontend uses this for routing
+        employerCategory: user.employerCategory,
         companyName: user.companyName,
         isActive: user.isActive,
         emailVerified: user.emailVerified
@@ -174,7 +187,7 @@ router.use('/reset-password', cors(otpCorsOptions));
 // Generate JWT token
 // Role is now directly stored in user.role - no resolution needed
 // This function is kept for backward compatibility but just returns the role
-const getUserRole = (user: Pick<IUser, 'role'>): 'student' | 'individual' | 'corporate' | 'local' | 'admin' => {
+const getUserRole = (user: Pick<IUser, 'role'>): 'student' | 'individual' | 'corporate' | 'local' | 'admin' | undefined => {
   return user.role;
 };
 
@@ -206,11 +219,15 @@ const generateToken = (user: IUser): string => {
   if (!secret) {
     throw new Error('JWT_SECRET is not defined');
   }
+  
+  // Ensure role is defined, use 'unknown' as fallback if not set
+  const role = user.role || 'unknown';
+  
   return jwt.sign(
     { 
       userId: user._id,
       email: user.email,
-      role: user.role
+      role: role
     },
     secret,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
@@ -223,9 +240,14 @@ const generateToken = (user: IUser): string => {
 router.post('/register', asyncHandler(async (req: express.Request, res: express.Response) => {
   console.log('📝 Registration request received:', {
     role: req.body.role,
+    userType: req.body.userType,
     hasCollege: !!req.body.college,
     college: req.body.college,
-    bodyKeys: Object.keys(req.body)
+    bodyKeys: Object.keys(req.body),
+    hasOtp: !!req.body.otp,
+    hasOtpCode: !!req.body.otpCode,
+    hasVerificationCode: !!req.body.verificationCode,
+    otpValue: req.body.otp || req.body.otpCode || req.body.verificationCode
   });
 
   const {
@@ -234,29 +256,65 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
     phone,
     password,
     role,
+    userType,
     college,
     skills,
     availability,
     companyName,
     businessType,
     address,
-    otp
+    otp,
+    otpCode,
+    verificationCode
   } = req.body;
 
+  // Support multiple OTP field names (otp, otpCode, verificationCode)
+  const otpValue = otp || otpCode || verificationCode;
+
+  // Map userType to role if role is not provided
+  // Frontend sends userType: 'student' | 'employer'
+  // Backend expects role: 'student' | 'individual' | 'corporate' | 'local'
+  let finalRole = role;
+  if (!finalRole && userType) {
+    if (userType === 'student') {
+      finalRole = 'student';
+    } else if (userType === 'employer') {
+      // Default to 'individual' for employers who haven't selected their category yet
+      // They will select their specific type (individual/corporate/local) during KYC
+      finalRole = 'individual';
+    }
+  }
+
   // Validate required fields - only basic fields required
-  if (!name || !email || !phone || !password || !role || !otp) {
-    throw new ValidationError('All required fields including OTP must be provided');
+  if (!name || !email || !phone || !password || !finalRole) {
+    console.log('❌ Missing basic fields:', { 
+      name: !!name, 
+      email: !!email, 
+      phone: !!phone, 
+      password: !!password, 
+      role: !!finalRole,
+      userType: !!userType,
+      receivedRole: !!role
+    });
+    throw new ValidationError('All required fields must be provided');
+  }
+
+  // Validate OTP separately with better error message
+  if (!otpValue) {
+    console.log('❌ OTP missing:', { hasOtp: !!otp, hasOtpCode: !!otpCode, hasVerificationCode: !!verificationCode });
+    throw new ValidationError('OTP is required. Please enter the verification code sent to your email.');
   }
 
   // Validate role - LOCKED: student | individual | corporate | local
-  if (!['student', 'individual', 'corporate', 'local'].includes(role)) {
+  if (!['student', 'individual', 'corporate', 'local'].includes(finalRole)) {
+    console.log('❌ Invalid role:', { role: finalRole, userType, receivedRole: role });
     throw new ValidationError('Invalid role. Must be one of: student, individual, corporate, local');
   }
 
   // Validate college for students
-  if (role === 'student') {
+  if (finalRole === 'student') {
     if (!college || !college.trim()) {
-      console.error('❌ College validation failed:', { role, college, hasCollege: !!college });
+      console.error('❌ College validation failed:', { role: finalRole, college, hasCollege: !!college });
       throw new ValidationError('College/University is required for students');
     }
     console.log('✅ College validated for student:', college);
@@ -269,9 +327,21 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
   // Note: Employer-specific fields (companyName, businessType, address) are optional - will be collected during KYC
 
   // Verify OTP before proceeding
-  const otpValid = await verifyOTP(email, otp, 'verification');
-  if (!otpValid) {
+  console.log('🔍 Verifying OTP:', { email, otpLength: otpValue?.toString().length });
+  const otpValid = await verifyOTP(email, otpValue.toString().trim(), 'verification');
+  
+  // Check for test OTP if enabled
+  const allowTestOTP = process.env.ALLOW_TEST_OTP === 'true';
+  const testOTPCode = process.env.TEST_OTP_CODE || '123456';
+  const isTestOTP = allowTestOTP && otpValue.toString().trim() === testOTPCode;
+  
+  if (!otpValid && !isTestOTP) {
+    console.log('❌ OTP verification failed:', { email, otpProvided: !!otpValue });
     throw new ValidationError('Invalid or expired OTP. Please request a new one.');
+  }
+  
+  if (isTestOTP) {
+    console.log('🧪 Test OTP used for registration:', email);
   }
 
   // Check if user already exists
@@ -294,13 +364,26 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
     email,
     phone,
     password,
-    role, // LOCKED: student | individual | corporate | local
+    role: finalRole, // LOCKED: student | individual | corporate | local
     emailVerified: true, // Mark as verified since OTP was verified
     submittedAt: new Date()
   };
 
+  // Set userType based on userType from request or infer from role
+  // Frontend uses userType for routing, so we need to set it properly
+  if (userType) {
+    userData.userType = userType; // 'student' | 'employer' | 'admin'
+  } else {
+    // Infer userType from role if not provided
+    if (finalRole === 'student') {
+      userData.userType = 'student';
+    } else if (['individual', 'corporate', 'local'].includes(finalRole)) {
+      userData.userType = 'employer';
+    }
+  }
+
   // Add college for students (required, already validated above)
-  if (role === 'student') {
+  if (finalRole === 'student') {
     userData.college = college.trim();
   }
 
@@ -317,7 +400,9 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
   // Set headers BEFORE sending body
   res.setHeader('X-OTP-Status', 'verified');
   res.setHeader('X-Verification-Status', 'success');
-  res.setHeader('X-User-Role', user.role);
+  if (user.role) {
+    res.setHeader('X-User-Role', user.role);
+  }
 
   // Send response
   sendSuccessResponse(res, {
@@ -327,6 +412,8 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
       email: user.email,
       phone: user.phone,
       role: user.role,
+      userType: user.userType, // Important: Frontend uses this for routing
+      employerCategory: user.employerCategory,
       college: user.college,
       skills: user.skills,
       availability: user.availability,
@@ -345,65 +432,91 @@ router.post('/register', asyncHandler(async (req: express.Request, res: express.
 // @desc    Login with email and password (auto-detect user role)
 // @access  Public
 router.post('/login-auto', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-  console.log('🔐 Auto-login attempt:', { email, passwordLength: password?.length });
+    console.log('🔐 Auto-login attempt:', { email, passwordLength: password?.length });
 
-  // Validate input
-  if (!email || !password) {
-    console.log('❌ Missing required fields');
-    throw new ValidationError('Email and password are required');
+    // Validate input
+    if (!email || !password) {
+      console.log('❌ Missing required fields');
+      throw new ValidationError('Email and password are required');
+    }
+
+    // Find user by email
+    const user = await User.findOne({ email });
+    if (!user) {
+      console.log('❌ User not found:', email);
+      throw new ValidationError('No account found with this email address');
+    }
+
+    console.log('✅ User found:', { id: user._id, email: user.email, role: user.role });
+
+    // Check if user is active
+    if (!user.isActive) {
+      console.log('❌ User account is inactive:', email);
+      throw new ValidationError('Account is deactivated');
+    }
+
+    // Check if user has a valid role
+    if (!user.role) {
+      console.log('❌ User role is undefined:', email);
+      throw new ValidationError('User account is missing role information. Please contact support.');
+    }
+
+    // Verify password
+    const isPasswordValid = await user.comparePassword(password);
+    if (!isPasswordValid) {
+      console.log('❌ Invalid password for:', email);
+      throw new ValidationError('Invalid email or password');
+    }
+
+    // Generate JWT token
+    let token: string;
+    try {
+      token = generateToken(user);
+    } catch (tokenError: any) {
+      console.error('❌ Token generation failed:', tokenError);
+      throw new Error(`Token generation failed: ${tokenError.message}`);
+    }
+
+    setAuthCookie(res, token);
+
+    console.log('✅ Auto-login successful:', { email, role: user.role });
+
+    res.setHeader('X-User-Role', user.role);
+
+    sendSuccessResponse(res, {
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        userType: user.userType, // Important: Frontend uses this for routing
+        employerCategory: user.employerCategory,
+        college: user.college,
+        skills: user.skills,
+        availability: user.availability,
+        companyName: user.companyName,
+        businessType: user.businessType,
+        address: user.address,
+        isVerified: user.isVerified,
+        emailVerified: user.emailVerified,
+        profilePicture: user.profilePicture, // Include profile picture
+        kycStatus: user.kycStatus, // Include KYC status
+        createdAt: user.createdAt
+      },
+      token
+    }, 'Login successful');
+  } catch (error: any) {
+    console.error('❌ Login-auto error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    throw error; // Re-throw to let asyncHandler handle it
   }
-
-  // Find user by email
-  const user = await User.findOne({ email });
-  if (!user) {
-    console.log('❌ User not found:', email);
-    throw new ValidationError('No account found with this email address');
-  }
-
-  console.log('✅ User found:', { id: user._id, email: user.email, role: user.role });
-
-  // Check if user is active
-  if (!user.isActive) {
-    console.log('❌ User account is inactive:', email);
-    throw new ValidationError('Account is deactivated');
-  }
-
-  // Verify password
-  const isPasswordValid = await user.comparePassword(password);
-  if (!isPasswordValid) {
-    console.log('❌ Invalid password for:', email);
-    throw new ValidationError('Invalid email or password');
-  }
-
-  // Generate JWT token
-  const token = generateToken(user);
-  setAuthCookie(res, token);
-
-  console.log('✅ Auto-login successful:', { email, role: user.role });
-
-  res.setHeader('X-User-Role', user.role);
-
-  sendSuccessResponse(res, {
-    user: {
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      role: user.role,
-      college: user.college,
-      skills: user.skills,
-      availability: user.availability,
-      companyName: user.companyName,
-      businessType: user.businessType,
-      address: user.address,
-      isVerified: user.isVerified,
-      emailVerified: user.emailVerified,
-      createdAt: user.createdAt
-    },
-    token
-  }, 'Login successful');
 }));
 
 // @route   POST /api/auth/login
@@ -463,7 +576,9 @@ router.post('/login', asyncHandler(async (req: express.Request, res: express.Res
 
   console.log('🎉 Login successful for:', email);
 
-  res.setHeader('X-User-Role', user.role);
+  if (user.role) {
+    res.setHeader('X-User-Role', user.role);
+  }
 
   // Send response
   sendSuccessResponse(res, {
@@ -473,6 +588,8 @@ router.post('/login', asyncHandler(async (req: express.Request, res: express.Res
       email: user.email,
       phone: user.phone,
       role: user.role,
+      userType: user.userType, // Important: Frontend uses this for routing
+      employerCategory: user.employerCategory,
       college: user.college,
       skills: user.skills,
       availability: user.availability,
@@ -656,8 +773,9 @@ router.post('/login-verify-otp', asyncHandler(async (req: express.Request, res: 
 
   const computedRole = getUserRole(user);
 
-  if (user.role !== computedRole) {
-    user.role = computedRole;
+  // Only update role if computedRole is defined and different from current role
+  if (computedRole && user.role !== computedRole) {
+    user.role = computedRole as 'student' | 'individual' | 'corporate' | 'local' | 'admin';
     await user.save();
   }
 
@@ -673,6 +791,8 @@ router.post('/login-verify-otp', asyncHandler(async (req: express.Request, res: 
       email: user.email,
       phone: user.phone,
       role: user.role,
+      userType: user.userType, // Important: Frontend uses this for routing
+      employerCategory: user.employerCategory,
       college: user.college,
       skills: user.skills,
       availability: user.availability,
@@ -681,14 +801,20 @@ router.post('/login-verify-otp', asyncHandler(async (req: express.Request, res: 
       address: user.address,
       isVerified: user.isVerified,
       emailVerified: user.emailVerified,
+      profilePicture: user.profilePicture, // Include profile picture
+      kycStatus: user.kycStatus, // Include KYC status
       createdAt: user.createdAt
     },
     token
   }, 'Login successful');
   
   // Expose headers
-  res.setHeader('X-User-Role', user.role);
-  res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status, X-Verification-Status, X-User-Role');
+  if (user.role) {
+    res.setHeader('X-User-Role', user.role);
+    res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status, X-Verification-Status, X-User-Role');
+  } else {
+    res.setHeader('Access-Control-Expose-Headers', 'X-OTP-Status, X-Verification-Status');
+  }
 }));
 
 // @route   POST /api/auth/forgot-password
@@ -1091,6 +1217,8 @@ router.post('/switch-role', authenticateToken, asyncHandler(async (req: AuthRequ
       email: updatedUser.email,
       phone: updatedUser.phone,
       role: updatedUser.role,
+      userType: updatedUser.userType, // Important: Frontend uses this for routing
+      employerCategory: updatedUser.employerCategory,
       college: updatedUser.college,
       skills: updatedUser.skills,
       availability: updatedUser.availability,
