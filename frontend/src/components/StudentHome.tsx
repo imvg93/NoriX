@@ -21,7 +21,6 @@ import {
   TrendingUp,
   XCircle,
   Loader,
-  Menu,
   ArrowRight,
   Play,
   Send,
@@ -35,7 +34,6 @@ import {
 import { apiService, type JobsResponse, type ApplicationsResponse, type Job, type Application } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
-import NotificationDropdown from './NotificationDropdown';
 
 interface StudentHomeProps {
   user: any;
@@ -278,16 +276,9 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                 <Link href="/jobs" className="hidden sm:inline-block text-xs sm:text-sm text-gray-600 hover:text-gray-900 transition-colors">
                   Browse Jobs
                 </Link>
-                <Link href="/applications" className="hidden lg:inline-block text-sm text-gray-600 hover:text-gray-900 transition-colors">
-                  My Work
+                <Link href="/student/dashboard" className="hidden lg:inline-block text-sm text-gray-600 hover:text-gray-900 transition-colors">
+                  Dashboard
                 </Link>
-                <Link href="/profile" className="hidden lg:inline-block text-sm text-gray-600 hover:text-gray-900 transition-colors">
-                  Profile
-                </Link>
-                <NotificationDropdown />
-                <button className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors">
-                  <Menu className="w-4 h-4 text-gray-600" />
-                </button>
               </motion.div>
             </div>
             

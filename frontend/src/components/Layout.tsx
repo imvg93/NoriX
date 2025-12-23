@@ -246,15 +246,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                         )}
                         
                         <Link
-                          href={user?.userType === 'student' ? "/student/profile" : "/profile"}
-                          className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
-                          onClick={() => setProfileDropdownOpen(false)}
-                        >
-                          <UserCircle className="w-5 h-5" />
-                          <span>Profile</span>
-                        </Link>
-                        
-                        <Link
                           href="/help-and-support"
                           className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
                           onClick={() => setProfileDropdownOpen(false)}

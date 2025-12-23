@@ -18,6 +18,18 @@ export interface IUser extends Document {
   completedJobs?: number;
   totalEarnings?: number;
   
+  // Instant job availability fields
+  availableForInstantJobs?: boolean;
+  onlineStatus?: 'online' | 'offline';
+  lastSeen?: Date;
+  locationCoordinates?: {
+    latitude: number;
+    longitude: number;
+  };
+  pushNotificationToken?: string;
+  instantAvailabilityExpiresAt?: Date; // Auto-expire availability after X hours
+  instantCooldownUntil?: Date; // Prevent spam notifications (5-10 min cooldown)
+  
   // Individual/Corporate specific fields
   companyName?: string;
   businessType?: string;
@@ -136,6 +148,43 @@ const userSchema = new Schema<IUser>({
     default: 0
   },
   
+  // Instant job availability fields
+  availableForInstantJobs: {
+    type: Boolean,
+    default: false
+  },
+  onlineStatus: {
+    type: String,
+    enum: ['online', 'offline'],
+    default: 'offline'
+  },
+  lastSeen: {
+    type: Date,
+    default: Date.now
+  },
+  locationCoordinates: {
+    latitude: {
+      type: Number,
+      min: -90,
+      max: 90
+    },
+    longitude: {
+      type: Number,
+      min: -180,
+      max: 180
+    }
+  },
+  pushNotificationToken: {
+    type: String,
+    default: ''
+  },
+  instantAvailabilityExpiresAt: {
+    type: Date
+  },
+  instantCooldownUntil: {
+    type: Date
+  },
+  
   companyName: {
     type: String,
     trim: true,
@@ -243,6 +292,8 @@ userSchema.index({ phone: 1 }, { unique: true });
 userSchema.index({ role: 1 });
 userSchema.index({ skills: 1 });
 userSchema.index({ availability: 1 });
+userSchema.index({ availableForInstantJobs: 1, onlineStatus: 1 });
+userSchema.index({ locationCoordinates: '2dsphere' });
 
 // Pre-save hook to ensure optional fields are not validated as required
 userSchema.pre('validate', function(next) {
