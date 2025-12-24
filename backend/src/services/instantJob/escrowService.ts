@@ -43,7 +43,7 @@ export async function createHeldEscrow(params: CreateEscrowParams): Promise<IEsc
 
 export async function releaseToStudent(params: TransitionParams): Promise<IEscrow | null> {
   const { escrowId, studentId, note, session } = params;
-  const escrow = await Escrow.findById(escrowId).session(session || undefined);
+  const escrow = await Escrow.findById(escrowId).session(session ?? null);
   if (!escrow) return null;
 
   if (escrow.status !== 'held' && escrow.status !== 'penalized') {
@@ -65,7 +65,7 @@ export async function releaseToStudent(params: TransitionParams): Promise<IEscro
 
 export async function refundEscrow(params: TransitionParams): Promise<IEscrow | null> {
   const { escrowId, note, session } = params;
-  const escrow = await Escrow.findById(escrowId).session(session || undefined);
+  const escrow = await Escrow.findById(escrowId).session(session ?? null);
   if (!escrow) return null;
 
   if (escrow.status !== 'held' && escrow.status !== 'penalized') {
@@ -86,7 +86,7 @@ export async function refundEscrow(params: TransitionParams): Promise<IEscrow | 
 
 export async function penalizeEmployerCancellation(params: TransitionParams): Promise<{ escrow: IEscrow | null; feeAmount: number; refundAmount: number }> {
   const { escrowId, penaltyPercent = 20, note, session } = params;
-  const escrow = await Escrow.findById(escrowId).session(session || undefined);
+  const escrow = await Escrow.findById(escrowId).session(session ?? null);
   if (!escrow) return { escrow: null, feeAmount: 0, refundAmount: 0 };
 
   if (escrow.status !== 'held') {

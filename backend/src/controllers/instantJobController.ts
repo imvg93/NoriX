@@ -5,8 +5,7 @@ import { ValidationError } from '../middleware/errorHandler';
 import InstantJob from '../models/InstantJob';
 import User from '../models/User';
 import { startDispatch, stopDispatch } from '../services/instantJob/dispatcher';
-import { createHeldEscrow, releaseToStudent, refundEscrow } from '../services/instantJob/escrowService';
-import { penalizeEmployerCancellation } from '../services/instantJob/penaltyService';
+import { createHeldEscrow, releaseToStudent, refundEscrow, penalizeEmployerCancellation } from '../services/instantJob/escrowService';
 
 const completionTimeouts = new Map<string, NodeJS.Timeout>();
 const COMPLETION_AUTO_MS = 10 * 60 * 1000; // 10 minutes
@@ -135,7 +134,7 @@ export const createInstantJob = async (req: AuthRequest, res: Response): Promise
       session
     });
 
-    instantJob.escrowId = escrow._id;
+    instantJob.escrowId = escrow._id as mongoose.Types.ObjectId | undefined;
     await instantJob.save({ session });
 
     await session.commitTransaction();
@@ -1004,7 +1003,7 @@ export const cancelInstantJob = async (req: AuthRequest, res: Response): Promise
       socketManager.io.to(`job:${instantJob._id.toString()}`).emit('job:cancelled', payloadBase);
       socketManager.io.to(`user:${instantJob.employerId.toString()}`).emit('job:cancelled', payloadBase);
       if (instantJob.acceptedBy) {
-        socketManager.io.to(`user:${instantJob.acceptedBy.toString()}`).emit('job:cancelled', payloadBase);
+        socketManager.io.to(`user:${(instantJob.acceptedBy as any)?.toString() ?? ''}`).emit('job:cancelled', payloadBase);
       }
     }
   } catch (error) {
