@@ -47,7 +47,7 @@ async function applyStudentPenalty(params: {
   note?: string;
 }) {
   const { jobId, studentId, banHours, trustDelta, type, session, note } = params;
-  const user = await User.findById(studentId).session(session || undefined);
+  const user = await User.findById(studentId).session(session ?? null);
   if (!user) return;
 
   const now = new Date();
@@ -85,7 +85,7 @@ export async function applyEmployerCancelPenalty(
     session
   });
 
-  const employer = await User.findById(employerId).session(session || undefined);
+  const employer = await User.findById(employerId).session(session ?? null);
   if (employer) {
     employer.instantPenaltyHistory = employer.instantPenaltyHistory || [];
     employer.instantPenaltyHistory.push({
