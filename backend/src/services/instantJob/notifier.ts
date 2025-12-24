@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { User } from '../../models/User';
 import { MatchedStudent } from './matcher';
+import { emitToUser } from './events';
 
 let notificationService: any = null;
 
@@ -73,13 +74,14 @@ export async function notifyStudents(
         }
       }
 
-      // Emit Socket.IO event for real-time instant job ping
+      // Emit Socket.IO event for real-time instant job ping - IMMEDIATE, NO DELAY
       const socketManager = (global as any).socketManager;
       if (socketManager && socketManager.io) {
         try {
           const roomName = `user:${student._id.toString()}`;
           const pingData = {
             jobId: job._id.toString(),
+            status: 'dispatching',
             jobTitle: job.jobTitle,
             jobType: job.jobType,
             distance: student.distance,
@@ -87,19 +89,59 @@ export async function notifyStudents(
             duration: job.duration,
             durationUnit: job.durationUnit,
             location: job.location.address,
+            companyName: job.companyName || 'Company',
             waveNumber,
-            expiresIn: 30 // 30 seconds to accept
+            expiresIn: 10, // 10 seconds to accept
+            timestamp: new Date().toISOString(),
+            version: 1
           };
           
-          // Check if room exists (has connected sockets)
-          const room = socketManager.io.sockets.adapter.rooms.get(roomName);
-          if (room && room.size > 0) {
-            socketManager.io.to(roomName).emit('instant-job-ping', pingData);
-            console.log(`   📡 ✅ Sent instant job ping to student ${student._id} (${student.name}) via Socket.IO (room: ${roomName}, ${room.size} socket(s))`);
-          } else {
-            console.log(`   ⚠️ Student ${student._id} (${student.name}) not connected to Socket.IO (room: ${roomName} doesn't exist)`);
-            // Still add to notified list even if not connected - they'll see it when they reconnect
+          console.log(`\n   ${'⚡'.repeat(70)}`);
+          console.log(`   ⚡ EMITTING SOCKET EVENT NOW - STUDENT SHOULD SEE POPUP IMMEDIATELY!`);
+          console.log(`   ⚡ Room: ${roomName}`);
+          console.log(`   ⚡ Event: student:ping`);
+          console.log(`   ⚡ Job: ${pingData.jobTitle}`);
+          console.log(`   ⚡ Pay: ${pingData.pay}`);
+          console.log(`   ${'⚡'.repeat(70)}\n`);
+          
+          // Emit immediately - don't wait for room check (new contract)
+          socketManager.io.to(roomName).emit('student:ping', pingData);
+          // Legacy fallback
+          socketManager.io.to(roomName).emit('instant-job-ping', pingData);
+          
+          // Also try direct emission to socket ID if available
+          const sockets = socketManager.io.sockets.sockets;
+          for (const [socketId, socket] of sockets) {
+            if ((socket as any).userId?.toString() === student._id.toString()) {
+              console.log(`   🎯 DIRECT EMIT to socket ${socketId}`);
+              socket.emit('student:ping', pingData);
+              socket.emit('instant-job-ping', pingData);
+            }
           }
+          
+          // Check if room exists for logging
+          const room = socketManager.io.sockets.adapter.rooms.get(roomName);
+          console.log(`\n   ${'─'.repeat(70)}`);
+          console.log(`   📡 SOCKET.IO EMISSION`);
+          console.log(`   ${'─'.repeat(70)}`);
+          console.log(`   Student: ${student.name} (${student._id})`);
+          console.log(`   Room: ${roomName}`);
+          console.log(`   Event: student:ping`);
+          console.log(`   Data:`, JSON.stringify(pingData, null, 2));
+          
+          if (room && room.size > 0) {
+            console.log(`   ✅ SUCCESSFULLY EMITTED - Student is connected (${room.size} socket(s))`);
+            console.log(`   🎯 Student should receive notification NOW!`);
+          } else {
+            console.log(`   ⚠️ WARNING - Student NOT connected to Socket.IO`);
+            console.log(`   Room "${roomName}" does not exist`);
+            console.log(`   Ping was emitted but student may not receive it`);
+            console.log(`   Check:`);
+            console.log(`      1. Is student logged in?`);
+            console.log(`      2. Is socket service initialized in frontend?`);
+            console.log(`      3. Check browser console for socket connection logs`);
+          }
+          console.log(`   ${'─'.repeat(70)}\n`);
         } catch (err) {
           console.error(`   ❌ Failed to emit Socket.IO event to ${student._id}:`, err);
         }

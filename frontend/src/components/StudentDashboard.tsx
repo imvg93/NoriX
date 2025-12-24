@@ -482,7 +482,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: userProp }) =
       if (!sock) return;
       
       console.log('🔌 Socket connected, setting up listeners...');
-      sock.on('instant-job-ping', handleInstantJobPing);
+      sock.on('instant-job-ping', handleInstantJobPing); // legacy
+      sock.on('student:ping', handleInstantJobPing);
       sock.on('instant-job-confirmed', handleJobConfirmed);
       sock.on('instant-job-rejected', handleJobRejected);
       console.log('✅ Socket listeners registered');
@@ -520,6 +521,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user: userProp }) =
         const sock = getSocket();
         if (sock) {
           sock.off('instant-job-ping', handleInstantJobPing);
+          sock.off('student:ping', handleInstantJobPing);
           sock.off('instant-job-confirmed', handleJobConfirmed);
           sock.off('instant-job-rejected', handleJobRejected);
         }

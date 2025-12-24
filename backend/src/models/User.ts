@@ -29,6 +29,17 @@ export interface IUser extends Document {
   pushNotificationToken?: string;
   instantAvailabilityExpiresAt?: Date; // Auto-expire availability after X hours
   instantCooldownUntil?: Date; // Prevent spam notifications (5-10 min cooldown)
+  instantBanUntil?: Date; // Penalty ban (24h / 7d)
+  trustScore?: number;
+  instantPenaltyHistory?: Array<{
+    type: 'student_cancel' | 'student_no_show' | 'employer_cancel';
+    jobId?: mongoose.Types.ObjectId;
+    appliedAt: Date;
+    banUntil?: Date;
+    trustDelta?: number;
+    feeAmount?: number;
+    note?: string;
+  }>;
   
   // Individual/Corporate specific fields
   companyName?: string;
@@ -184,6 +195,32 @@ const userSchema = new Schema<IUser>({
   instantCooldownUntil: {
     type: Date
   },
+  instantBanUntil: {
+    type: Date
+  },
+  trustScore: {
+    type: Number,
+    default: 0
+  },
+  instantPenaltyHistory: [{
+    type: {
+      type: String,
+      enum: ['student_cancel', 'student_no_show', 'employer_cancel'],
+      required: true
+    },
+    jobId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'InstantJob'
+    },
+    appliedAt: {
+      type: Date,
+      default: Date.now
+    },
+    banUntil: Date,
+    trustDelta: Number,
+    feeAmount: Number,
+    note: String
+  }],
   
   companyName: {
     type: String,

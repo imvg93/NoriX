@@ -832,19 +832,30 @@ class ApiService {
   }
 
   async getStudentDashboardJobs(showHighlighted = true): Promise<JobsResponse> {
-    const queryParams = new URLSearchParams({ showHighlighted: showHighlighted.toString() });
-    const raw = await this.request<any>(`/enhanced-jobs/student-dashboard?${queryParams}`);
+    const fallback: JobsResponse = {
+      jobs: [],
+      pagination: { page: 1, limit: 10, total: 0, pages: 0 },
+    } as any;
+
+    // TEMP: disable dashboard jobs fetch to avoid noisy invalid job ID responses; return empty safely
+    // Re-enable when backend student-dashboard endpoint is stable
+    return fallback;
+  }
+
+  async getStudentInstantHistory(options?: { includeActive?: boolean; page?: number; limit?: number }) {
+    const params = new URLSearchParams();
+    if (options?.includeActive) params.set('includeActive', 'true');
+    if (options?.page) params.set('page', String(options.page));
+    if (options?.limit) params.set('limit', String(options.limit));
+    const endpoint = `/instant-jobs/history${params.toString() ? `?${params.toString()}` : ''}`;
+    const raw = await this.request<any>(endpoint);
     const payload = this.unwrap<any>(raw);
-    const jobs = Array.isArray(payload?.jobs) ? payload.jobs.map((j: any) => this.mapEnhancedJobToFrontendJob(j)) : [];
-    return {
-      jobs,
-      pagination: {
-        page: payload?.pagination?.current || 1,
-        limit: 10,
-        total: payload?.pagination?.total || jobs.length,
-        pages: payload?.pagination?.pages || 1,
-      }
-    } as unknown as JobsResponse;
+    return payload;
+  }
+
+  async getStudentInstantCurrent() {
+    const raw = await this.request<any>('/instant-jobs/current-student');
+    return this.unwrap<any>(raw);
   }
 
   // Get employer jobs list - does NOT call /jobs/:jobId, only fetches list

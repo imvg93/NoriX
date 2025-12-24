@@ -17,17 +17,19 @@ export interface IInstantJob extends Document {
   skillsRequired: string[];
   
   // Dispatch system fields
-  status: 'searching' | 'pending' | 'dispatching' | 'locked' | 'confirmed' | 'expired' | 'failed';
+  status: 'pending' | 'dispatching' | 'locked' | 'in_progress' | 'completed' | 'expired' | 'failed' | 'cancelled';
   currentWave: number; // Current wave number (1, 2, or 3)
   waves: Array<{
     waveNumber: number;
     notifiedStudentIds: mongoose.Types.ObjectId[];
     sentAt: Date;
   }>;
+  escrowId?: mongoose.Types.ObjectId;
+  startTime?: Date;
   
   // Locking mechanism
   lockedBy?: mongoose.Types.ObjectId; // Student who accepted
-  lockExpiresAt?: Date; // 90 seconds after accept
+  lockExpiresAt?: Date; // 60 seconds after accept
   lockedAt?: Date;
   
   // Final assignment
@@ -63,6 +65,11 @@ export interface IInstantJob extends Document {
   // Virtual properties
   isExpired: boolean;
   isLockExpired: boolean;
+
+  // Completion tracking
+  completionRequestedAt?: Date;
+  completedAt?: Date;
+  completionAutoCompleted?: boolean;
 }
 
 const instantJobSchema = new Schema<IInstantJob>({
@@ -134,8 +141,8 @@ const instantJobSchema = new Schema<IInstantJob>({
   // Dispatch system fields
   status: {
     type: String,
-    enum: ['searching', 'pending', 'dispatching', 'locked', 'confirmed', 'expired', 'failed'],
-    default: 'searching',
+    enum: ['pending', 'dispatching', 'locked', 'in_progress', 'completed', 'expired', 'failed', 'cancelled'],
+    default: 'pending',
     index: true
   },
   currentWave: {
@@ -161,6 +168,14 @@ const instantJobSchema = new Schema<IInstantJob>({
       default: Date.now
     }
   }],
+  escrowId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Escrow',
+    index: true
+  },
+  startTime: {
+    type: Date
+  },
   
   // Locking mechanism
   lockedBy: {
@@ -241,6 +256,16 @@ const instantJobSchema = new Schema<IInstantJob>({
     type: Date,
     required: [true, 'Expiry time is required'],
     index: true
+  },
+  completionRequestedAt: {
+    type: Date
+  },
+  completedAt: {
+    type: Date
+  },
+  completionAutoCompleted: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true,
@@ -268,16 +293,28 @@ instantJobSchema.virtual('isLockExpired').get(function(this: IInstantJob) {
 
 // Pre-save middleware
 instantJobSchema.pre('save', function(this: IInstantJob) {
-  // Auto-expire if past expiry time
-  if (this.isExpired && this.status !== 'expired' && this.status !== 'confirmed') {
+  // NEVER change status if it's in_progress or completed - those are final paths
+  if (this.status === 'in_progress' || this.status === 'completed') {
+    return; // Skip auto-expiry logic once work has started or completed
+  }
+  
+  // Auto-expire if past expiry time - but NOT if job is locked
+  // Allow locked jobs to continue even if expired (employer has 60 seconds to confirm/arrive)
+  if (this.isExpired && this.status !== 'expired' && this.status !== 'locked') {
     this.status = 'expired';
   }
   
-  // Auto-expire lock if past lock expiry
+  // Auto-expire lock if past lock expiry - but only if not already in progress
   if (this.lockedBy && this.isLockExpired) {
+    // Lock expired - clear it
     this.lockedBy = undefined;
     this.lockedAt = undefined;
     this.lockExpiresAt = undefined;
+    if (this.status === 'locked') {
+      this.acceptedBy = undefined;
+      this.acceptedAt = undefined;
+      this.status = 'dispatching';
+    }
   }
 });
 

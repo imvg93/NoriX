@@ -26,6 +26,7 @@ const TrackStudentPage = () => {
   const [trackingData, setTrackingData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [confirmingArrival, setConfirmingArrival] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!jobId) return;
@@ -37,7 +38,7 @@ const TrackStudentPage = () => {
   // Listen for real-time location updates
   useEffect(() => {
     const socketService = require('../../../../../services/socketService').default;
-    const socket = (socketService as any).socket;
+    const socket = (socketService as any).getSocket?.() || (socketService as any).socket;
 
     const handleLocationUpdate = (data: any) => {
       if (data.jobId === jobId) {
@@ -48,9 +49,13 @@ const TrackStudentPage = () => {
     if (socket) {
       socket.on('student-location-updated', handleLocationUpdate);
       socket.on('student-arrived', handleLocationUpdate);
+      socket.on('job:in_progress', handleLocationUpdate);
+      socket.on('job:completed', handleLocationUpdate);
       return () => {
         socket.off('student-location-updated', handleLocationUpdate);
         socket.off('student-arrived', handleLocationUpdate);
+        socket.off('job:in_progress', handleLocationUpdate);
+        socket.off('job:completed', handleLocationUpdate);
       };
     }
   }, [jobId]);
@@ -84,10 +89,19 @@ const TrackStudentPage = () => {
       } else {
         const errorData = await response.json().catch(() => ({ message: 'Failed to fetch tracking data' }));
         console.error('Error response:', errorData);
+        // 400 likely means not yet confirmed/assigned; show clearer message
+        if (response.status === 400) {
+          setErrorMessage(errorData.message || 'Tracking is available after the student is accepted/locked.');
+        } else if (response.status === 403) {
+          setErrorMessage('Access denied for this job.');
+        } else {
+          setErrorMessage(errorData.message || 'Failed to fetch tracking data');
+        }
         setLoading(false);
       }
     } catch (error) {
       console.error('Error fetching tracking data:', error);
+      setErrorMessage('Unable to load tracking data.');
       setLoading(false);
     }
   };
@@ -159,6 +173,36 @@ const TrackStudentPage = () => {
           {jobId && (
             <p className="text-xs text-gray-400 mt-2">Job ID: {jobId}</p>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  if (errorMessage) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-700 mb-2">{errorMessage}</p>
+          {jobId && <p className="text-xs text-gray-500">Job ID: {jobId}</p>}
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <button
+              onClick={() => {
+                setErrorMessage(null);
+                setLoading(true);
+                fetchTrackingData();
+              }}
+              className="px-6 py-2 bg-[#2A8A8C] text-white rounded-lg"
+            >
+              Retry
+            </button>
+            <button
+              onClick={() => router.push('/employer')}
+              className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg"
+            >
+              Back to Dashboard
+            </button>
+          </div>
         </div>
       </div>
     );
