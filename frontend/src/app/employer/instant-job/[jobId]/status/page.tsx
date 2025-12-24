@@ -43,6 +43,7 @@ const DispatchStatusPage = () => {
   const [viewedAt, setViewedAt] = useState<Date | null>(null);
   const [studentLocation, setStudentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const redirectingRef = useRef(false);
+  const [completionNotification, setCompletionNotification] = useState(false);
 
   const fetchStudentTracking = async () => {
     try {
@@ -65,6 +66,20 @@ const DispatchStatusPage = () => {
       console.error('Error fetching student tracking:', error);
     }
   };
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // Show completion notification if completionRequestedAt exists
+  useEffect(() => {
+    if (jobStatus?.completionRequestedAt && !completionNotification) {
+      setCompletionNotification(true);
+    }
+  }, [jobStatus?.completionRequestedAt]);
 
   // Redirect to manage page when status becomes confirmed (polling fallback)
   useEffect(() => {
@@ -183,6 +198,24 @@ const DispatchStatusPage = () => {
       fetchStudentTracking();
     };
 
+    // Handle when student requests completion
+    const handleCompletionRequested = (data: any) => {
+      console.log('🎉 Student requested completion:', data);
+      // Show notification
+      setCompletionNotification(true);
+      // Play notification sound (optional)
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission === 'granted') {
+          new Notification('Work Completed! 🎉', {
+            body: 'The student has marked the work as complete. Please review and confirm.',
+            icon: '/logo.png'
+          });
+        }
+      }
+      // Refresh job status
+      fetchJobStatus();
+    };
+
     if (socket) {
       socket.on('instant-job-student-accepted', handleStudentAccepted);
       socket.on('instant-job-student-confirmed', handleStudentConfirmed);
@@ -191,6 +224,7 @@ const DispatchStatusPage = () => {
       socket.on('job:completed', () => fetchJobStatus());
       socket.on('job:cancelled', () => fetchJobStatus());
       socket.on('job:expired', () => fetchJobStatus());
+      socket.on('employer:completion_requested', handleCompletionRequested);
       return () => {
         socket.off('instant-job-student-accepted', handleStudentAccepted);
         socket.off('instant-job-student-confirmed', handleStudentConfirmed);
@@ -199,6 +233,7 @@ const DispatchStatusPage = () => {
         socket.off('job:completed', () => fetchJobStatus());
         socket.off('job:cancelled', () => fetchJobStatus());
         socket.off('job:expired', () => fetchJobStatus());
+        socket.off('employer:completion_requested', handleCompletionRequested);
       };
     }
   }, [jobId]);
@@ -374,6 +409,31 @@ const DispatchStatusPage = () => {
     }
   };
 
+  const handleConfirmCompletion = async () => {
+    if (!window.confirm('Confirm that the job is complete? Payment will be released to the worker.')) return;
+    setConfirming(true);
+    try {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/instant-jobs/${jobId}/confirm-completion`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to confirm completion');
+      }
+      alert('Job completed! Payment released to worker.');
+      await fetchJobStatus();
+    } catch (error: any) {
+      alert(error.message || 'Failed to confirm completion');
+    } finally {
+      setConfirming(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -406,6 +466,36 @@ const DispatchStatusPage = () => {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Dispatch Status</h1>
           <p className="text-gray-600">Real-time updates on your instant job</p>
         </div>
+
+        {/* Completion Notification */}
+        {completionNotification && jobStatus?.completionRequestedAt && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-500 rounded-xl p-6 shadow-lg"
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
+                <CheckCircle className="w-6 h-6 text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-gray-900 mb-2">🎉 Work Completed!</h3>
+                <p className="text-gray-700 mb-3">
+                  The student has marked the work as complete. Please review and confirm the completion below.
+                </p>
+                <p className="text-sm text-gray-600">
+                  ⏱️ Auto-completion in 10 minutes if no action is taken
+                </p>
+              </div>
+              <button
+                onClick={() => setCompletionNotification(false)}
+                className="text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+          </motion.div>
+        )}
 
         {/* Status Cards */}
         <AnimatePresence mode="wait">
@@ -611,6 +701,32 @@ const DispatchStatusPage = () => {
                   )}
                 </button>
               </div>
+              {/* Completion Confirmation - Show if student requested completion */}
+              {jobStatus?.completionRequestedAt && (
+                <div className="mt-4 p-4 bg-green-50 border-2 border-green-300 rounded-xl">
+                  <div className="flex items-start gap-3 mb-3">
+                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <div className="text-sm text-green-800 font-bold mb-1">✅ Worker Marked Work as Complete</div>
+                      <p className="text-sm text-green-700 mb-2">
+                        Please review the work and confirm completion to release payment to the worker.
+                      </p>
+                      <p className="text-xs text-green-600">
+                        ⏱️ Will auto-confirm in 10 minutes if no action taken
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleConfirmCompletion}
+                    disabled={confirming}
+                    className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 font-bold shadow-md flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle className="w-5 h-5" />
+                    {confirming ? 'Processing...' : 'Confirm & Release Payment'}
+                  </button>
+                </div>
+              )}
+
               <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl">
                 <div className="text-sm text-red-700 font-semibold mb-2">Cancel job?</div>
                 <p className="text-sm text-red-700 mb-3">Cancelling after lock will incur a 25% fee. Proceed only if you cannot continue.</p>

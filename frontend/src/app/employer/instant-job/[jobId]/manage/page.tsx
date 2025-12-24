@@ -33,6 +33,8 @@ const ManageInstantJobPage = () => {
   const [timeElapsed, setTimeElapsed] = useState<string>('');
   const [timeRemaining, setTimeRemaining] = useState<string>('');
   const [socketConnected, setSocketConnected] = useState<boolean>(false);
+  const [completionRequested, setCompletionRequested] = useState(false);
+  const [confirmingCompletion, setConfirmingCompletion] = useState(false);
 
   useEffect(() => {
     if (!jobId) return;
@@ -105,6 +107,32 @@ const ManageInstantJobPage = () => {
           }
         };
 
+        const handleCompletionRequested = (data: any) => {
+          console.log('\n' + '🎉'.repeat(50));
+          console.log('🎉🎉🎉 EMPLOYER: COMPLETION REQUESTED EVENT RECEIVED! 🎉🎉🎉');
+          console.log('🎉 Data:', JSON.stringify(data, null, 2));
+          console.log('🎉 Expected jobId:', jobId);
+          console.log('🎉 Received jobId:', data.jobId);
+          console.log('🎉'.repeat(50) + '\n');
+          
+          if (data.jobId === jobId) {
+            console.log('✅ JobId matches! Showing completion banner...');
+            setCompletionRequested(true);
+            // Show browser notification
+            if (typeof window !== 'undefined' && 'Notification' in window) {
+              if (Notification.permission === 'granted') {
+                new Notification('Work Completed! 🎉', {
+                  body: 'The student has marked the work as complete. Please review and confirm.',
+                  icon: '/logo.png'
+                });
+              }
+            }
+            fetchJobData(); // Refresh data
+          } else {
+            console.log('❌ JobId does NOT match. Ignoring event.');
+          }
+        };
+
         // Test that socket is receiving events
         socket.onAny((eventName: string, ...args: any[]) => {
           console.log('📡 EMPLOYER: Received socket event:', eventName, args);
@@ -114,10 +142,12 @@ const ManageInstantJobPage = () => {
         socket.on('student-arrived', handleStudentArrived);
         socket.on('job:in_progress', handleJobInProgress);
         socket.on('employer:arrival_confirmed', handleJobInProgress);
+        socket.on('employer:completion_requested', handleCompletionRequested);
         console.log('✅ EMPLOYER: Event listeners registered!');
         console.log('   - student-arrived');
         console.log('   - job:in_progress');
         console.log('   - employer:arrival_confirmed');
+        console.log('   - employer:completion_requested');
 
         return () => {
           console.log('🧹 EMPLOYER: Cleaning up socket listeners');
@@ -125,6 +155,7 @@ const ManageInstantJobPage = () => {
           socket.off('student-arrived', handleStudentArrived);
           socket.off('job:in_progress', handleJobInProgress);
           socket.off('employer:arrival_confirmed', handleJobInProgress);
+          socket.off('employer:completion_requested', handleCompletionRequested);
         };
       } catch (error) {
         console.error('❌ Error initializing socket:', error);
@@ -226,6 +257,23 @@ const ManageInstantJobPage = () => {
         });
         
         setStudentArrived(!!shouldShowArrival);
+        
+        // Check if completion has been requested
+        // Only update state if completionRequestedAt exists, don't reset to false if it doesn't
+        if (jobData?.job?.completionRequestedAt) {
+          console.log('🎉 Completion already requested, showing banner', {
+            completionRequestedAt: jobData.job.completionRequestedAt,
+            status: jobData.job.status
+          });
+          setCompletionRequested(true);
+        } else if (!jobData?.job?.completionRequestedAt && !completionRequested) {
+          // Only log if we're not already showing the notification
+          console.log('ℹ️ No completion request yet', {
+            status: jobData.job.status,
+            jobId: jobData.job._id
+          });
+        }
+        // Don't set to false - keep the notification showing once it appears
       } else {
         setErrorMessage(trackResponse.status === 403 ? 'Access denied for this job.' : 'Failed to load job.');
         setLoading(false);
@@ -280,6 +328,48 @@ const ManageInstantJobPage = () => {
       setStudentArrived(true); // Show banner again if error
     } finally {
       setConfirmingArrival(false);
+    }
+  };
+
+  const handleConfirmCompletion = async () => {
+    console.log('\n🎉 Employer confirming job completion...');
+    setConfirmingCompletion(true);
+    setCompletionRequested(false); // Immediately hide banner
+    
+    try {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('token');
+
+      console.log('📡 Sending confirm-completion request to backend...');
+      const response = await fetch(`${API_BASE_URL}/instant-jobs/${jobId}/confirm-completion`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to confirm completion');
+      }
+
+      const result = await response.json();
+      console.log('✅ Completion confirmed successfully:', result);
+      
+      alert('Job completed successfully! Payment released to student. 🎉');
+      
+      // Redirect to dashboard after completion
+      setTimeout(() => {
+        router.push('/employer/instant-job');
+      }, 1500);
+      
+    } catch (error: any) {
+      console.error('❌ Error confirming completion:', error);
+      alert(error.message || 'Failed to confirm completion');
+      setCompletionRequested(true); // Show banner again if error
+    } finally {
+      setConfirmingCompletion(false);
     }
   };
 
@@ -341,6 +431,15 @@ const ManageInstantJobPage = () => {
   const arrivalStatus = job?.arrivalStatus || 'en_route';
   const studentLocation = student?.currentLocation;
 
+  // Debug log
+  console.log('🖥️ EMPLOYER MANAGE PAGE RENDER:', {
+    jobId: job?._id,
+    status: job?.status,
+    completionRequestedAt: job?.completionRequestedAt,
+    completionRequestedState: completionRequested,
+    willShowNotification: (completionRequested || job?.completionRequestedAt) && job?.status === 'in_progress'
+  });
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -372,12 +471,22 @@ const ManageInstantJobPage = () => {
             <span className="text-gray-500">
               Status: <span className="font-semibold">{job.status}</span> | 
               Arrival: <span className="font-semibold">{arrivalStatus}</span> | 
-              Confirmed By: <span className="font-semibold">{(job as any)?.arrivalConfirmedBy || 'none'}</span>
+              Confirmed By: <span className="font-semibold">{(job as any)?.arrivalConfirmedBy || 'none'}</span> |
+              Completion: <span className="font-semibold">{job.completionRequestedAt ? 'REQUESTED' : 'Not Yet'}</span>
             </span>
             <span className={`flex items-center gap-1 px-2 py-1 rounded ${socketConnected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
               <span className={`w-2 h-2 rounded-full ${socketConnected ? 'bg-green-500' : 'bg-red-500'} ${socketConnected ? 'animate-pulse' : ''}`}></span>
               {socketConnected ? 'Live Updates' : 'Disconnected'}
             </span>
+            <button
+              onClick={() => {
+                console.log('🧪 TEST: Setting completionRequested to true');
+                setCompletionRequested(true);
+              }}
+              className="px-3 py-1 bg-purple-500 text-white rounded text-xs hover:bg-purple-600"
+            >
+              TEST: Show Notification
+            </button>
           </div>
         </div>
 
@@ -414,6 +523,63 @@ const ManageInstantJobPage = () => {
                     </>
                   )}
                 </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ⭐ COMPLETION REQUEST - PRIORITY NOTIFICATION ⭐ */}
+        {(completionRequested || job.completionRequestedAt) && job.status === 'in_progress' && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mb-6"
+          >
+            <div className="bg-gradient-to-br from-green-500 via-green-600 to-emerald-600 rounded-2xl p-1 shadow-2xl">
+              <div className="bg-white rounded-xl p-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0">
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg animate-pulse">
+                      <CheckCircle className="w-8 h-8 text-white" />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-2xl">🎉</span>
+                      <h2 className="text-2xl font-black text-gray-900">Work Completed!</h2>
+                    </div>
+                    <p className="text-lg text-gray-700 mb-3 font-semibold">
+                      {student.name} has finished the work and is requesting completion.
+                    </p>
+                    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded-lg mb-4">
+                      <p className="text-sm text-yellow-800 font-semibold">
+                        ⏱️ Auto-completes in 10 minutes if no action is taken
+                      </p>
+                    </div>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleConfirmCompletion}
+                        disabled={confirmingCompletion}
+                        className="flex-1 px-8 py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl font-bold text-lg transition-all disabled:opacity-50 flex items-center justify-center gap-3 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+                      >
+                        {confirmingCompletion ? (
+                          <>
+                            <Loader className="w-6 h-6 animate-spin" />
+                            Confirming...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="w-6 h-6" />
+                            Confirm & Release Payment
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 text-center mt-3">
+                      By confirming, you agree that the work is satisfactory and payment will be released to the student.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </motion.div>

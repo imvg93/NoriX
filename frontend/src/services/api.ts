@@ -2016,6 +2016,46 @@ class ApiService {
       throw error;
     }
   }
+
+  // ===== Instant Job Methods =====
+  
+  // Get employer's current active instant job
+  async getEmployerCurrentInstantJob() {
+    return this.request(`/instant-jobs/current`);
+  }
+
+  // Get instant job status
+  async getInstantJobStatus(jobId: string) {
+    return this.request(`/instant-jobs/${jobId}/status`);
+  }
+
+  // Student requests completion of instant job
+  async requestInstantJobCompletion(jobId: string) {
+    return this.request(`/instant-jobs/${jobId}/complete`, {
+      method: 'POST',
+    });
+  }
+
+  // Employer confirms completion of instant job
+  async confirmInstantJobCompletion(jobId: string) {
+    return this.request(`/instant-jobs/${jobId}/confirm-completion`, {
+      method: 'POST',
+    });
+  }
+
+  // Employer cancels instant job
+  async cancelInstantJob(jobId: string) {
+    return this.request(`/instant-jobs/${jobId}/cancel`, {
+      method: 'POST',
+    });
+  }
+
+  // Confirm arrival at job location
+  async confirmInstantJobArrival(jobId: string) {
+    return this.request(`/instant-jobs/${jobId}/confirm-arrival`, {
+      method: 'POST',
+    });
+  }
 }
 
 export const apiService = new ApiService();

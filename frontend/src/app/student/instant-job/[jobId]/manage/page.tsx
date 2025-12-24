@@ -16,7 +16,8 @@ import {
   AlertCircle,
   FileText,
   Bell,
-  MessageSquare
+  MessageSquare,
+  DollarSign
 } from 'lucide-react';
 import { useAuth } from '../../../../../contexts/AuthContext';
 
@@ -30,6 +31,7 @@ const StudentManageInstantJobPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirmingArrival, setConfirmingArrival] = useState(false);
+  const [completingJob, setCompletingJob] = useState(false);
   const [arrivalStatus, setArrivalStatus] = useState<'en_route' | 'arrived' | 'confirmed'>('en_route');
   const [timeElapsed, setTimeElapsed] = useState<string>('');
   const [timeRemaining, setTimeRemaining] = useState<string>('');
@@ -62,12 +64,25 @@ const StudentManageInstantJobPage = () => {
           }
         };
 
+        const handleJobCompleted = (data: any) => {
+          if (data.jobId === jobId) {
+            console.log('🎉 Job completed!', data);
+            fetchJobData();
+            // Show success alert
+            setTimeout(() => {
+              alert('🎉 Job Completed! Thank you for your work. Payment has been released!');
+            }, 500);
+          }
+        };
+
         if (socket) {
           socket.on('student:arrival_confirmed', handleArrivalConfirmed);
           socket.on('job:in_progress', handleArrivalConfirmed);
+          socket.on('job:completed', handleJobCompleted);
           return () => {
             socket.off('student:arrival_confirmed', handleArrivalConfirmed);
             socket.off('job:in_progress', handleArrivalConfirmed);
+            socket.off('job:completed', handleJobCompleted);
           };
         }
       } catch (error) {
@@ -117,14 +132,20 @@ const StudentManageInstantJobPage = () => {
       const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
       const token = localStorage.getItem('token');
 
+      console.log('Fetching job data for jobId:', jobId);
+      console.log('API URL:', `${API_BASE_URL}/instant-jobs/${jobId}/status`);
+
       const response = await fetch(`${API_BASE_URL}/instant-jobs/${jobId}/status`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
 
+      console.log('Response status:', response.status);
+
       if (response.ok) {
         const data = await response.json();
+        console.log('Job data received:', data);
         const instantJob = data.data;
         
         // Set job data from status endpoint with all necessary fields
@@ -138,7 +159,8 @@ const StudentManageInstantJobPage = () => {
             arrivalStatus: instantJob.arrivalStatus,
             status: instantJob.status,
             startTime: instantJob.startTime,
-            arrivalConfirmedAt: instantJob.arrivalConfirmedAt
+            arrivalConfirmedAt: instantJob.arrivalConfirmedAt,
+            completionRequestedAt: instantJob.completionRequestedAt
           },
           jobLocation: instantJob.location
         });
@@ -151,6 +173,7 @@ const StudentManageInstantJobPage = () => {
         setLoading(false);
       } else {
         const errorData = await response.json().catch(() => ({ message: 'Failed to load job' }));
+        console.error('Error response from backend:', errorData);
         setError(errorData.message || 'Job not found or access denied');
         setLoading(false);
       }
@@ -214,6 +237,38 @@ const StudentManageInstantJobPage = () => {
       alert(error.message || 'Failed to confirm arrival');
     } finally {
       setConfirmingArrival(false);
+    }
+  };
+
+  const handleCompleteJob = async () => {
+    if (!confirm('Are you sure you want to mark this job as complete? The employer will need to confirm to release payment.')) {
+      return;
+    }
+
+    setCompletingJob(true);
+    try {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(`${API_BASE_URL}/instant-jobs/${jobId}/complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to request completion');
+      }
+
+      alert('✅ Work completion requested! Waiting for employer approval. You will be notified once confirmed.');
+      await fetchJobData();
+    } catch (error: any) {
+      alert(error.message || 'Failed to request completion');
+    } finally {
+      setCompletingJob(false);
     }
   };
 
@@ -312,6 +367,22 @@ const StudentManageInstantJobPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #2A8A8C;
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #238085;
+        }
+      `}</style>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-6">
@@ -325,6 +396,59 @@ const StudentManageInstantJobPage = () => {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Manage Instant Job</h1>
           <p className="text-gray-600">{jobData.jobLocation?.address || 'Instant Job'}</p>
         </div>
+
+        {/* Scrollable Content Container with 70vh max height */}
+        <div 
+          className="overflow-y-auto custom-scrollbar pr-2 pb-8" 
+          style={{ 
+            maxHeight: '70vh', 
+            scrollBehavior: 'smooth'
+          }}
+        >
+
+        {/* Job Status Card */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-2xl shadow-lg border-2 border-[#2A8A8C] p-6 mb-6"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-2xl font-bold text-gray-900">
+              {jobData?.job?.jobTitle || jobData?.job?.jobType || 'Instant Job'}
+            </h2>
+            <span className={`px-4 py-2 rounded-full text-sm font-bold ${
+              jobData?.job?.status === 'in_progress' ? 'bg-green-100 text-green-800 border-2 border-green-300' :
+              jobData?.job?.status === 'locked' ? 'bg-yellow-100 text-yellow-800 border-2 border-yellow-300' :
+              jobData?.job?.status === 'completed' ? 'bg-blue-100 text-blue-800 border-2 border-blue-300' :
+              'bg-gray-100 text-gray-800 border-2 border-gray-300'
+            }`}>
+              {jobData?.job?.status === 'in_progress' ? '🚀 In Progress' :
+               jobData?.job?.status === 'locked' ? '✅ Assigned' :
+               jobData?.job?.status === 'completed' ? '🎉 Completed' :
+               jobData?.job?.status?.toUpperCase()}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-4 text-sm">
+            {jobData?.job?.pay && (
+              <span className="flex items-center gap-1 bg-green-50 px-3 py-2 rounded-lg text-green-700 font-semibold border border-green-200">
+                <DollarSign className="w-4 h-4" />
+                {jobData.job.pay}
+              </span>
+            )}
+            {jobData?.job?.duration && (
+              <span className="flex items-center gap-1 bg-blue-50 px-3 py-2 rounded-lg text-blue-700 font-semibold border border-blue-200">
+                <Clock className="w-4 h-4" />
+                {jobData.job.duration} hours
+              </span>
+            )}
+            {jobData.jobLocation?.address && (
+              <span className="flex items-center gap-1 bg-purple-50 px-3 py-2 rounded-lg text-purple-700 font-semibold border border-purple-200">
+                <MapPin className="w-4 h-4" />
+                <span className="truncate max-w-[200px]">{jobData.jobLocation.address}</span>
+              </span>
+            )}
+          </div>
+        </motion.div>
 
         {/* Arrival Confirmation Section */}
         {arrivalStatus === 'en_route' && (
@@ -404,6 +528,68 @@ const StudentManageInstantJobPage = () => {
           </motion.div>
         )}
 
+        {/* Work Completed Button - Always visible when in_progress, disabled after clicked */}
+        {jobData?.job?.status === 'in_progress' && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6"
+          >
+            <button
+              onClick={handleCompleteJob}
+              disabled={completingJob || !!jobData?.job?.completionRequestedAt}
+              className={`w-full px-6 py-4 ${
+                jobData?.job?.completionRequestedAt 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800'
+              } text-white rounded-2xl font-bold text-lg transition-all flex items-center justify-center gap-3 shadow-xl hover:shadow-2xl disabled:opacity-70 disabled:cursor-not-allowed`}
+            >
+              <CheckCircle className="w-6 h-6" />
+              {jobData?.job?.completionRequestedAt 
+                ? '✅ Completion Requested' 
+                : completingJob 
+                  ? 'Submitting...' 
+                  : 'Work Completed'}
+            </button>
+            {!jobData?.job?.completionRequestedAt && (
+              <p className="text-sm text-gray-600 text-center mt-2">
+                ✓ Click when you finish the work (even if before time ends)<br />
+                ✓ Employer will review and confirm completion
+              </p>
+            )}
+            {jobData?.job?.completionRequestedAt && (
+              <p className="text-sm text-yellow-700 text-center mt-2 font-semibold">
+                ⏱️ Waiting for employer to confirm your completion
+              </p>
+            )}
+          </motion.div>
+        )}
+
+        {/* Job Completed - Success */}
+        {jobData?.job?.status === 'completed' && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-green-50 border-2 border-green-400 rounded-xl p-6 mb-6"
+          >
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                <CheckCircle className="w-8 h-8 text-green-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-green-900 mb-2">🎉 Completed! Thank You!</h3>
+                <p className="text-green-800 mb-2">
+                  Great work! The employer has confirmed your work completion.
+                </p>
+                <p className="text-sm text-green-700 font-semibold">
+                  💰 Payment has been released and will be in your account soon. Thank you for using NoriX!
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+
         {/* Work Timer - Shows when job is in progress */}
         {jobData?.job?.status === 'in_progress' && jobData?.job?.startTime && (
           <motion.div
@@ -452,9 +638,12 @@ const StudentManageInstantJobPage = () => {
               </div>
             )}
 
-            <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-              <p className="text-xs text-yellow-800">
-                💡 When you finish the work, request completion. The employer will confirm and release payment.
+            <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3">
+              <p className="text-xs text-green-800 font-semibold mb-1">
+                ✅ You can complete work early!
+              </p>
+              <p className="text-xs text-green-700">
+                Click "Work Completed" button above when you finish - even before the timer ends. Employer will review and confirm.
               </p>
             </div>
           </motion.div>
@@ -526,6 +715,18 @@ const StudentManageInstantJobPage = () => {
             <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
               <div className="space-y-3">
+                {/* Confirm Arrival Button - Only show when status is locked and not arrived yet */}
+                {jobData?.job?.status === 'locked' && arrivalStatus === 'en_route' && (
+                  <button
+                    onClick={handleConfirmArrival}
+                    disabled={confirmingArrival}
+                    className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <MapPin className="w-5 h-5" />
+                    {confirmingArrival ? 'Confirming...' : 'I Have Arrived'}
+                  </button>
+                )}
+                
                 <button
                   onClick={() => router.push(`/student/instant-job/${jobId}/confirmation`)}
                   className="w-full px-4 py-2 bg-[#2A8A8C] hover:bg-[#238085] text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 shadow-lg"
@@ -573,6 +774,8 @@ const StudentManageInstantJobPage = () => {
             </div>
           </div>
         </div>
+
+        </div> {/* End Scrollable Container */}
       </div>
     </div>
   );
