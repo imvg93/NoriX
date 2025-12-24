@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Zap, 
   MapPin, 
@@ -168,19 +168,143 @@ const InstantJobPage = () => {
       }
 
       const data = await response.json();
+      console.log('✅ Job created response:', data);
       
-      // Navigate to dispatch status screen
-      router.push(`/employer/instant-job/${data.data.jobId}/status`);
+      // Get jobId from response (could be _id or jobId)
+      const jobId = data.data?.jobId || data.data?._id || data.data?.id;
+      
+      console.log('📋 Extracted jobId:', jobId);
+      console.log('📋 Full data structure:', JSON.stringify(data, null, 2));
+      
+      if (!jobId) {
+        console.error('❌ No jobId in response:', data);
+        setLoading(false);
+        alert('Job created but failed to get job ID. Please check your jobs list.');
+        return;
+      }
+      
+      // Keep loading animation visible for at least 2 seconds to show radar animation
+      // Then navigate to dispatch status screen
+      setTimeout(() => {
+        console.log('🚀 Navigating to status page:', `/employer/instant-job/${jobId}/status`);
+        router.push(`/employer/instant-job/${jobId}/status`);
+        // Don't set loading to false here - let the navigation handle it
+      }, 2000); // 2 second delay to show animation
+      
     } catch (error: any) {
       console.error('Error creating instant job:', error);
-      alert(error.message || 'Failed to create instant job');
-    } finally {
       setLoading(false);
+      alert(error.message || 'Failed to create instant job');
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Loading Overlay with Radar Animation */}
+      <AnimatePresence mode="wait">
+        {loading && (
+          <motion.div
+            key="loading-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-white/95 backdrop-blur-sm"
+            style={{ zIndex: 9999 }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="bg-white rounded-2xl shadow-2xl border border-gray-200 p-8 sm:p-12 text-center max-w-md mx-4"
+            >
+              {/* Radar Animation */}
+              <div className="relative w-32 h-32 mx-auto mb-6">
+                <motion.div
+                  className="absolute inset-0 border-4 border-[#2A8A8C] rounded-full"
+                  animate={{
+                    scale: [1, 1.5, 1],
+                    opacity: [1, 0, 1]
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  }}
+                />
+                <motion.div
+                  className="absolute inset-0 border-4 border-[#2A8A8C] rounded-full"
+                  animate={{
+                    scale: [1, 1.3, 1],
+                    opacity: [0.7, 0, 0.7]
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay: 0.5
+                  }}
+                />
+                <motion.div
+                  className="absolute inset-0 border-4 border-[#2A8A8C] rounded-full"
+                  animate={{
+                    scale: [1, 1.2, 1],
+                    opacity: [0.5, 0, 0.5]
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay: 1
+                  }}
+                />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <motion.div
+                    animate={{
+                      scale: [1, 1.1, 1],
+                      rotate: [0, 360]
+                    }}
+                    transition={{
+                      duration: 3,
+                      repeat: Infinity,
+                      ease: "linear"
+                    }}
+                  >
+                    <Zap className="w-12 h-12 text-[#2A8A8C]" />
+                  </motion.div>
+                </div>
+              </div>
+
+              <motion.h2
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-2xl font-bold text-gray-900 mb-2"
+              >
+                Creating Job...
+              </motion.h2>
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2 }}
+                className="text-gray-600 mb-4"
+              >
+                Setting up your instant job and preparing to notify workers
+              </motion.p>
+              <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                >
+                  <Clock className="w-4 h-4" />
+                </motion.div>
+                <span>Please wait</span>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
         {/* Header */}
         <motion.div
@@ -211,10 +335,10 @@ const InstantJobPage = () => {
         {/* Command Panel */}
         <motion.form
           initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          animate={{ opacity: loading ? 0.5 : 1, y: 0 }}
           transition={{ delay: 0.1 }}
           onSubmit={handleSubmit}
-          className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 sm:p-8 space-y-6"
+          className={`bg-white rounded-2xl shadow-lg border border-gray-200 p-6 sm:p-8 space-y-6 ${loading ? 'pointer-events-none' : ''}`}
         >
           {/* Job Type Grid */}
           <div>

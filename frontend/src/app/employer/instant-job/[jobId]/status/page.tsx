@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -18,7 +18,10 @@ import {
   Navigation2,
   Copy,
   CheckCheck,
-  FileText
+  FileText,
+  Mail,
+  GraduationCap,
+  Briefcase
 } from 'lucide-react';
 import { useAuth } from '../../../../../contexts/AuthContext';
 
@@ -29,20 +32,82 @@ const DispatchStatusPage = () => {
   const params = useParams();
   const jobId = params?.jobId as string;
   const { user } = useAuth();
+
   const [jobStatus, setJobStatus] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [contactInfo, setContactInfo] = useState<any>(null);
   const [locationUpdateCount, setLocationUpdateCount] = useState(0);
   const [hasBeenViewed, setHasBeenViewed] = useState(false);
   const [viewedAt, setViewedAt] = useState<Date | null>(null);
+  const [studentLocation, setStudentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const redirectingRef = useRef(false);
+
+  const fetchStudentTracking = async () => {
+    try {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(`${API_BASE_URL}/instant-jobs/${jobId}/track-student`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.data?.student?.currentLocation) {
+          setStudentLocation(data.data.student.currentLocation);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching student tracking:', error);
+    }
+  };
+
+  // Redirect to manage page when status becomes confirmed (polling fallback)
+  useEffect(() => {
+    console.log('🔍 Redirect useEffect triggered:', {
+      status: jobStatus?.status,
+      userType: user?.userType,
+      redirecting: redirectingRef.current,
+      jobId
+    });
+    
+    if (jobStatus?.status === 'confirmed' && user?.userType === 'employer' && !redirectingRef.current) {
+      console.log('✅ Job confirmed via polling - FORCE REDIRECTING NOW!');
+      redirectingRef.current = true; // Prevent multiple redirects
+      
+      // Redirect IMMEDIATELY - no delay
+      console.log('🚀 FORCE REDIRECT (from polling)');
+      window.location.href = `/employer/instant-job/${jobId}/manage`;
+    }
+  }, [jobStatus?.status, jobId, user]);
 
   useEffect(() => {
-    if (!jobId) return;
+    if (!jobId || jobId === 'undefined' || jobId === 'null') {
+      console.error('❌ Invalid jobId in useEffect:', jobId);
+      return;
+    }
+    
+    // Don't poll if already confirmed - redirect will happen via socket
+    if (jobStatus?.status === 'confirmed') {
+      console.log('✅ Job is confirmed - stopping polling');
+      return;
+    }
+    
+    // Don't poll if confirming - wait for socket event
+    if (confirming) {
+      console.log('⏳ Confirming in progress - waiting for socket event');
+      return;
+    }
+    
     fetchJobStatus();
     const interval = setInterval(fetchJobStatus, 2000); // Poll every 2 seconds
+    
     return () => clearInterval(interval);
-  }, [jobId]);
+  }, [jobId, jobStatus?.status, confirming]);
 
   // Mark as viewed when confirmed status appears
   useEffect(() => {
@@ -87,11 +152,19 @@ const DispatchStatusPage = () => {
     }
   }, [jobStatus?.status, jobId]);
 
-  // Listen for Socket.IO confirmation event with contact info
+  // Listen for Socket.IO events
   useEffect(() => {
     const socketService = require('../../../../../services/socketService').default;
     const socket = (socketService as any).socket;
 
+    // Handle when student accepts (locks job)
+    const handleStudentAccepted = (data: any) => {
+      console.log('📨 Student accepted job:', data);
+      // Refresh job status to show locked state
+      fetchJobStatus();
+    };
+
+    // Handle when student is confirmed (after employer confirms)
     const handleStudentConfirmed = (data: any) => {
       console.log('✅ Student confirmed with contact info:', data);
       if (data.student) {
@@ -100,16 +173,35 @@ const DispatchStatusPage = () => {
           phone: data.student.phone,
           location: data.student.location
         });
+        // Set student location if available
+        if (data.student.currentLocation) {
+          setStudentLocation(data.student.currentLocation);
+        }
       }
+      // Refresh job status and fetch tracking
+      fetchJobStatus();
+      fetchStudentTracking();
     };
 
     if (socket) {
+      socket.on('instant-job-student-accepted', handleStudentAccepted);
       socket.on('instant-job-student-confirmed', handleStudentConfirmed);
+      socket.on('job:locked', handleStudentAccepted);
+      socket.on('job:in_progress', () => fetchJobStatus());
+      socket.on('job:completed', () => fetchJobStatus());
+      socket.on('job:cancelled', () => fetchJobStatus());
+      socket.on('job:expired', () => fetchJobStatus());
       return () => {
+        socket.off('instant-job-student-accepted', handleStudentAccepted);
         socket.off('instant-job-student-confirmed', handleStudentConfirmed);
+        socket.off('job:locked', handleStudentAccepted);
+        socket.off('job:in_progress', () => fetchJobStatus());
+        socket.off('job:completed', () => fetchJobStatus());
+        socket.off('job:cancelled', () => fetchJobStatus());
+        socket.off('job:expired', () => fetchJobStatus());
       };
     }
-  }, []);
+  }, [jobId]);
 
   const fetchContactInfo = async () => {
     try {
@@ -124,7 +216,11 @@ const DispatchStatusPage = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setContactInfo(data.data.contact);
+        setContactInfo(data.data);
+        // Set student location if available
+        if (data.data?.studentLocation) {
+          setStudentLocation(data.data.studentLocation);
+        }
       }
     } catch (error) {
       console.error('Error fetching contact info:', error);
@@ -153,20 +249,44 @@ const DispatchStatusPage = () => {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('📊 Job status fetched:', {
+          status: data.data?.status,
+          hasAcceptedBy: !!data.data?.acceptedBy,
+          fullData: data.data
+        });
         setJobStatus(data.data);
         setLoading(false);
+        
+        // If status is confirmed, trigger redirect check immediately
+        if (data.data?.status === 'confirmed' && !redirectingRef.current) {
+          console.log('🎯 Status is confirmed - triggering redirect check');
+          redirectingRef.current = true;
+          setTimeout(() => {
+            console.log('🚀 AUTO REDIRECT from fetchJobStatus');
+            window.location.href = `/employer/instant-job/${jobId}/manage`;
+          }, 500);
+        }
+        
+        // Return status for use in handleConfirm
+        return data.data?.status;
       }
     } catch (error) {
       console.error('Error fetching job status:', error);
     }
+    return null;
   };
 
   const handleConfirm = async (confirm: boolean) => {
+    console.log('\n' + '🎯'.repeat(40));
+    console.log('🎯 EMPLOYER CONFIRMING:', confirm ? 'CONFIRM' : 'REJECT');
+    console.log('🎯'.repeat(40) + '\n');
+    
     setConfirming(true);
     try {
       const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
       const token = localStorage.getItem('token');
 
+      console.log('📤 Sending confirmation request to backend...');
       const response = await fetch(`${API_BASE_URL}/instant-jobs/confirm`, {
         method: 'POST',
         headers: {
@@ -175,7 +295,7 @@ const DispatchStatusPage = () => {
         },
         body: JSON.stringify({
           jobId,
-          confirm
+          action: confirm ? 'confirm' : 'reject'
         })
       });
 
@@ -184,11 +304,73 @@ const DispatchStatusPage = () => {
         throw new Error(error.message || 'Failed to confirm');
       }
 
-      await fetchJobStatus();
+      // Get response data to check status
+      const responseData = await response.json();
+      console.log('✅ Backend response received:', responseData);
+      
+      // If confirmed, wait for socket event OR redirect after timeout
+      if (confirm) {
+        console.log('⏳ Waiting for socket event to trigger redirect...');
+        console.log('   If socket event doesn\'t arrive, will redirect in 3 seconds');
+        
+        // Backup redirect in case socket event doesn't arrive
+        setTimeout(() => {
+          if (!redirectingRef.current) {
+            console.warn('⚠️ Socket event timeout - forcing redirect as backup');
+            redirectingRef.current = true;
+            window.location.href = `/employer/instant-job/${jobId}/manage`;
+          }
+        }, 3000);
+      } else {
+        // Rejected - refresh status and wait for new student
+        console.log('❌ Rejected - searching for next worker');
+        console.log('   Backend will dispatch to more students');
+        console.log('   Waiting for next student to accept...');
+        
+        await fetchJobStatus();
+        setConfirming(false);
+        
+        // Clear the current locked student from UI
+        setJobStatus((prev: any) => ({
+          ...prev,
+          status: 'dispatching',
+          lockedBy: null,
+          lockExpiresAt: null
+        }));
+      }
     } catch (error: any) {
+      console.error('❌ Error confirming:', error);
       alert(error.message || 'Failed to confirm');
-    } finally {
       setConfirming(false);
+    }
+  };
+
+  const handleCancelJob = async () => {
+    if (!jobId) return;
+    const isLocked = status === 'locked' || status === 'in_progress';
+    const warning = isLocked
+      ? 'Cancelling now will incur a 25% fee. Do you want to proceed?'
+      : 'Cancel search? (no penalty)';
+    if (!window.confirm(warning)) return;
+    setCancelling(true);
+    try {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/instant-jobs/${jobId}/cancel`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to cancel job');
+      }
+      router.push('/employer');
+    } catch (error: any) {
+      alert(error.message || 'Failed to cancel job');
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -275,6 +457,15 @@ const DispatchStatusPage = () => {
                 <Clock className="w-4 h-4" />
                 <span>This may take up to 2 minutes</span>
               </div>
+              <div className="mt-6 flex justify-center">
+                <button
+                  onClick={handleCancelJob}
+                  disabled={cancelling}
+                  className="px-5 py-3 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                >
+                  {cancelling ? 'Cancelling...' : 'Cancel Search (no penalty)'}
+                </button>
+              </div>
             </motion.div>
           )}
 
@@ -313,7 +504,7 @@ const DispatchStatusPage = () => {
                     </div>
                   )}
                   <div className="flex-1">
-                    <h3 className="text-xl font-bold text-gray-900">{lockedStudent.name}</h3>
+                    <h3 className="text-xl font-bold text-gray-900">{lockedStudent.name || 'Student'}</h3>
                     <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
                       <span className="flex items-center gap-1">
                         <span className="text-yellow-500">⭐</span>
@@ -327,8 +518,53 @@ const DispatchStatusPage = () => {
                   </div>
                 </div>
 
+                {/* Student Contact Information */}
+                <div className="space-y-2 pt-4 border-t border-gray-200">
+                  {lockedStudent.email && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Mail className="w-4 h-4 text-[#2A8A8C]" />
+                      <span className="text-gray-700">{lockedStudent.email}</span>
+                    </div>
+                  )}
+                  {lockedStudent.phone && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Phone className="w-4 h-4 text-[#2A8A8C]" />
+                      <a href={`tel:${lockedStudent.phone}`} className="text-[#2A8A8C] hover:underline">
+                        {lockedStudent.phone}
+                      </a>
+                    </div>
+                  )}
+                  {lockedStudent.college && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <GraduationCap className="w-4 h-4 text-[#2A8A8C]" />
+                      <span className="text-gray-700">{lockedStudent.college}</span>
+                      {lockedStudent.courseYear && (
+                        <span className="text-gray-500">• Year {lockedStudent.courseYear}</span>
+                      )}
+                    </div>
+                  )}
+                  {lockedStudent.address && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <MapPin className="w-4 h-4 text-[#2A8A8C]" />
+                      <span className="text-gray-700">{lockedStudent.address}</span>
+                    </div>
+                  )}
+                  {lockedStudent.skills && Array.isArray(lockedStudent.skills) && lockedStudent.skills.length > 0 && (
+                    <div className="flex items-start gap-2 text-sm pt-2">
+                      <Briefcase className="w-4 h-4 text-[#2A8A8C] mt-0.5" />
+                      <div className="flex flex-wrap gap-1">
+                        {lockedStudent.skills.map((skill: string, idx: number) => (
+                          <span key={idx} className="px-2 py-1 bg-[#2A8A8C]/10 text-[#2A8A8C] rounded-md text-xs">
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Job Details */}
-                <div className="grid grid-cols-2 gap-4 text-sm pt-4 border-t border-gray-200">
+                <div className="grid grid-cols-2 gap-4 text-sm pt-4 border-t border-gray-200 mt-4">
                   <div className="flex items-center gap-2 text-gray-700">
                     <MapPin className="w-4 h-4 text-[#2A8A8C]" />
                     <span className="truncate">{jobStatus?.location?.address || 'Location'}</span>
@@ -373,6 +609,17 @@ const DispatchStatusPage = () => {
                       Confirm Worker
                     </>
                   )}
+                </button>
+              </div>
+              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl">
+                <div className="text-sm text-red-700 font-semibold mb-2">Cancel job?</div>
+                <p className="text-sm text-red-700 mb-3">Cancelling after lock will incur a 25% fee. Proceed only if you cannot continue.</p>
+                <button
+                  onClick={handleCancelJob}
+                  disabled={cancelling}
+                  className="w-full px-4 py-3 bg-white text-red-700 border border-red-300 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
+                >
+                  {cancelling ? 'Cancelling...' : 'Cancel Job (25% penalty)'}
                 </button>
               </div>
             </motion.div>
@@ -422,19 +669,19 @@ const DispatchStatusPage = () => {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">Name:</span>
-                        <span className="text-sm font-semibold text-gray-900">{contactInfo.name}</span>
+                        <span className="text-sm font-semibold text-gray-900">{contactInfo.contact?.name || contactInfo.name}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">Phone:</span>
                         <div className="flex items-center gap-2">
                           <a 
-                            href={`tel:${contactInfo.phone}`}
+                            href={`tel:${contactInfo.contact?.phone || contactInfo.phone}`}
                             className="text-sm font-semibold text-[#2A8A8C] hover:underline"
                           >
-                            {contactInfo.phone}
+                            {contactInfo.contact?.phone || contactInfo.phone}
                           </a>
                           <button
-                            onClick={() => copyToClipboard(contactInfo.phone)}
+                            onClick={() => copyToClipboard(contactInfo.contact?.phone || contactInfo.phone)}
                             className="p-1 hover:bg-gray-200 rounded transition-colors"
                             title="Copy phone number"
                           >
@@ -445,64 +692,86 @@ const DispatchStatusPage = () => {
                     </div>
                   </div>
 
-                  {/* Location Section */}
-                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-[#2A8A8C]" />
-                      Student Location
-                      {locationUpdateCount > 0 && (
-                        <motion.span
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                          className="ml-auto text-xs text-[#2A8A8C] font-normal flex items-center gap-1"
-                        >
-                          <Navigation2 className="w-3 h-3" />
-                          Updated {locationUpdateCount}x
-                        </motion.span>
-                      )}
-                    </h3>
-                    {contactInfo.location ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">
-                          {contactInfo.location.latitude.toFixed(6)}, {contactInfo.location.longitude.toFixed(6)}
+                  {/* Student Location Tracking */}
+                  {studentLocation && (
+                    <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+                      <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                        <Navigation2 className="w-4 h-4 text-[#2A8A8C]" />
+                        Student Location
+                        <span className="ml-auto text-xs text-[#2A8A8C] font-normal animate-pulse">
+                          Live
                         </span>
+                      </h3>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-600">Coordinates:</span>
+                          <span className="text-xs font-mono text-gray-700">
+                            {studentLocation.latitude.toFixed(6)}, {studentLocation.longitude.toFixed(6)}
+                          </span>
+                        </div>
                         <button
-                          onClick={() => openMaps(contactInfo.location)}
-                          className="ml-auto flex items-center gap-1 px-3 py-1.5 bg-[#2A8A8C] text-white text-xs rounded-lg hover:bg-[#238085] transition-colors"
+                          onClick={() => openMaps(studentLocation)}
+                          className="w-full mt-2 flex items-center justify-center gap-2 px-3 py-2 bg-[#2A8A8C] text-white text-sm rounded-lg hover:bg-[#238085] transition-colors"
                         >
-                          <Navigation2 className="w-3 h-3" />
-                          Open Maps
+                          <MapPin className="w-4 h-4" />
+                          Track on Map
                         </button>
                       </div>
-                    ) : (
-                      <p className="text-xs text-gray-500">Location not available</p>
-                    )}
-                  </div>
+                    </div>
+                  )}
+
+                  {/* Student Location Tracking */}
+                  {studentLocation && (
+                    <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+                      <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                        <Navigation2 className="w-4 h-4 text-[#2A8A8C]" />
+                        Student Location
+                        <span className="ml-auto text-xs text-[#2A8A8C] font-normal animate-pulse">
+                          Live
+                        </span>
+                      </h3>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-600">Coordinates:</span>
+                          <span className="text-xs font-mono text-gray-700">
+                            {studentLocation.latitude.toFixed(6)}, {studentLocation.longitude.toFixed(6)}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => openMaps(studentLocation)}
+                          className="w-full mt-2 flex items-center justify-center gap-2 px-3 py-2 bg-[#2A8A8C] text-white text-sm rounded-lg hover:bg-[#238085] transition-colors"
+                        >
+                          <MapPin className="w-4 h-4" />
+                          Track on Map
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row gap-4">
                 <button
-                  onClick={() => router.push(`/employer/instant-job/${jobId}/manage`)}
+                  onClick={() => {
+                    console.log('🚀 FORCE REDIRECT - Button clicked');
+                    redirectingRef.current = true;
+                    window.location.href = `/employer/instant-job/${jobId}/manage`;
+                  }}
                   className="flex-1 px-6 py-3 bg-[#2A8A8C] hover:bg-[#238085] text-white rounded-xl font-semibold transition-colors shadow-md flex items-center justify-center gap-2"
                 >
                   <FileText className="w-5 h-5" />
-                  Manage Job
+                  View Student Profile & Tracker
                 </button>
-                <button
-                  onClick={() => router.push(`/employer/instant-job/${jobId}/track`)}
-                  className="flex-1 px-6 py-3 bg-white border-2 border-[#2A8A8C] text-[#2A8A8C] hover:bg-[#2A8A8C] hover:text-white rounded-xl font-semibold transition-colors flex items-center justify-center gap-2"
-                >
-                  <Navigation2 className="w-5 h-5" />
-                  Track Student
-                </button>
-                <button
-                  onClick={() => router.push('/employer')}
-                  className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold transition-colors"
-                >
-                  Dashboard
-                </button>
+              </div>
+              
+              {/* Debug Info */}
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs">
+                <p className="font-semibold text-yellow-900 mb-1">Debug Info:</p>
+                <p>Status: {status}</p>
+                <p>Redirecting Flag: {redirectingRef.current ? 'Yes' : 'No'}</p>
+                <p>Job ID: {jobId}</p>
+                <p>Has Accepted Student: {acceptedStudent ? 'Yes' : 'No'}</p>
               </div>
             </motion.div>
           )}

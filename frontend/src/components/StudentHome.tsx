@@ -326,6 +326,13 @@ const StudentHome: React.FC<StudentHomeProps> = ({ user }) => {
                   Explore Jobs
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </Link>
+                <Link
+                  href="/student/instant-job"
+                  className="inline-flex items-center justify-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 border border-[#2A8A8C] text-[#2A8A8C] rounded-xl hover:bg-[#2A8A8C] hover:text-white transition-colors font-medium text-sm sm:text-base"
+                >
+                  Instant Jobs
+                  <Zap className="w-4 h-4" />
+                </Link>
                 <button className="inline-flex items-center justify-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium text-sm sm:text-base">
                   <Play className="w-4 h-4" />
                   Watch Intro

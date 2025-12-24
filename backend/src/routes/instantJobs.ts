@@ -1,7 +1,7 @@
 import express from 'express';
 import { authenticateToken, requireEmployer, requireStudent, AuthRequest } from '../middleware/auth';
 import { asyncHandler, ValidationError } from '../middleware/errorHandler';
-import { createInstantJob, getInstantJobStatus, acceptInstantJob, confirmInstantJob, getContactInfo, trackStudent, confirmArrival, markConfirmationViewed, getCurrentInstantJob } from '../controllers/instantJobController';
+import { createInstantJob, getInstantJobStatus, acceptInstantJob, confirmInstantJob, getContactInfo, trackStudent, confirmArrival, markConfirmationViewed, getCurrentInstantJob, getCurrentInstantJobForStudent, cancelInstantJob, requestCompletion, confirmCompletion, getStudentInstantHistory } from '../controllers/instantJobController';
 
 const router = express.Router();
 
@@ -42,6 +42,24 @@ router.post('/confirm', authenticateToken, requireEmployer, asyncHandler(async (
  */
 router.get('/current', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
   await getCurrentInstantJob(req, res);
+}));
+
+/**
+ * @route   GET /api/instant-jobs/current-student
+ * @desc    Get current active instant job for student
+ * @access  Private (Students only)
+ */
+router.get('/current-student', authenticateToken, requireStudent, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  await getCurrentInstantJobForStudent(req, res);
+}));
+
+/**
+ * @route   GET /api/instant-jobs/history
+ * @desc    Get student instant job history
+ * @access  Private (Students only)
+ */
+router.get('/history', authenticateToken, requireStudent, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  await getStudentInstantHistory(req, res);
 }));
 
 /**
@@ -88,9 +106,9 @@ router.post('/test-ping', authenticateToken, asyncHandler(async (req: AuthReques
 /**
  * @route   GET /api/instant-jobs/:jobId/status
  * @desc    Get instant job status
- * @access  Private (Employers only - own jobs)
+ * @access  Private (Employers and accepted students)
  */
-router.get('/:jobId/status', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+router.get('/:jobId/status', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
   await getInstantJobStatus(req, res);
 }));
 
@@ -119,6 +137,33 @@ router.get('/:jobId/track-student', authenticateToken, asyncHandler(async (req: 
  */
 router.post('/:jobId/confirm-arrival', authenticateToken, asyncHandler(async (req: AuthRequest, res: express.Response) => {
   await confirmArrival(req, res);
+}));
+
+/**
+ * @route   POST /api/instant-jobs/:jobId/complete
+ * @desc    Student requests completion
+ * @access  Private (Students only)
+ */
+router.post('/:jobId/complete', authenticateToken, requireStudent, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  await requestCompletion(req, res);
+}));
+
+/**
+ * @route   POST /api/instant-jobs/:jobId/confirm-completion
+ * @desc    Employer confirms completion
+ * @access  Private (Employers only)
+ */
+router.post('/:jobId/confirm-completion', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  await confirmCompletion(req, res);
+}));
+
+/**
+ * @route   POST /api/instant-jobs/:jobId/cancel
+ * @desc    Employer cancels instant job
+ * @access  Private (Employers only)
+ */
+router.post('/:jobId/cancel', authenticateToken, requireEmployer, asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  await cancelInstantJob(req, res);
 }));
 
 /**

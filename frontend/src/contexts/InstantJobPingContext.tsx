@@ -41,17 +41,13 @@ export const InstantJobPingProvider: React.FC<InstantJobPingProviderProps> = ({ 
   const { user } = useAuth();
   const [currentPing, setCurrentPing] = useState<InstantJobPingData | null>(null);
   const [postAcceptState, setPostAcceptState] = useState<PostAcceptStateData | null>(null);
+  const [waveNumber, setWaveNumber] = useState<number>(1);
 
   // Global Socket.IO listener for instant job pings
   useEffect(() => {
     // Only listen if user is a student
     if (!user || user.userType !== 'student') {
-      return;
-    }
-
-    // Only listen if user is available for instant jobs
-    if (!(user as any).availableForInstantJobs) {
-      console.log('⚠️ Student not available for instant jobs, skipping global ping listener');
+      console.log('⚠️ Not a student, skipping instant job ping listener');
       return;
     }
 
@@ -64,11 +60,18 @@ export const InstantJobPingProvider: React.FC<InstantJobPingProviderProps> = ({ 
 
     // Handler for instant job ping
     const handleInstantJobPing = (data: any) => {
-      console.log('📨 ✅ GLOBAL LISTENER: Received instant job ping:', data);
-      console.log('🎯 Showing popup modal now!');
+      console.log('\n' + '='.repeat(80));
+      console.log('📨 ✅ GLOBAL LISTENER: INSTANT JOB PING RECEIVED!');
+      console.log('='.repeat(80));
+      console.log('📦 Ping Data:', JSON.stringify(data, null, 2));
+      console.log('🎯 Setting currentPing state to show popup NOW!');
+      console.log('='.repeat(80) + '\n');
       
-      // Show the popup immediately
-      setCurrentPing({
+      // Update wave number
+      setWaveNumber(data.waveNumber || 1);
+      
+      // Show the popup immediately - FORCE UPDATE
+      const pingData = {
         _id: data.jobId,
         jobTitle: data.jobTitle || 'Instant Job Opportunity',
         distance: data.distance || 0,
@@ -76,12 +79,26 @@ export const InstantJobPingProvider: React.FC<InstantJobPingProviderProps> = ({ 
         duration: data.duration || 1,
         companyName: data.companyName,
         location: data.location
-      });
+      };
       
-      // Force a re-render to ensure popup shows
+      console.log('📋 Popup Data:', pingData);
+      console.log('🚨 SETTING STATE - POPUP WILL SHOW!');
+      
+      // Clear any existing ping first
+      setCurrentPing(null);
+      
+      // Then set new ping immediately
       setTimeout(() => {
-        console.log('✅ Popup state set, currentPing should be visible');
-      }, 100);
+        setCurrentPing(pingData);
+        console.log('✅ State SET - Popup component should render NOW!');
+        console.log('   currentPing is now:', pingData);
+        
+        // Force body to be visible
+        if (typeof window !== 'undefined') {
+          document.body.style.overflow = 'hidden';
+          console.log('🔒 Body scroll locked for popup');
+        }
+      }, 50);
     };
 
     // Handler for job confirmed
@@ -93,13 +110,7 @@ export const InstantJobPingProvider: React.FC<InstantJobPingProviderProps> = ({ 
       });
       setCurrentPing(null); // Close ping modal
       
-      // Optionally redirect to confirmation page after a short delay
-      // This gives time for the PostAcceptState modal to show first
-      setTimeout(() => {
-        if (typeof window !== 'undefined') {
-          window.location.href = `/student/instant-job/${data.jobId}/confirmation`;
-        }
-      }, 2000); // 2 second delay to show the confirmation modal first
+      // No auto-redirect - let user stay on the modal and choose their action
     };
 
     // Handler for job rejected
@@ -114,26 +125,57 @@ export const InstantJobPingProvider: React.FC<InstantJobPingProviderProps> = ({ 
 
     // Setup listeners when socket connects
     const setupListeners = (sock: any) => {
-      if (!sock) return;
+      if (!sock) {
+        console.log('⚠️ GLOBAL: No socket instance available');
+        return;
+      }
       
-      console.log('🔌 GLOBAL: Socket connected, setting up listeners...');
-      sock.on('instant-job-ping', handleInstantJobPing);
+      console.log('🔌 GLOBAL: Socket connected, setting up listeners...', {
+        socketId: sock.id,
+        connected: sock.connected,
+        userId: user._id,
+        room: `user:${user._id}`
+      });
+      
+      // Remove existing listeners to prevent duplicates
+      sock.off('instant-job-ping', handleInstantJobPing);
+      sock.off('student:ping', handleInstantJobPing);
+      sock.off('instant-job-confirmed', handleJobConfirmed);
+      sock.off('instant-job-rejected', handleJobRejected);
+      
+      // Add listeners with HIGH PRIORITY
+      sock.on('instant-job-ping', handleInstantJobPing); // legacy
+      sock.on('student:ping', handleInstantJobPing);
       sock.on('instant-job-confirmed', handleJobConfirmed);
       sock.on('instant-job-rejected', handleJobRejected);
-      console.log('✅ GLOBAL: Socket listeners registered');
+      
+      console.log('✅ GLOBAL: Socket listeners ACTIVE - Ready to receive instant job pings!');
+      console.log('   Listening on room: user:' + user._id);
+      console.log('   When employer creates job, popup will show IMMEDIATELY!');
+      
+      // Test connection by emitting a test event
+      sock.emit('ping', { userId: user._id, timestamp: Date.now() });
+      
+      // Log that we're ready
+      console.log('🎯 READY: Student is ONLINE and will receive instant job notifications');
     };
 
     // Try to setup immediately
     const socket = getSocket();
     if (socket && socket.connected) {
+      console.log('✅ GLOBAL: Socket already connected, setting up listeners immediately');
       setupListeners(socket);
     } else {
-      console.log('⚠️ GLOBAL: Socket not connected yet, waiting for connection...');
+      console.log('⚠️ GLOBAL: Socket not connected yet, waiting for connection...', {
+        hasSocket: !!socket,
+        isConnected: socket?.connected
+      });
       
       // Listen for socket connection
       const handleConnect = () => {
+        console.log('🔌 GLOBAL: Socket connected event received');
         const sock = getSocket();
-        if (sock) {
+        if (sock && sock.connected) {
           setupListeners(sock);
         }
       };
@@ -141,10 +183,17 @@ export const InstantJobPingProvider: React.FC<InstantJobPingProviderProps> = ({ 
       // Listen for custom socket connected event
       window.addEventListener('socketConnected', handleConnect);
       
+      // Also listen to socket's own connect event
+      if (socket) {
+        socket.on('connect', handleConnect);
+        socket.on('connected', handleConnect);
+      }
+      
       // Also try periodically
       const retryInterval = setInterval(() => {
         const sock = getSocket();
         if (sock && sock.connected) {
+          console.log('✅ GLOBAL: Socket connected via retry, setting up listeners');
           clearInterval(retryInterval);
           setupListeners(sock);
         }
@@ -153,6 +202,10 @@ export const InstantJobPingProvider: React.FC<InstantJobPingProviderProps> = ({ 
       return () => {
         clearInterval(retryInterval);
         window.removeEventListener('socketConnected', handleConnect);
+        if (socket) {
+          socket.off('connect', handleConnect);
+          socket.off('connected', handleConnect);
+        }
       };
     }
 
@@ -160,7 +213,8 @@ export const InstantJobPingProvider: React.FC<InstantJobPingProviderProps> = ({ 
     return () => {
       const sock = getSocket();
       if (sock) {
-        sock.off('instant-job-ping', handleInstantJobPing);
+      sock.off('instant-job-ping', handleInstantJobPing);
+      sock.off('student:ping', handleInstantJobPing);
         sock.off('instant-job-confirmed', handleJobConfirmed);
         sock.off('instant-job-rejected', handleJobRejected);
       }
@@ -216,19 +270,54 @@ export const InstantJobPingProvider: React.FC<InstantJobPingProviderProps> = ({ 
     setPostAcceptState(null);
   };
 
+  // Debug render
+  React.useEffect(() => {
+    console.log('🔄 InstantJobPingProvider RENDER:', {
+      hasCurrentPing: !!currentPing,
+      hasPostAcceptState: !!postAcceptState,
+      currentPingData: currentPing,
+      isStudent: user?.userType === 'student',
+      willShowPopup: !!currentPing && user?.userType === 'student'
+    });
+
+    if (currentPing && user?.userType === 'student') {
+      console.log('🚨🚨🚨 POPUP SHOULD BE VISIBLE NOW 🚨🚨🚨');
+      console.log('   Job:', currentPing.jobTitle);
+      console.log('   Pay:', currentPing.pay);
+      console.log('   Distance:', currentPing.distance, 'km');
+    }
+  }, [currentPing, postAcceptState, user]);
+
   return (
     <InstantJobPingContext.Provider value={{ currentPing, postAcceptState }}>
       {children}
       
-      {/* Global Instant Job Ping Modal - Always on top */}
-      {currentPing && (
-        <InstantJobPing
-          job={currentPing}
-          onAccept={handleAccept}
-          onSkip={handleSkip}
-          onClose={handleSkip}
-        />
-      )}
+      {/* Global Instant Job Ping Modal - ALWAYS RENDERS ON TOP OF EVERYTHING */}
+      {currentPing && user?.userType === 'student' && (() => {
+        console.log('🎨🎨🎨 RENDERING InstantJobPing POPUP 🎨🎨🎨');
+        console.log('   Job Data:', currentPing);
+        console.log('   Wave:', waveNumber);
+        return (
+          <div 
+            style={{ 
+              position: 'fixed', 
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 999999,
+              pointerEvents: 'auto'
+            }}
+          >
+            <InstantJobPing
+              job={{...currentPing, waveNumber} as any}
+              onAccept={handleAccept}
+              onSkip={handleSkip}
+              onClose={handleSkip}
+            />
+          </div>
+        );
+      })()}
 
       {/* Global Post-Accept State Modal */}
       {postAcceptState && (
@@ -237,14 +326,7 @@ export const InstantJobPingProvider: React.FC<InstantJobPingProviderProps> = ({ 
           status={postAcceptState.status}
           onConfirmed={() => {
             handleClosePostAccept();
-            // Redirect to confirmation page if confirmed
-            if (postAcceptState.status === 'confirmed') {
-              setTimeout(() => {
-                if (typeof window !== 'undefined') {
-                  window.location.href = `/student/instant-job/${postAcceptState.jobId}/confirmation`;
-                }
-              }, 1500);
-            }
+            // No auto-redirect - user controls navigation
           }}
         />
       )}

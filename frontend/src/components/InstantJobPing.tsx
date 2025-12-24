@@ -14,6 +14,7 @@ interface InstantJobPingProps {
     duration: number;
     companyName?: string;
     location?: string;
+    waveNumber?: number;
   };
   onAccept: () => void;
   onSkip: () => void;
@@ -21,14 +22,23 @@ interface InstantJobPingProps {
 }
 
 const InstantJobPing: React.FC<InstantJobPingProps> = ({ job, onAccept, onSkip, onClose }) => {
-  const [timeLeft, setTimeLeft] = useState(30); // 30 seconds countdown
+  console.log('\n' + '🎨'.repeat(40));
+  console.log('🎨 InstantJobPing COMPONENT RENDERING');
+  console.log('🎨'.repeat(40));
+  console.log('📦 Job Data:', job);
+  console.log('🎨'.repeat(40) + '\n');
+
+  const initialCountdown = Math.max(5, Math.min(30, (job as any)?.expiresIn || 10));
+  const [timeLeft, setTimeLeft] = useState(initialCountdown);
   const [accepting, setAccepting] = useState(false);
   const [skipping, setSkipping] = useState(false);
 
   // Prevent body scroll when modal is open
   useEffect(() => {
+    console.log('🔒 InstantJobPing: Locking body scroll');
     document.body.style.overflow = 'hidden';
     return () => {
+      console.log('🔓 InstantJobPing: Unlocking body scroll');
       document.body.style.overflow = 'unset';
     };
   }, []);
@@ -141,7 +151,9 @@ const InstantJobPing: React.FC<InstantJobPingProps> = ({ job, onAccept, onSkip, 
                 </motion.div>
                 <div>
                   <h3 className="text-lg font-semibold text-white">Instant Job Alert</h3>
-                  <p className="text-xs text-white/80">Urgent opportunity nearby</p>
+                  <p className="text-xs text-white/80">
+                    {job.waveNumber && job.waveNumber > 1 ? `Wave ${job.waveNumber} • ` : ''}Urgent opportunity nearby
+                  </p>
                 </div>
               </div>
               

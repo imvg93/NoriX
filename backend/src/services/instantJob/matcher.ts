@@ -70,14 +70,33 @@ export async function findEligibleStudents(
     _id: { $nin: excludeStudentIds.map(id => new mongoose.Types.ObjectId(id)) }
   };
 
-  console.log(`🔍 Finding eligible students for job ${job._id}`);
-  console.log(`   Excluding ${excludeStudentIds.length} already notified students`);
+  console.log(`\n🔍 FINDING ELIGIBLE STUDENTS FOR JOB ${job._id}`);
+  console.log(`   Query: availableForInstantJobs=true, has location, within 30min online`);
+  console.log(`   Excluding ${excludeStudentIds.length} already notified students: ${excludeStudentIds.join(', ')}`);
 
   const eligibleStudents = await User.find(query)
     .select('name email phone skills locationCoordinates rating completedJobs profilePicture availableForInstantJobs onlineStatus lastSeen instantCooldownUntil')
     .limit(50); // Get more candidates for filtering
 
-  console.log(`   Found ${eligibleStudents.length} potentially eligible students`);
+  console.log(`   ✅ Found ${eligibleStudents.length} potentially eligible students in database`);
+  
+  if (eligibleStudents.length > 0) {
+    console.log(`   📋 Student Details:`);
+    eligibleStudents.forEach((student, idx) => {
+      console.log(`      ${idx + 1}. ${student.name} (${student._id})`);
+      console.log(`         - Available: ${student.availableForInstantJobs}`);
+      console.log(`         - Online Status: ${student.onlineStatus}`);
+      console.log(`         - Last Seen: ${student.lastSeen}`);
+      console.log(`         - Location: ${student.locationCoordinates?.latitude}, ${student.locationCoordinates?.longitude}`);
+      console.log(`         - Cooldown Until: ${student.instantCooldownUntil || 'None'}`);
+    });
+  } else {
+    console.log(`   ⚠️ NO STUDENTS FOUND - Check if any students have:`);
+    console.log(`      - availableForInstantJobs = true`);
+    console.log(`      - locationCoordinates set`);
+    console.log(`      - lastSeen within 30 minutes OR onlineStatus = 'online'`);
+    console.log(`      - Not in cooldown`);
+  }
 
   // Filter by skills match and distance
   const matchedStudents: MatchedStudent[] = [];

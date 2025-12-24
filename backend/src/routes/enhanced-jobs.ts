@@ -638,30 +638,45 @@ router.get('/employer-dashboard', authenticateToken, requireEmployer, asyncHandl
       .limit(pageSize)
       .lean();
 
-    const jobIds = jobs.map(job => job._id);
+    const jobIds = jobs.map(job => job._id).filter(id => id && mongoose.isValidObjectId(id));
 
-    const applications = await Application.find({ jobId: { $in: jobIds } })
+    const applications = await Application.find({ 
+      jobId: { $in: jobIds, $exists: true, $ne: null } // Ensure jobId exists, is not null, and is in the list
+    })
       .populate('studentId', 'name email skills availability')
       .sort({ appliedAt: -1 })
       .lean();
 
     const appsByJob: Record<string, any[]> = {};
     for (const app of applications) {
-      const key = app.jobId?.toString();
-      if (!key) continue;
-      if (!appsByJob[key]) appsByJob[key] = [];
-      appsByJob[key].push({
-        applicationId: app._id,
-        studentId: (app.studentId as any)?._id,
-        name: (app.studentId as any)?.name || 'Candidate',
-        email: (app.studentId as any)?.email || 'N/A',
-        skills: (app.studentId as any)?.skills || [],
-        availability: (app.studentId as any)?.availability,
-        resumeUrl: app.resume || '',
-        coverLetter: app.coverLetter || '',
-        appliedAt: app.appliedAt,
-        status: app.status
-      });
+      try {
+        // Skip if no jobId or invalid jobId
+        if (!app.jobId) continue;
+        
+        const key = app.jobId?.toString();
+        if (!key || !mongoose.isValidObjectId(key)) {
+          console.warn(`⚠️ Skipping application ${app._id} with invalid jobId: ${key}`);
+          continue;
+        }
+        
+        if (!appsByJob[key]) appsByJob[key] = [];
+        appsByJob[key].push({
+          applicationId: app._id,
+          studentId: (app.studentId as any)?._id,
+          name: (app.studentId as any)?.name || 'Candidate',
+          email: (app.studentId as any)?.email || 'N/A',
+          skills: (app.studentId as any)?.skills || [],
+          availability: (app.studentId as any)?.availability,
+          resumeUrl: app.resume || '',
+          coverLetter: app.coverLetter || '',
+          appliedAt: app.appliedAt,
+          status: app.status
+        });
+      } catch (appErr) {
+        console.error(`❌ Error processing application ${app._id}:`, appErr);
+        // Continue to next application instead of failing the entire request
+        continue;
+      }
     }
 
     const totalJobs = await Job.countDocuments({ employerId });
@@ -1058,6 +1073,54 @@ router.get('/:jobId/applications', authenticateToken, requireEmployer, asyncHand
       total
     }
   }, 'Job applications retrieved successfully');
+}));
+
+// ==============================================
+// DYNAMIC ROUTES - MUST BE LAST
+// ==============================================
+
+// @route   GET /api/enhanced-jobs/:id
+// @desc    Get job details by ID
+// @access  Public
+router.get('/:id', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const { id } = req.params;
+
+  if (!mongoose.isValidObjectId(id)) {
+    return sendErrorResponse(res, 400, 'Invalid job ID');
+  }
+
+  try {
+    const job = await Job.findById(id)
+      .populate('employerId', 'name email companyName phone')
+      .lean();
+
+    if (!job) {
+      return sendErrorResponse(res, 404, 'Job not found');
+    }
+
+    // Map to frontend format
+    const jobData = {
+      _id: job._id,
+      title: job.jobTitle,
+      description: job.description,
+      company: job.companyName,
+      location: job.location,
+      salary: job.salaryRange,
+      type: job.workType,
+      requirements: job.skillsRequired || [],
+      createdAt: job.createdAt,
+      employer: job.employerId?._id,
+      highlighted: job.highlighted || false,
+      status: job.status,
+      applicationDeadline: job.applicationDeadline,
+      employerDetails: job.employerId
+    };
+
+    sendSuccessResponse(res, jobData, 'Job retrieved successfully');
+  } catch (e: any) {
+    console.error('❌ Failed to fetch job:', e?.message);
+    return sendErrorResponse(res, 500, 'Failed to fetch job', process.env.NODE_ENV !== 'production' ? e?.message : undefined);
+  }
 }));
 
 export default router;

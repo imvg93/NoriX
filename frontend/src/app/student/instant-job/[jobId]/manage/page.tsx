@@ -28,21 +28,26 @@ const StudentManageInstantJobPage = () => {
   const [jobData, setJobData] = useState<any>(null);
   const [contactInfo, setContactInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [confirmingArrival, setConfirmingArrival] = useState(false);
   const [arrivalStatus, setArrivalStatus] = useState<'en_route' | 'arrived' | 'confirmed'>('en_route');
+  const [timeElapsed, setTimeElapsed] = useState<string>('');
+  const [timeRemaining, setTimeRemaining] = useState<string>('');
 
   useEffect(() => {
     if (!jobId) return;
-    fetchJobData();
-    fetchContactInfo();
+    loadAllData();
     const interval = setInterval(() => {
-      fetchJobData();
-      fetchContactInfo();
+      loadAllData();
     }, 5000);
     return () => clearInterval(interval);
   }, [jobId]);
 
-  // Listen for arrival confirmation
+  const loadAllData = async () => {
+    await Promise.all([fetchJobData(), fetchContactInfo()]);
+  };
+
+  // Listen for arrival confirmation and job in progress
   useEffect(() => {
     const initSocket = async () => {
       try {
@@ -51,15 +56,18 @@ const StudentManageInstantJobPage = () => {
 
         const handleArrivalConfirmed = (data: any) => {
           if (data.jobId === jobId) {
+            console.log('✅ Arrival confirmed, job in progress:', data);
             setArrivalStatus('confirmed');
             fetchJobData();
           }
         };
 
         if (socket) {
-          socket.on('arrival-confirmed', handleArrivalConfirmed);
+          socket.on('student:arrival_confirmed', handleArrivalConfirmed);
+          socket.on('job:in_progress', handleArrivalConfirmed);
           return () => {
-            socket.off('arrival-confirmed', handleArrivalConfirmed);
+            socket.off('student:arrival_confirmed', handleArrivalConfirmed);
+            socket.off('job:in_progress', handleArrivalConfirmed);
           };
         }
       } catch (error) {
@@ -69,6 +77,40 @@ const StudentManageInstantJobPage = () => {
 
     initSocket();
   }, [jobId]);
+
+  // Timer effect - update elapsed and remaining time
+  useEffect(() => {
+    if (!jobData?.job) return;
+
+    const updateTimer = () => {
+      const job = jobData.job;
+      const now = new Date();
+
+      // Calculate elapsed time if job has started
+      if (job.startTime && job.status === 'in_progress') {
+        const startTime = new Date(job.startTime);
+        const elapsed = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+        const hours = Math.floor(elapsed / 3600);
+        const minutes = Math.floor((elapsed % 3600) / 60);
+        const seconds = elapsed % 60;
+        setTimeElapsed(`${hours}h ${minutes}m ${seconds}s`);
+
+        // Calculate remaining time
+        if (job.duration) {
+          const totalSeconds = job.duration * 3600;
+          const remaining = Math.max(0, totalSeconds - elapsed);
+          const remHours = Math.floor(remaining / 3600);
+          const remMinutes = Math.floor((remaining % 3600) / 60);
+          const remSeconds = remaining % 60;
+          setTimeRemaining(`${remHours}h ${remMinutes}m ${remSeconds}s`);
+        }
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [jobData]);
 
   const fetchJobData = async () => {
     try {
@@ -83,15 +125,38 @@ const StudentManageInstantJobPage = () => {
 
       if (response.ok) {
         const data = await response.json();
-        if (data.data?.job?.arrivalStatus) {
-          setArrivalStatus(data.data.job.arrivalStatus);
+        const instantJob = data.data;
+        
+        // Set job data from status endpoint with all necessary fields
+        setJobData({
+          job: {
+            _id: instantJob._id,
+            jobTitle: instantJob.jobTitle,
+            jobType: instantJob.jobType,
+            pay: instantJob.pay,
+            duration: instantJob.duration,
+            arrivalStatus: instantJob.arrivalStatus,
+            status: instantJob.status,
+            startTime: instantJob.startTime,
+            arrivalConfirmedAt: instantJob.arrivalConfirmedAt
+          },
+          jobLocation: instantJob.location
+        });
+        
+        if (instantJob.arrivalStatus) {
+          setArrivalStatus(instantJob.arrivalStatus);
         }
+        
+        setError(null);
         setLoading(false);
       } else {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to load job' }));
+        setError(errorData.message || 'Job not found or access denied');
         setLoading(false);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching job data:', error);
+      setError(error.message || 'Unable to load job data');
       setLoading(false);
     }
   };
@@ -110,7 +175,11 @@ const StudentManageInstantJobPage = () => {
       if (response.ok) {
         const data = await response.json();
         setContactInfo(data.data.contact);
-        setJobData(data.data);
+        
+        // Update job data with full details if we have them
+        if (data.data) {
+          setJobData(data.data);
+        }
       }
     } catch (error) {
       console.error('Error fetching contact info:', error);
@@ -207,18 +276,35 @@ const StudentManageInstantJobPage = () => {
     );
   }
 
-  if (!jobData) {
+  if (error || !jobData) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600">Job not found</p>
-          <button
-            onClick={() => router.push('/student')}
-            className="mt-4 px-6 py-2 bg-[#2A8A8C] text-white rounded-lg"
-          >
-            Back to Dashboard
-          </button>
+        <div className="text-center max-w-md px-4">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-gray-900 mb-2">
+            {error ? 'Unable to Load Job' : 'Job Not Found'}
+          </h2>
+          <p className="text-gray-600 mb-6">
+            {error || 'The instant job you are looking for could not be found or you may not have access to it.'}
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              onClick={() => {
+                setError(null);
+                setLoading(true);
+                loadAllData();
+              }}
+              className="px-6 py-2 bg-[#2A8A8C] text-white rounded-lg hover:bg-[#238085] transition-colors"
+            >
+              Retry
+            </button>
+            <button
+              onClick={() => router.push('/student/instant-job')}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Back to Instant Jobs
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -309,11 +395,67 @@ const StudentManageInstantJobPage = () => {
                 <CheckCircle className="w-6 h-6 text-green-600" />
               </div>
               <div className="flex-1">
-                <h3 className="text-lg font-bold text-green-900 mb-2">Arrival Confirmed!</h3>
+                <h3 className="text-lg font-bold text-green-900 mb-2">Arrival Confirmed - Work Started!</h3>
                 <p className="text-green-800">
-                  Your arrival has been confirmed by the employer. You can now proceed with the job.
+                  Your arrival has been confirmed by the employer. The timer has started. Work well and request completion when done.
                 </p>
               </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Work Timer - Shows when job is in progress */}
+        {jobData?.job?.status === 'in_progress' && jobData?.job?.startTime && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gradient-to-r from-green-50 to-blue-50 rounded-2xl shadow-lg border-2 border-green-400 p-6 mb-6"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <Clock className="w-7 h-7 text-green-600 animate-pulse" />
+              <h2 className="text-xl font-bold text-gray-900">Work In Progress</h2>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="bg-white rounded-xl p-4 border border-green-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock className="w-5 h-5 text-green-600" />
+                  <p className="text-xs font-semibold text-gray-600">Time Worked</p>
+                </div>
+                <p className="text-2xl font-bold text-green-600">{timeElapsed || '0h 0m 0s'}</p>
+              </div>
+              
+              {jobData.job.duration && (
+                <div className="bg-white rounded-xl p-4 border border-blue-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Clock className="w-5 h-5 text-blue-600" />
+                    <p className="text-xs font-semibold text-gray-600">Time Remaining</p>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-600">{timeRemaining || '0h 0m 0s'}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-white rounded-lg p-3 border border-gray-200 mb-4">
+              <p className="text-xs text-gray-600 mb-1">Work Started At</p>
+              <p className="text-sm font-semibold text-gray-900">
+                {new Date(jobData.job.startTime).toLocaleString()}
+              </p>
+            </div>
+
+            {jobData.job.duration && (
+              <div className="bg-white rounded-lg p-3 border border-gray-200">
+                <p className="text-xs text-gray-600 mb-1">Expected Completion</p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {new Date(new Date(jobData.job.startTime).getTime() + jobData.job.duration * 3600000).toLocaleString()}
+                </p>
+              </div>
+            )}
+
+            <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <p className="text-xs text-yellow-800">
+                💡 When you finish the work, request completion. The employer will confirm and release payment.
+              </p>
             </div>
           </motion.div>
         )}
