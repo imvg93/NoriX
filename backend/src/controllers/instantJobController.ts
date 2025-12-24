@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import mongoose from 'mongoose';
 import { AuthRequest } from '../middleware/auth';
-import { ValidationError } from '../middleware/errorHandler';
+import { ValidationError, AuthorizationError } from '../middleware/errorHandler';
 import InstantJob from '../models/InstantJob';
 import User from '../models/User';
 import { startDispatch, stopDispatch } from '../services/instantJob/dispatcher';
@@ -214,19 +214,39 @@ export const getInstantJobStatus = async (req: AuthRequest, res: Response): Prom
   }
   
   const userId = req.user._id.toString();
-  const isEmployer = employerIdStr === userId;
-  const isAcceptedStudent = instantJob.acceptedBy && instantJob.acceptedBy.toString() === userId;
+  const userType = req.user.userType;
 
-  if (!isEmployer && !(req.user.userType === 'student' && isAcceptedStudent)) {
-    console.error('Access denied - employerId mismatch:', {
-      jobId,
-      employerId: employerIdStr,
-      userId,
-      employerIdType: typeof instantJob.employerId,
-      isObjectId: instantJob.employerId instanceof mongoose.Types.ObjectId
-    });
-    throw new ValidationError('Access denied');
+  // Authorization check based on user role
+  if (userType === 'employer') {
+    // Employer: can access only if they own the job
+    if (employerIdStr !== userId) {
+      console.error('❌ Employer access denied:', {
+        jobId,
+        employerId: employerIdStr,
+        requestingUserId: userId
+      });
+      throw new AuthorizationError('You do not have permission to access this job');
+    }
+  } else if (userType === 'student') {
+    // Student: can access if they are lockedBy OR acceptedBy
+    const isLockedStudent = instantJob.lockedBy && instantJob.lockedBy.toString() === userId;
+    const isAcceptedStudent = instantJob.acceptedBy && instantJob.acceptedBy.toString() === userId;
+    
+    if (!isLockedStudent && !isAcceptedStudent) {
+      console.error('❌ Student access denied:', {
+        jobId,
+        lockedBy: instantJob.lockedBy ? instantJob.lockedBy.toString() : null,
+        acceptedBy: instantJob.acceptedBy ? instantJob.acceptedBy.toString() : null,
+        requestingUserId: userId
+      });
+      throw new AuthorizationError('You do not have permission to access this job');
+    }
+  } else {
+    throw new AuthorizationError('Invalid user type');
   }
+
+  console.log('✅ Access granted to job status:', { userId, userType, jobId });
+
 
   res.json({
     success: true,
@@ -512,17 +532,19 @@ export const getContactInfo = async (req: AuthRequest, res: Response): Promise<v
     throw new ValidationError('Invalid job ID');
   }
 
-  const instantJob = await InstantJob.findById(jobId).populate('employerId acceptedBy', 'name phone email');
+  const instantJob = await InstantJob.findById(jobId).populate('employerId acceptedBy lockedBy', 'name phone email');
   if (!instantJob) {
     throw new ValidationError('Instant job not found');
   }
 
-  if (!instantJob.acceptedBy) {
-    throw new ValidationError('Job must have an accepted student to access contact info');
+  if (!instantJob.acceptedBy && !instantJob.lockedBy) {
+    throw new ValidationError('Job must have an assigned student to access contact info');
   }
 
-  // Verify user is either employer or accepted student
+  // Authorization check based on user role
   const userId = req.user._id.toString();
+  const userType = req.user.userType;
+  
   // Handle both populated and non-populated employerId
   let employerIdStr: string;
   if (instantJob.employerId instanceof mongoose.Types.ObjectId) {
@@ -531,30 +553,60 @@ export const getContactInfo = async (req: AuthRequest, res: Response): Promise<v
     const populatedEmployer = instantJob.employerId as any;
     employerIdStr = populatedEmployer._id ? populatedEmployer._id.toString() : populatedEmployer.toString();
   }
-  const isEmployer = userId === employerIdStr;
-  const isStudent = instantJob.acceptedBy && userId === instantJob.acceptedBy.toString();
 
-  if (!isEmployer && !isStudent) {
-    throw new ValidationError('Access denied');
+  if (userType === 'employer') {
+    // Employer: can access only if they own the job
+    if (employerIdStr !== userId) {
+      console.error('❌ Employer access denied:', {
+        jobId,
+        employerId: employerIdStr,
+        requestingUserId: userId
+      });
+      throw new AuthorizationError('You do not have permission to access this job');
+    }
+  } else if (userType === 'student') {
+    // Student: can access if they are lockedBy OR acceptedBy
+    const isLockedStudent = instantJob.lockedBy && instantJob.lockedBy.toString() === userId;
+    const isAcceptedStudent = instantJob.acceptedBy && instantJob.acceptedBy.toString() === userId;
+    
+    if (!isLockedStudent && !isAcceptedStudent) {
+      console.error('❌ Student access denied:', {
+        jobId,
+        lockedBy: instantJob.lockedBy ? instantJob.lockedBy.toString() : null,
+        acceptedBy: instantJob.acceptedBy ? instantJob.acceptedBy.toString() : null,
+        requestingUserId: userId
+      });
+      throw new AuthorizationError('You do not have permission to access this job');
+    }
+  } else {
+    throw new AuthorizationError('Invalid user type');
   }
 
+  console.log('✅ Contact Info Access granted:', { userId, userType, jobId });
+
+
   // Get contact info and location
-  if (isEmployer && instantJob.acceptedBy) {
+  if (userType === 'employer') {
     // Employer gets student contact info + student location for tracking
-    const student = await User.findById(instantJob.acceptedBy).select('name phone email locationCoordinates');
-    res.json({
-      success: true,
-      data: {
-        contact: {
-          name: (student as any)?.name || (instantJob.acceptedBy as any).name,
-          phone: (student as any)?.phone || (instantJob.acceptedBy as any).phone,
-          email: (student as any)?.email || (instantJob.acceptedBy as any).email
+    const studentId = instantJob.acceptedBy || instantJob.lockedBy;
+    if (studentId) {
+      const student = await User.findById(studentId).select('name phone email locationCoordinates');
+      res.json({
+        success: true,
+        data: {
+          contact: {
+            name: (student as any)?.name || 'Student',
+            phone: (student as any)?.phone || '',
+            email: (student as any)?.email || ''
+          },
+          studentLocation: student?.locationCoordinates || null, // Student's current location for tracking
+          jobLocation: instantJob.location // Job location
         },
-        studentLocation: student?.locationCoordinates || null, // Student's current location for tracking
-        jobLocation: instantJob.location // Job location
-      },
-      message: 'Contact info retrieved successfully'
-    });
+        message: 'Contact info retrieved successfully'
+      });
+    } else {
+      throw new ValidationError('No student assigned to job yet');
+    }
   } else {
     // Student gets employer contact info + job location
     res.json({
@@ -587,16 +639,18 @@ export const trackStudent = async (req: AuthRequest, res: Response): Promise<voi
     throw new ValidationError('Invalid job ID');
   }
 
-  // Populate acceptedBy with complete student information
+  // Populate acceptedBy and lockedBy with complete student information
   const instantJob = await InstantJob.findById(jobId)
-    .populate('acceptedBy', 'name email phone profilePicture rating completedJobs skills address college courseYear');
+    .populate('acceptedBy', 'name email phone profilePicture rating completedJobs skills address college courseYear')
+    .populate('lockedBy', 'name email phone profilePicture rating completedJobs skills address college courseYear');
   
   if (!instantJob) {
     throw new ValidationError('Instant job not found');
   }
 
-  if (!instantJob.acceptedBy) {
-    throw new ValidationError('Job must have an accepted student to track');
+  // Allow tracking if student is either acceptedBy or lockedBy
+  if (!instantJob.acceptedBy && !instantJob.lockedBy) {
+    throw new ValidationError('Job must have an assigned student to track');
   }
 
   const userId = req.user._id.toString();
@@ -611,7 +665,9 @@ export const trackStudent = async (req: AuthRequest, res: Response): Promise<voi
   }
   
   const isEmployer = userId === employerIdStr;
-  const isStudent = instantJob.acceptedBy && userId === instantJob.acceptedBy.toString();
+  const isAcceptedStudent = instantJob.acceptedBy && userId === instantJob.acceptedBy.toString();
+  const isLockedStudent = instantJob.lockedBy && userId === instantJob.lockedBy.toString();
+  const isStudent = isAcceptedStudent || isLockedStudent;
 
   if (!isEmployer && !isStudent) {
     throw new ValidationError('Access denied');
@@ -622,11 +678,12 @@ export const trackStudent = async (req: AuthRequest, res: Response): Promise<voi
     throw new ValidationError('Job must be locked or in progress to track student');
   }
 
-  // Get student's current location from User model
+  // Get student's current location from User model - check both acceptedBy and lockedBy
+  const studentId = instantJob.acceptedBy || instantJob.lockedBy;
   let studentCurrentLocation = null;
   let studentCompleteInfo: any = null;
-  if (instantJob.acceptedBy) {
-    const student = await User.findById(instantJob.acceptedBy)
+  if (studentId) {
+    const student = await User.findById(studentId)
       .select('name email phone profilePicture rating completedJobs skills address college courseYear locationCoordinates');
     studentCurrentLocation = student?.locationCoordinates || null;
     
@@ -647,21 +704,24 @@ export const trackStudent = async (req: AuthRequest, res: Response): Promise<voi
         currentLocation: studentCurrentLocation
       };
     } else {
-      // Fallback to populated data
-      studentCompleteInfo = {
-        _id: (instantJob.acceptedBy as any)._id,
-        name: (instantJob.acceptedBy as any).name,
-        email: (instantJob.acceptedBy as any).email,
-        phone: (instantJob.acceptedBy as any).phone,
-        profilePicture: (instantJob.acceptedBy as any).profilePicture,
-        rating: (instantJob.acceptedBy as any).rating || 0,
-        completedJobs: (instantJob.acceptedBy as any).completedJobs || 0,
-        skills: (instantJob.acceptedBy as any).skills || [],
-        address: (instantJob.acceptedBy as any).address,
-        college: (instantJob.acceptedBy as any).college,
-        courseYear: (instantJob.acceptedBy as any).courseYear,
-        currentLocation: studentCurrentLocation
-      };
+      // Fallback to populated data - use acceptedBy if available, otherwise lockedBy
+      const populatedStudent = (instantJob.acceptedBy as any) || (instantJob.lockedBy as any);
+      if (populatedStudent) {
+        studentCompleteInfo = {
+          _id: populatedStudent._id,
+          name: populatedStudent.name,
+          email: populatedStudent.email,
+          phone: populatedStudent.phone,
+          profilePicture: populatedStudent.profilePicture,
+          rating: populatedStudent.rating || 0,
+          completedJobs: populatedStudent.completedJobs || 0,
+          skills: populatedStudent.skills || [],
+          address: populatedStudent.address,
+          college: populatedStudent.college,
+          courseYear: populatedStudent.courseYear,
+          currentLocation: studentCurrentLocation
+        };
+      }
     }
   }
 
@@ -722,13 +782,30 @@ export const confirmArrival = async (req: AuthRequest, res: Response): Promise<v
     throw new ValidationError('Job must be locked or in progress to confirm arrival');
   }
 
+  // Authorization check based on user role
   const userId = req.user._id.toString();
-  const isEmployer = userId === instantJob.employerId.toString();
-  const isStudent = instantJob.acceptedBy && userId === instantJob.acceptedBy.toString();
+  const userType = req.user.userType;
+  const employerIdStr = instantJob.employerId.toString();
 
-  if (!isEmployer && !isStudent) {
-    throw new ValidationError('Access denied');
+  if (userType === 'employer') {
+    // Employer: can access only if they own the job
+    if (employerIdStr !== userId) {
+      throw new AuthorizationError('You do not have permission to access this job');
+    }
+  } else if (userType === 'student') {
+    // Student: can access if they are lockedBy OR acceptedBy
+    const isLockedStudent = instantJob.lockedBy && instantJob.lockedBy.toString() === userId;
+    const isAcceptedStudent = instantJob.acceptedBy && instantJob.acceptedBy.toString() === userId;
+    
+    if (!isLockedStudent && !isAcceptedStudent) {
+      throw new AuthorizationError('You do not have permission to access this job');
+    }
+  } else {
+    throw new AuthorizationError('Invalid user type');
   }
+
+  const isEmployer = userType === 'employer';
+  const isStudent = userType === 'student';
 
   // Idempotent arrival confirmation
   if (instantJob.arrivalStatus === 'arrived' && instantJob.status === 'in_progress') {
@@ -1034,8 +1111,19 @@ export const requestCompletion = async (req: AuthRequest, res: Response): Promis
     throw new ValidationError('Instant job not found');
   }
 
-  if (!instantJob.acceptedBy || instantJob.acceptedBy.toString() !== req.user._id.toString()) {
-    throw new ValidationError('You are not assigned to this job');
+  // Student: can access if they are lockedBy OR acceptedBy
+  const userId = req.user._id.toString();
+  const isLockedStudent = instantJob.lockedBy && instantJob.lockedBy.toString() === userId;
+  const isAcceptedStudent = instantJob.acceptedBy && instantJob.acceptedBy.toString() === userId;
+  
+  if (!isLockedStudent && !isAcceptedStudent) {
+    console.error('❌ Student completion request denied:', {
+      jobId,
+      lockedBy: instantJob.lockedBy ? instantJob.lockedBy.toString() : null,
+      acceptedBy: instantJob.acceptedBy ? instantJob.acceptedBy.toString() : null,
+      requestingUserId: userId
+    });
+    throw new AuthorizationError('You do not have permission to access this job');
   }
 
   if (instantJob.status !== 'in_progress') {
@@ -1057,7 +1145,12 @@ export const requestCompletion = async (req: AuthRequest, res: Response): Promis
     version: 1
   };
   if (socketManager?.io) {
-    socketManager.io.to(`user:${instantJob.employerId.toString()}`).emit('employer:completion_requested', payloadBase);
+    const employerRoom = `user:${instantJob.employerId.toString()}`;
+    console.log('🔔 Sending completion request notification to employer room:', employerRoom);
+    socketManager.io.to(employerRoom).emit('employer:completion_requested', payloadBase);
+    console.log('✅ Notification sent with payload:', payloadBase);
+  } else {
+    console.warn('⚠️ Socket.IO not available - employer will not receive real-time notification');
   }
 
   const autoCompleteAt = new Date((instantJob.completionRequestedAt as Date).getTime() + COMPLETION_AUTO_MS);

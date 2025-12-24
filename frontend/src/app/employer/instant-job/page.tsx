@@ -28,12 +28,30 @@ const JOB_TYPES = [
   { id: 'other', label: 'Other', icon: '⚡' }
 ];
 
+interface CurrentJob {
+  _id: string;
+  jobTitle?: string;
+  jobType?: string;
+  pay?: string;
+  duration?: number;
+  status: string;
+  completionRequestedAt?: string;
+  location?: {
+    address?: string;
+  };
+  student?: {
+    name?: string;
+  };
+}
+
 const InstantJobPage = () => {
   const router = useRouter();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [locationLoading, setLocationLoading] = useState(true);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [currentJob, setCurrentJob] = useState<CurrentJob | null>(null);
+  const [loadingCurrentJob, setLoadingCurrentJob] = useState(true);
   const [formData, setFormData] = useState({
     jobType: '',
     jobTitle: '',
@@ -45,6 +63,63 @@ const InstantJobPage = () => {
     duration: 4,
     skillsRequired: [] as string[]
   });
+
+  // Load current active job
+  const loadCurrentJob = async () => {
+    try {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/instant-jobs/current`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentJob(data.data || data.job || null);
+      }
+    } catch (err) {
+      console.log('No active job or error loading:', err);
+    } finally {
+      setLoadingCurrentJob(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCurrentJob();
+  }, []);
+
+  // Listen for Socket.IO events for completion requests
+  useEffect(() => {
+    if (!currentJob?._id) return;
+
+    const socketService = require('../../../services/socketService').default;
+    const socket = (socketService as any).socket;
+
+    const handleCompletionRequested = (data: any) => {
+      console.log('🎉 Student requested completion (employer dashboard):', data);
+      // Show browser notification
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission === 'granted') {
+          new Notification('Work Completed! 🎉', {
+            body: 'The student has marked the work as complete. Please review and confirm.',
+            icon: '/logo.png'
+          });
+        } else if (Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+      }
+      // Refresh current job
+      loadCurrentJob();
+    };
+
+    if (socket) {
+      socket.on('employer:completion_requested', handleCompletionRequested);
+      return () => {
+        socket.off('employer:completion_requested', handleCompletionRequested);
+      };
+    }
+  }, [currentJob?._id]);
 
   // Auto-fetch user location
   useEffect(() => {
@@ -331,6 +406,77 @@ const InstantJobPage = () => {
             </div>
           </div>
         </motion.div>
+
+        {/* Current Active Job */}
+        {!loadingCurrentJob && currentJob && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8 bg-white border-2 border-[#2A8A8C] rounded-2xl shadow-lg p-6"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-sm font-semibold text-gray-600">ACTIVE JOB</span>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900">{currentJob.jobTitle || currentJob.jobType || 'Instant Job'}</h2>
+                {currentJob.student?.name && (
+                  <p className="text-sm text-gray-600 mt-1">Worker: {currentJob.student.name}</p>
+                )}
+              </div>
+              <div className="text-right">
+                <span className="px-4 py-2 bg-green-100 text-green-800 rounded-full text-sm font-bold border-2 border-green-200">
+                  {currentJob.status === 'in_progress' ? 'In Progress' : currentJob.status.charAt(0).toUpperCase() + currentJob.status.slice(1)}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3 mb-4">
+              {currentJob.pay && (
+                <span className="flex items-center gap-1 bg-green-50 px-3 py-1 rounded-full text-sm">
+                  <DollarSign className="w-4 h-4 text-green-600" />
+                  <span className="font-semibold text-green-700">{currentJob.pay}</span>
+                </span>
+              )}
+              {currentJob.duration && (
+                <span className="flex items-center gap-1 bg-blue-50 px-3 py-1 rounded-full text-sm">
+                  <Clock className="w-4 h-4 text-blue-600" />
+                  <span className="font-semibold text-blue-700">{currentJob.duration} hours</span>
+                </span>
+              )}
+              {currentJob.location?.address && (
+                <span className="flex items-center gap-1 bg-purple-50 px-3 py-1 rounded-full text-sm">
+                  <MapPin className="w-4 h-4 text-purple-600" />
+                  <span className="font-semibold text-purple-700 truncate max-w-[200px]">{currentJob.location.address}</span>
+                </span>
+              )}
+            </div>
+
+            {/* Completion Request Alert */}
+            {currentJob.completionRequestedAt && (
+              <div className="mb-4 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-500 rounded-xl p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
+                    <span className="text-2xl">🎉</span>
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-gray-900 mb-1">Work Completed!</p>
+                    <p className="text-sm text-gray-700">Student has marked this job as complete. Please review and confirm below.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => router.push(`/employer/instant-job/${currentJob._id}/status`)}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-[#2A8A8C] text-white rounded-xl hover:bg-[#238085] transition-colors font-semibold shadow-md"
+            >
+              Manage & End Job
+              <ArrowRight className="w-5 h-5" />
+            </button>
+          </motion.div>
+        )}
 
         {/* Command Panel */}
         <motion.form
