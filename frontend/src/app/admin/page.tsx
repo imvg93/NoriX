@@ -231,6 +231,7 @@ interface AdminOverview {
   pendingStudentApprovals: number;
   pendingEmployerApprovals: number;
   pendingJobApprovals: number;
+  recentPosts?: number; // Recent job posts (jobs are auto-approved)
   recentActivity: RecentActivity[];
 }
 
@@ -258,6 +259,7 @@ const defaultAdminData: AdminData = {
     pendingStudentApprovals: 0,
     pendingEmployerApprovals: 0,
     pendingJobApprovals: 0,
+    recentPosts: 0,
     recentActivity: [],
   },
   students: [],
@@ -523,6 +525,7 @@ export default function AdminDashboard() {
             pendingStudentApprovals: stats.users?.pendingApprovals || 0,
             pendingEmployerApprovals: employers.filter((e: Employer) => e.approvalStatus === 'pending').length,
             pendingJobApprovals: stats.jobs?.pendingApprovals || 0,
+            recentPosts: stats.jobs?.recentPosts || stats.jobs?.active || 0,
             recentActivity: [],
           },
           students,
