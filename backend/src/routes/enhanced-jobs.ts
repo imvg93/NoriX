@@ -213,6 +213,7 @@ router.post('/', authenticateToken, requireEmployer, asyncHandler(async (req: Au
     jobData.applicationDeadline = expireDate;
     // For tasks, auto-approve
     jobData.approvalStatus = 'approved';
+    jobData.approvedAt = new Date();
   } else {
     // Job-specific fields
     jobData.description = description;
@@ -221,8 +222,9 @@ router.post('/', authenticateToken, requireEmployer, asyncHandler(async (req: Au
     jobData.skillsRequired = skillsRequired || [];
     jobData.applicationDeadline = new Date(applicationDeadline);
     jobData.genderPreference = genderPreference || 'any';
-    // Jobs require admin approval (for corporate) or auto-approve (for local business)
-    jobData.approvalStatus = employer.employerCategory === 'corporate' ? 'pending' : 'approved';
+    // Auto-approve all jobs - no admin approval needed
+    jobData.approvalStatus = 'approved';
+    jobData.approvedAt = new Date();
   }
 
   // Auto-filled employer info
@@ -691,7 +693,7 @@ router.get('/employer-dashboard', authenticateToken, requireEmployer, asyncHandl
         companyName: job.companyName || '',
         location: job.location || '',
         status: job.status,
-        approvalStatus: job.approvalStatus || job.status || 'pending',
+        approvalStatus: job.approvalStatus || 'approved', // Jobs are auto-approved
         salaryRange: job.salaryRange || '',
         workType: job.workType || (job as any).type || '',
         skillsRequired: Array.isArray(job.skillsRequired) ? job.skillsRequired : [],

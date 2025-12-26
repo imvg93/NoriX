@@ -956,11 +956,11 @@ export default function AdminDashboard() {
           whileHover={{ scale: 1.02 }}
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Pending Job Approvals</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Recent Job Posts</h3>
             <Briefcase className="w-5 h-5 text-yellow-600" />
           </div>
-          <div className="text-2xl font-bold text-yellow-600 mb-2">{data.overview.pendingJobApprovals}</div>
-          <p className="text-sm text-gray-600">Jobs waiting for approval</p>
+          <div className="text-2xl font-bold text-yellow-600 mb-2">{data.overview.recentPosts || data.overview.pendingJobApprovals || 0}</div>
+          <p className="text-sm text-gray-600">Recent job posts (auto-approved)</p>
         </motion.div>
       </div>
     </section>
@@ -1392,20 +1392,7 @@ export default function AdminDashboard() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-500">{new Date(job.submittedAt).toLocaleDateString()}</span>
                   <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => openApprovalModal(job._id, 'job', 'approve')}
-                      className="p-1 text-green-600 hover:text-green-900 rounded hover:bg-green-50"
-                      title="Approve"
-                    >
-                      <CheckCircle className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={() => openApprovalModal(job._id, 'job', 'reject')}
-                      className="p-1 text-red-600 hover:text-red-900 rounded hover:bg-red-50"
-                      title="Reject"
-                    >
-                      <XCircle className="w-3 h-3" />
-                    </button>
+                    {/* Jobs are auto-approved - no approval buttons needed */}
                     <button className="p-1 text-blue-600 hover:text-blue-900 rounded hover:bg-blue-50" title="View">
                       <Eye className="w-3 h-3" />
                     </button>
@@ -1462,21 +1449,7 @@ export default function AdminDashboard() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex gap-2">
-                      <button
-                        onClick={() => openApprovalModal(job._id, 'job', 'approve')}
-                        disabled={job.approvalStatus === 'approved'}
-                        className="text-green-600 hover:text-green-800 p-1.5 rounded-lg hover:bg-green-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                        title="Approve"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => openApprovalModal(job._id, 'job', 'reject')}
-                        className="text-red-600 hover:text-red-800 p-1.5 rounded-lg hover:bg-red-50"
-                        title="Reject"
-                      >
-                        <XCircle className="w-4 h-4" />
-                      </button>
+                      {/* Jobs are auto-approved - no approval buttons needed */}
                       <button className="text-blue-600 hover:text-blue-800 p-1.5 rounded-lg hover:bg-blue-50" title="View">
                         <Eye className="w-4 h-4" />
                       </button>
