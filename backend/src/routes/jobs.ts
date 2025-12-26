@@ -27,7 +27,7 @@ router.get('/', async (req, res, next) => {
       salaryMin,
       salaryMax,
       page = 1,
-      limit = 10,
+      limit,
       search
     } = req.query;
 
@@ -52,15 +52,19 @@ router.get('/', async (req, res, next) => {
       ];
     }
 
-    const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
+    // Use a very high limit (10000) when limit is not specified to fetch all approved jobs
+    const limitValue = limit ? parseInt(limit as string) : 10000;
+    const pageValue = parseInt(page as string);
+    const skip = (pageValue - 1) * limitValue;
+    
+    console.log('📊 Jobs API - Query params:', { limit: req.query.limit, limitValue, page: req.query.page, pageValue, skip });
+    console.log('✅ Using limit:', limitValue, '(10000 = effectively unlimited)');
     
     const jobs = await Job.find(filter)
-
       .populate('employerId', 'name companyName businessType')
-
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit as string));
+      .limit(limitValue);
 
     const total = await Job.countDocuments(filter);
 
@@ -102,10 +106,10 @@ router.get('/', async (req, res, next) => {
     res.json({
       jobs: normalizedJobs,
       pagination: {
-        page: parseInt(page as string),
-        limit: parseInt(limit as string),
+        page: pageValue,
+        limit: limitValue,
         total,
-        pages: Math.ceil(total / parseInt(limit as string))
+        pages: Math.ceil(total / limitValue)
       }
     });
   } catch (error) {
@@ -443,7 +447,8 @@ router.post('/', async (req: AuthRequest, res, next) => {
       phone: contactPhone,
       applicationDeadline: defaultExpiry, // Set application deadline to 30 days from now
       status: 'active', // Jobs start as active
-      approvalStatus: 'pending', // All new jobs need admin approval
+      approvalStatus: 'approved', // Auto-approve all jobs - no admin approval needed
+      approvedAt: new Date(),
       createdAt: new Date()
     });
 

@@ -9,7 +9,7 @@ export interface IJob extends Document {
   description: string;
   location: string;
   salaryRange: string;
-  workType: 'Part-time' | 'Full-time' | 'Remote' | 'On-site';
+  workType: 'Part-time' | 'Full-time' | 'Remote' | 'On-site' | 'Hybrid';
   skillsRequired: string[];
   applicationDeadline: Date;
   genderPreference?: 'male' | 'female' | 'any';
@@ -104,7 +104,7 @@ const jobSchema = new Schema<IJob>({
   workType: {
     type: String,
     required: [true, 'Work type is required'],
-    enum: ['Part-time', 'Full-time', 'Remote', 'On-site'],
+    enum: ['Part-time', 'Full-time', 'Remote', 'On-site', 'Hybrid'],
     default: 'Full-time'
   },
   skillsRequired: [{

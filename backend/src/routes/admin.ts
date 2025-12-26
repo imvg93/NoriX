@@ -66,7 +66,7 @@ router.get('/stats', authenticateToken, requireRole(['admin']), asyncHandler(asy
     jobs: {
       total: totalJobs,
       active: activeJobs,
-      pendingApprovals: pendingJobApprovals,
+      recentPosts: activeJobs, // Recent active job posts (all jobs are auto-approved, no approval needed)
       approved: approvedJobs,
       rejected: rejectedJobs
     },
@@ -115,14 +115,14 @@ router.get('/users/pending', authenticateToken, requireRole(['admin']), asyncHan
   }, 'Users retrieved successfully');
 }));
 
-// @route   GET /api/admin/jobs/pending
-// @desc    Get active jobs (simplified - no approval needed)
+// @route   GET /api/admin/jobs/recent
+// @desc    Get recent job posts (jobs are auto-approved, this is for admin viewing/monitoring)
 // @access  Private (Admin only)
-router.get('/jobs/pending', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
-  const { page = 1, limit = 10 } = req.query;
+router.get('/jobs/recent', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { page = 1, limit = 20 } = req.query;
 
   const jobs = await Job.find({ status: 'active' })
-    .populate('employer', 'name email companyName')
+    .populate('employerId', 'name email companyName')
     .sort({ createdAt: -1 })
     .limit(Number(limit) * 1)
     .skip((Number(page) - 1) * Number(limit));
@@ -136,7 +136,29 @@ router.get('/jobs/pending', authenticateToken, requireRole(['admin']), asyncHand
       pages: Math.ceil(total / Number(limit)),
       total
     }
-  }, 'Active jobs retrieved successfully');
+  }, 'Recent job posts retrieved successfully');
+}));
+
+// Keep old endpoint for backward compatibility (redirects to recent)
+router.get('/jobs/pending', authenticateToken, requireRole(['admin']), asyncHandler(async (req: AuthRequest, res: express.Response) => {
+  const { page = 1, limit = 20 } = req.query;
+
+  const jobs = await Job.find({ status: 'active' })
+    .populate('employerId', 'name email companyName')
+    .sort({ createdAt: -1 })
+    .limit(Number(limit) * 1)
+    .skip((Number(page) - 1) * Number(limit));
+
+  const total = await Job.countDocuments({ status: 'active' });
+
+  sendSuccessResponse(res, {
+    jobs,
+    pagination: {
+      current: Number(page),
+      pages: Math.ceil(total / Number(limit)),
+      total
+    }
+  }, 'Recent job posts retrieved successfully (jobs are auto-approved)');
 }));
 
 // @route   PATCH /api/admin/users/:id/approve
